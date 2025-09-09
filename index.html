@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Race to Housing — Demo (v8)</title>
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<style>
+  body{ margin:0; font-family:Arial, sans-serif; background:#0e1011; color:#e8eaed;}
+  header{ padding:16px 20px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center;}
+  a{ color:#60a5fa; }
+  .mapWrap{ width:100%; aspect-ratio:16/10; border:1px solid rgba(255,255,255,.08); border-radius:14px; overflow:hidden; position:relative; background:#000; margin-bottom:20px;}
+  svg{ width:100%; height:100%; display:block }
+  .stopLabel{ fill:#ffffff; font-size:14px; font-weight:700; paint-order: stroke; stroke:#0b0b0c; stroke-width:3px }
+  .star{ fill:#ffd700; stroke:#fff; stroke-width:1 }
+  .star.final{ fill:#22c55e }
+  .penguinDot{ stroke:#fff; stroke-width:1.3 }
+  .p1{ fill:#60a5fa } .p2{ fill:#f472b6 } .p3{ fill:#fb923c }
+  .players{ max-width:700px; margin:20px auto; }
+  .player{ border:1px solid #333; border-radius:10px; padding:12px; margin-bottom:12px; }
+  .progress{ height:10px; background:#222; border-radius:5px; overflow:hidden; }
+  .bar{ height:100%; background:#c10016; width:0%; }
+</style>
+</head>
+<body>
+<header>
+  <div><b>Race to Housing — Demo</b></div>
+  <div><a href="instructions.html" target="_blank">Instructions</a></div>
+</header>
+
+<div class="mapWrap">
+  <svg viewBox="0 0 1279 768">
+    <image href="campus.jpg" x="0" y="0" width="1279" height="768"/>
+    <path id="routePath" d="M180,660 C360,640 560,560 760,520 C960,480 1080,420 1180,340"
+          fill="none" stroke="#7ccf92" stroke-width="12"/>
+    <g transform="translate(320,620)"><polygon points="12,0 15,9 24,9 17,14 19,24 12,19 5,24 7,14 0,9 9,9" class="star"></polygon>
+      <text class="stopLabel" x="0" y="36">Lyden House</text></g>
+    <g transform="translate(560,550)"><polygon points="12,0 15,9 24,9 17,14 19,24 12,19 5,24 7,14 0,9 9,9" class="star"></polygon>
+      <text class="stopLabel" x="0" y="36">Residence Halls</text></g>
+    <g transform="translate(930,470)"><polygon points="12,0 15,9 24,9 17,14 19,24 12,19 5,24 7,14 0,9 9,9" class="star"></polygon>
+      <text class="stopLabel" x="0" y="36">University Courtyard</text></g>
+    <g transform="translate(1160,310)"><polygon points="14,0 17,10 27,10 20,15 22,26 14,21 6,26 8,15 1,10 11,10" class="star final"></polygon>
+      <text class="stopLabel" x="-10" y="36">Kilcawley House</text></g>
+    <g id="markers">
+      <circle id="m1" class="penguinDot p1" r="7"/>
+      <circle id="m2" class="penguinDot p2" r="7"/>
+      <circle id="m3" class="penguinDot p3" r="7"/>
+    </g>
+  </svg>
+</div>
+
+<div class="players" id="players"></div>
+
+<script>
+const KEY='rth_v8';
+const POINTS_TO_FINISH=700;
+let players=[
+ {name:'John',id:'JHN-101',color:'p1',points:60,codes:{'JHN-8X2M':25}},
+ {name:'Stephanie',id:'STP-202',color:'p2',points:40,codes:{'STP-7K9P':25}},
+ {name:'Olivia',id:'OLV-303',color:'p3',points:20,codes:{'OLV-5Q7R':25}}
+];
+
+// Load saved state
+try{ const s=localStorage.getItem(KEY); if(s) players=JSON.parse(s);}catch(e){}
+function save(){ localStorage.setItem(KEY,JSON.stringify(players)); }
+
+const route=document.getElementById('routePath');
+function posForPoints(points){ const length=route.getTotalLength(); const ratio=Math.max(0,Math.min(1,points/POINTS_TO_FINISH)); return route.getPointAtLength(length*ratio); }
+
+function render(){
+  const list=document.getElementById('players'); list.innerHTML='';
+  players.forEach((p,i)=>{
+    const el=document.createElement('div'); el.className='player';
+    el.innerHTML=`<b>${p.name}</b> (${p.id})<br>Points: ${p.points}<div class="progress"><div class="bar" style="width:${(p.points/POINTS_TO_FINISH*100)}%"></div></div>`;
+    list.appendChild(el);
+    const pt=posForPoints(p.points); document.getElementById('m'+(i+1)).setAttribute('cx',pt.x); document.getElementById('m'+(i+1)).setAttribute('cy',pt.y);
+  });
+  save();
+}
+render();
+</script>
+</body>
+</html>
