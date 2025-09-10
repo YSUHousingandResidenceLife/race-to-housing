@@ -3,25 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Race to Housing – Map</title>
+  <title>Race to Housing – Map Only</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     body { margin:0; font-family: system-ui, Arial, sans-serif; }
-    #map { width:100%; height:420px; border-bottom:1px solid #e5e7eb; }
+    #map { width:100%; height:420px; }
     .page { max-width:900px; margin:auto; padding:16px; }
   </style>
 </head>
 <body>
-  <!-- MAP BANNER -->
+  <!-- MAP -->
   <div id="map"></div>
 
   <div class="page">
     <h1>Race to Housing</h1>
-    <p>This page is just the map. We’ll add other features later.</p>
+    <p>This is the map only. We’ll add Firebase later.</p>
   </div>
 
-  <!-- SINGLE SCRIPT: everything for the map lives here -->
   <script>
-    // 1) Your stops (you can edit/add/remove here)
+    // Init map centered on YSU
+    const map = L.map('map').setView([41.1040, -80.6470], 15);
+
+    // Free OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Stops
     const STOPS = [
       { id:"lyden",     name:"Lyden House",      lat:41.1069, lng:-80.6462, category:"Housing" },
       { id:"cafaro",    name:"Cafaro House",     lat:41.1061, lng:-80.6466, category:"Housing" },
@@ -31,82 +41,23 @@
       { id:"kilcawley", name:"Kilcawley House",  lat:41.1053, lng:-80.6518, category:"Housing" }
     ];
 
-    // 2) The route order you requested
+    // Route order
     const ROUTE = ["lyden","cafaro","christman","weller","wick","kilcawley"];
 
-    // 3) Minimal “campus” map style (not satellite)
-    //    This just mutes colors so it looks cleaner like a campus map.
-    const CAMPUS_STYLE = [
-      { "featureType":"poi","stylers":[{"visibility":"off"}] },
-      { "featureType":"transit","stylers":[{"visibility":"off"}] },
-      { "featureType":"road","elementType":"geometry","stylers":[{"lightness":20}] },
-      { "featureType":"road","elementType":"labels.icon","stylers":[{"visibility":"off"}] },
-      { "featureType":"water","stylers":[{"color":"#cfe8ff"}] },
-      { "featureType":"landscape","stylers":[{"color":"#f3f4f6"}] },
-      { "featureType":"administrative","elementType":"labels","stylers":[{"visibility":"off"}] }
-    ];
+    // Add markers
+    const indexById = {};
+    STOPS.forEach(s => {
+      indexById[s.id] = s;
+      const marker = L.marker([s.lat, s.lng]).addTo(map);
+      marker.bindPopup(`<b>${s.name}</b><br>${s.category}`);
+    });
 
-    // 4) Map init (called by Google Maps)
-    function initMap() {
-      const map = new google.maps.Map(document.getElementById('map'), {
-        center: { lat: 41.1040, lng: -80.6470 }, // YSU area
-        zoom: 15,
-        mapTypeId: 'roadmap',         // <- this is the standard map (not satellite)
-        mapTypeControl: false,
-        streetViewControl: false,
-        styles: CAMPUS_STYLE
-      });
+    // Draw route line
+    const path = ROUTE.map(id => indexById[id]).map(s => [s.lat, s.lng]);
+    L.polyline(path, { color: '#b30000', weight: 4 }).addTo(map);
 
-      // Icons
-      const ICONS = {
-        Housing: "https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png",
-        Meal:    "https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png",
-        Default: "https://maps.gstatic.com/mapfiles/ms2/micons/yellow-dot.png"
-      };
-
-      // Place markers
-      const bounds = new google.maps.LatLngBounds();
-      const indexById = {};
-      for (const s of STOPS) {
-        indexById[s.id] = s;
-        const pos = { lat: s.lat, lng: s.lng };
-        const marker = new google.maps.Marker({
-          position: pos,
-          map,
-          title: s.name,
-          icon: ICONS[s.category] || ICONS.Default
-        });
-        const iw = new google.maps.InfoWindow({
-          content: `<strong>${s.name}</strong><br>${s.category || ""}`
-        });
-        marker.addListener("click", () => iw.open(map, marker));
-        bounds.extend(pos);
-      }
-
-      // Draw route line using ROUTE order
-      const path = ROUTE
-        .map(id => indexById[id])
-        .filter(Boolean)
-        .map(s => ({ lat: s.lat, lng: s.lng }));
-
-      new google.maps.Polyline({
-        path,
-        geodesic: true,
-        strokeColor: "#b30000",
-        strokeOpacity: 0.95,
-        strokeWeight: 3,
-        map
-      });
-
-      map.fitBounds(bounds);
-      if (map.getZoom() > 17) map.setZoom(17); // cap max zoom-in
-    }
-
-    // Expose initMap so Google Maps can call it
-    window.initMap = initMap;
+    // Fit map to route
+    map.fitBounds(path);
   </script>
-
-  <!-- Load the Google Maps JS (replace YOUR_MAPS_API_KEY) -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_MAPS_API_KEY&callback=initMap" async defer></script>
 </body>
 </html>
