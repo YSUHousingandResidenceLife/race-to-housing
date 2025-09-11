@@ -1,13 +1,17 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Race to Housing – Map Only</title>
+
+  <!-- Leaflet (free / no API key) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <style>
-    body { margin:0; font-family: system-ui, Arial, sans-serif; }
+    :root { --route-green:#00cc44; --route-outline:#004400; }
+    html,body { margin:0; height:100%; font-family: system-ui, Arial, sans-serif; }
     #map { width:100%; height:420px; }
     .page { max-width:900px; margin:auto; padding:16px; }
   </style>
@@ -18,46 +22,56 @@
 
   <div class="page">
     <h1>Race to Housing</h1>
-    <p>This is the map only. We’ll add Firebase later.</p>
+    <p>Map only. We’ll hook up Firebase later.</p>
   </div>
 
   <script>
-    // Init map centered on YSU
+    // 1) Base map (centered near YSU)
     const map = L.map('map').setView([41.1040, -80.6470], 15);
-
-    // Free OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Stops
-    const STOPS = [
-      { id:"lyden",     name:"Lyden House",      lat:41.1069, lng:-80.6462, category:"Housing" },
-      { id:"cafaro",    name:"Cafaro House",     lat:41.1061, lng:-80.6466, category:"Housing" },
-      { id:"christman", name:"Christman Dining", lat:41.1050, lng:-80.6425, category:"Meal"    },
-      { id:"weller",    name:"Weller House",     lat:41.1018, lng:-80.6467, category:"Housing" },
-      { id:"wick",      name:"Wick House",       lat:41.1015, lng:-80.6469, category:"Housing" },
-      { id:"kilcawley", name:"Kilcawley House",  lat:41.1053, lng:-80.6518, category:"Housing" }
-    ];
-
-    // Route order
-    const ROUTE = ["lyden","cafaro","christman","weller","wick","kilcawley"];
-
-    // Add markers
-    const indexById = {};
-    STOPS.forEach(s => {
-      indexById[s.id] = s;
-      const marker = L.marker([s.lat, s.lng]).addTo(map);
-      marker.bindPopup(`<b>${s.name}</b><br>${s.category}`);
+    // 2) Icons (house for halls, fork/knife for dining)
+    const houseIcon = L.icon({
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/69/69524.png',
+      iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -28]
+    });
+    const diningIcon = L.icon({
+      iconUrl: 'https://cdn-icons-png.flaticon.com/512/857/857681.png',
+      iconSize: [26, 26], iconAnchor: [13, 26], popupAnchor: [0, -26]
     });
 
-    // Draw route line
-    const path = ROUTE.map(id => indexById[id]).map(s => [s.lat, s.lng]);
-    L.polyline(path, { color: '#b30000', weight: 4 }).addTo(map);
+    // 3) Stops (edit these anytime)
+    const STOPS = [
+      { id:'lyden',     name:'Lyden House',      lat:41.1069, lng:-80.6462, icon:houseIcon,   cat:'Housing' },
+      { id:'cafaro',    name:'Cafaro House',     lat:41.1061, lng:-80.6466, icon:houseIcon,   cat:'Housing' },
+      { id:'christman', name:'Christman Dining', lat:41.1050, lng:-80.6425, icon:diningIcon,  cat:'Meal'    },
+      { id:'weller',    name:'Weller House',     lat:41.1018, lng:-80.6467, icon:houseIcon,   cat:'Housing' },
+      { id:'wick',      name:'Wick House',       lat:41.1015, lng:-80.6469, icon:houseIcon,   cat:'Housing' },
+      { id:'kilcawley', name:'Kilcawley House',  lat:41.1053, lng:-80.6518, icon:houseIcon,   cat:'Housing' }
+    ];
 
-    // Fit map to route
-    map.fitBounds(path);
+    // 4) Route order (Lyden → Cafaro → Christman → Weller → Wick → Kilcawley)
+    const ROUTE = ['lyden','cafaro','christman','weller','wick','kilcawley'];
+
+    // 5) Place markers
+    const byId = Object.fromEntries(STOPS.map(s => [s.id, s]));
+    const bounds = L.latLngBounds();
+    STOPS.forEach(s => {
+      const m = L.marker([s.lat, s.lng], { icon: s.icon, title: s.name }).addTo(map);
+      m.bindPopup(`<b>${s.name}</b><br>${s.cat}`);
+      bounds.extend([s.lat, s.lng]);
+    });
+
+    // 6) Draw styled route (dark outline + bright green center)
+    const path = ROUTE.map(id => byId[id]).filter(Boolean).map(s => [s.lat, s.lng]);
+    L.polyline(path, { color: getComputedStyle(document.documentElement).getPropertyValue('--route-outline').trim(), weight: 10, opacity: 0.9 }).addTo(map);
+    L.polyline(path, { color: getComputedStyle(document.documentElement).getPropertyValue('--route-green').trim(),   weight: 6,  opacity: 1.0 }).addTo(map);
+
+    // 7) Fit view
+    map.fitBounds(bounds);
   </script>
 </body>
 </html>
