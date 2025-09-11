@@ -3,37 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Race to Housing – Map Only</title>
+  <title>Race to Housing – Map Styles</title>
 
-  <!-- Leaflet (free / no API key) -->
+  <!-- Leaflet (free / no key) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    :root { --route-green:#00cc44; --route-outline:#004400; }
     html,body { margin:0; height:100%; font-family: system-ui, Arial, sans-serif; }
     #map { width:100%; height:420px; }
     .page { max-width:900px; margin:auto; padding:16px; }
   </style>
 </head>
 <body>
-  <!-- MAP -->
   <div id="map"></div>
 
   <div class="page">
     <h1>Race to Housing</h1>
-    <p>Map only. We’ll hook up Firebase later.</p>
+    <p>Use the layer switcher (top-right) to try different map styles. “Esri World Topo” is the most
+      illustrated/campus-like; “Carto Positron” is a clean light gray style; “OSM Standard” is the default.</p>
   </div>
 
   <script>
-    // 1) Base map (centered near YSU)
-    const map = L.map('map').setView([41.1040, -80.6470], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    // --- 1) Base map (start near YSU)
+    const map = L.map('map', { center:[41.1040, -80.6470], zoom:15 });
 
-    // 2) Icons (house for halls, fork/knife for dining)
+    // --- 2) Basemap choices (no keys required)
+    const osmStandard = L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }
+    );
+
+    const cartoPositron = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }
+    );
+
+    const cartoVoyager = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      { maxZoom: 20, attribution: '&copy; OpenStreetMap &copy; CARTO' }
+    );
+
+    // Esri World Topo (soft, illustrated feel)
+    const esriWorldTopo = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 20,
+        attribution: 'Tiles &copy; Esri — Esri, USGS, NOAA, HERE, Garmin, FAO, METI/NASA, & others'
+      }
+    );
+
+    // Set default layer (pick the one you like most)
+    esriWorldTopo.addTo(map);
+
+    // --- 3) Layer switcher UI
+    const baseMaps = {
+      "Esri World Topo (illustrated)": esriWorldTopo,
+      "Carto Positron (clean light)": cartoPositron,
+      "Carto Voyager (colorful)": cartoVoyager,
+      "OSM Standard": osmStandard
+    };
+    L.control.layers(baseMaps, null, { position: 'topright', collapsed: false }).addTo(map);
+
+    // --- 4) Icons (house for halls, fork/knife for dining)
     const houseIcon = L.icon({
       iconUrl: 'https://cdn-icons-png.flaticon.com/512/69/69524.png',
       iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -28]
@@ -43,20 +75,18 @@
       iconSize: [26, 26], iconAnchor: [13, 26], popupAnchor: [0, -26]
     });
 
-    // 3) Stops (edit these anytime)
+    // --- 5) Stops (you can edit these quickly)
     const STOPS = [
-      { id:'lyden',     name:'Lyden House',      lat:41.1069, lng:-80.6462, icon:houseIcon,   cat:'Housing' },
-      { id:'cafaro',    name:'Cafaro House',     lat:41.1061, lng:-80.6466, icon:houseIcon,   cat:'Housing' },
-      { id:'christman', name:'Christman Dining', lat:41.1050, lng:-80.6425, icon:diningIcon,  cat:'Meal'    },
-      { id:'weller',    name:'Weller House',     lat:41.1018, lng:-80.6467, icon:houseIcon,   cat:'Housing' },
-      { id:'wick',      name:'Wick House',       lat:41.1015, lng:-80.6469, icon:houseIcon,   cat:'Housing' },
-      { id:'kilcawley', name:'Kilcawley House',  lat:41.1053, lng:-80.6518, icon:houseIcon,   cat:'Housing' }
+      { id:'lyden',     name:'Lyden House',      lat:41.1069, lng:-80.6462, icon:houseIcon,  cat:'Housing' },
+      { id:'cafaro',    name:'Cafaro House',     lat:41.1061, lng:-80.6466, icon:houseIcon,  cat:'Housing' },
+      { id:'christman', name:'Christman Dining', lat:41.1050, lng:-80.6425, icon:diningIcon, cat:'Meal'    },
+      { id:'weller',    name:'Weller House',     lat:41.1018, lng:-80.6467, icon:houseIcon,  cat:'Housing' },
+      { id:'wick',      name:'Wick House',       lat:41.1015, lng:-80.6469, icon:houseIcon,  cat:'Housing' },
+      { id:'kilcawley', name:'Kilcawley House',  lat:41.1053, lng:-80.6518, icon:houseIcon,  cat:'Housing' }
     ];
-
-    // 4) Route order (Lyden → Cafaro → Christman → Weller → Wick → Kilcawley)
     const ROUTE = ['lyden','cafaro','christman','weller','wick','kilcawley'];
 
-    // 5) Place markers
+    // --- 6) Markers
     const byId = Object.fromEntries(STOPS.map(s => [s.id, s]));
     const bounds = L.latLngBounds();
     STOPS.forEach(s => {
@@ -65,13 +95,12 @@
       bounds.extend([s.lat, s.lng]);
     });
 
-    // 6) Draw styled route (dark outline + bright green center)
+    // --- 7) Route (dark outline + bright green center)
     const path = ROUTE.map(id => byId[id]).filter(Boolean).map(s => [s.lat, s.lng]);
-    L.polyline(path, { color: getComputedStyle(document.documentElement).getPropertyValue('--route-outline').trim(), weight: 10, opacity: 0.9 }).addTo(map);
-    L.polyline(path, { color: getComputedStyle(document.documentElement).getPropertyValue('--route-green').trim(),   weight: 6,  opacity: 1.0 }).addTo(map);
+    L.polyline(path, { color:'#004400', weight:10, opacity:0.9 }).addTo(map);
+    L.polyline(path, { color:'#00cc44', weight:6,  opacity:1.0 }).addTo(map);
 
-    // 7) Fit view
-    map.fitBounds(bounds);
+    map.fitBounds(bounds, { maxZoom: 17 });
   </script>
 </body>
 </html>
