@@ -1,349 +1,168 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Race to Housing • YSU</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root{
-      --ysu-red:#d50000; --ysu-black:#111; --gold:#ffca28;
-    }
-    html,body{margin:0;background:#0b0b0b;color:#fff;font-family:Inter,system-ui,Arial,sans-serif}
-    header{
-      padding:10px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between;
-      background:linear-gradient(90deg,#111, #1a1a1a);
-      border-bottom:1px solid #222;
-      position:sticky; top:0; z-index:5;
-    }
-    .brand{font-weight:800; letter-spacing:.4px}
-    .panel{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-    .chip{background:#191919; border:1px solid #2a2a2a; padding:6px 10px; border-radius:999px; font-size:14px}
-    .btn{
-      background:var(--ysu-red); border:none; color:#fff; font-weight:700; padding:8px 12px; border-radius:10px;
-      cursor:pointer; transition:.2s transform ease;
-    }
-    .btn:active{transform:scale(.98)}
-    #app{max-width:1400px; margin:0 auto; padding:12px}
-    .map-wrap{
-      position:relative; width:100%; aspect-ratio: 28/16; /* wide header-like banner */
-      background:#000; overflow:hidden; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,.35);
-      border:1px solid #222;
-    }
-    .map{
-      position:absolute; inset:0; background-size:cover; background-position:center;
-      filter: saturate(1.05) contrast(1.06) brightness(1.03);
-    }
-    svg.overlay{position:absolute; inset:0}
-    .route{fill:none; stroke:url(#grad); stroke-width:10; filter:url(#glow)}
-    .route-dots circle{fill:var(--gold); opacity:.85}
-    .penguin{
-      position:absolute; width:48px; height:48px; transform:translate(-50%,-85%); pointer-events:none;
-      transition: left .6s ease, top .6s ease;
-      animation: waddle 0s linear 1; /* activated when moving */
-      z-index:3;
-    }
-    .penguin.moving{ animation: waddle .6s ease; }
-    @keyframes waddle{
-      0%{ transform:translate(-50%,-85%) rotate(-6deg); }
-      50%{ transform:translate(-50%,-85%) rotate(6deg); }
-      100%{ transform:translate(-50%,-85%) rotate(0deg); }
-    }
-    .hud{
-      position:absolute; left:14px; bottom:14px; z-index:4;
-      background:rgba(15,15,15,.8); border:1px solid #2a2a2a; border-radius:12px; padding:10px 12px;
-      backdrop-filter: blur(6px);
-    }
-    .hud h3{margin:0 0 6px 0; font-size:14px; opacity:.9}
-    .hud .row{display:flex; gap:8px; align-items:center; margin-top:6px}
-    input,select{
-      background:#111; color:#fff; border:1px solid #2a2a2a; padding:8px 10px; border-radius:8px; outline:none
-    }
-    input::placeholder{color:#888}
-    .notice{font-size:12px; opacity:.8; margin-top:6px}
-    footer{opacity:.65; font-size:12px; text-align:center; padding:10px}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Race to Housing – Demo</title>
+<style>
+  :root{ --red:#d50000; --gold:#ffcc00; --ink:#111; }
+  html,body{margin:0;background:#0b0b0b;color:#fff;font-family:system-ui,Segoe UI,Arial}
+  header{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:10px 14px;background:#121212;border-bottom:1px solid #222}
+  a{color:#9ad0ff;text-decoration:none}
+  .map-wrap{position:relative; width:100%; max-width:1100px; margin:10px auto; aspect-ratio: 28/16;
+    border:1px solid #222; border-radius:14px; overflow:hidden; background:#0a0a0a;
+    box-shadow:0 8px 30px rgba(0,0,0,.35)}
+  /* Penguin marker (emoji + crown) */
+  .marker{position:absolute; transform:translate(-50%,-90%); transition:left .5s ease, top .5s ease}
+  .bubble{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none}
+  .penguin{font-size:44px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.5))}
+  .crown{position:absolute; right:-6px; top:-10px; font-size:22px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.6))}
+  /* HUD */
+  .hud{display:flex; gap:8px; align-items:center; justify-content:center; margin:8px auto}
+  input{background:#101010;color:#fff;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;min-width:200px}
+  button{background:var(--red);color:#fff;border:none;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
+  .note{font-size:12px;opacity:.8;text-align:center;margin:6px 0}
+</style>
 </head>
 <body>
 <header>
-  <div class="brand">🐧 Race to Housing — YSU</div>
-  <div class="panel">
-    <div class="chip"><b>Status:</b> <span id="status">Demo Mode</span></div>
-    <div class="chip"><b>Player:</b> <span id="playerName">guest</span></div>
-    <div class="chip"><b>Points:</b> <span id="pointsVal">0</span> / <span id="pointsMax">700</span></div>
-    <button class="btn" id="btnLogin">Sign In</button>
-  </div>
+  <div><strong>🐧 Race to Housing – Demo</strong> | Points: <span id="pts">0</span> / 700</div>
+  <nav style="display:flex;gap:14px">
+    <a id="instructionsLink" href="#" target="_blank">Instructions</a>
+    <a id="registerLink" href="#" target="_blank">Register</a>
+  </nav>
 </header>
 
-<main id="app">
-  <div class="map-wrap" id="mapWrap">
-    <div class="map" id="map"></div>
-    <!-- SVG overlay draws route + dots -->
-    <svg class="overlay" viewBox="0 0 1792 1024" preserveAspectRatio="none" id="overlay">
-      <defs>
-        <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="#d50000"/>
-          <stop offset="100%" stop-color="#ff6d6d"/>
-        </linearGradient>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="4" result="b"/>
-          <feMerge>
-            <feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      <g id="routeGroup">
-        <path id="routePath" class="route" d=""/>
-        <g id="routeDots" class="route-dots"></g>
-      </g>
-    </svg>
-    <!-- Penguin marker -->
-    <img class="penguin" id="penguin" alt="penguin" src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Emoji_u1f427.svg/64px-Emoji_u1f427.svg.png" />
-    <!-- HUD -->
-    <div class="hud">
-      <h3>Redeem Code</h3>
-      <div class="row">
-        <input id="codeInput" placeholder="Enter code e.g. SOCIAL5" />
-        <button class="btn" id="btnRedeem">Redeem</button>
-      </div>
-      <div class="notice">Test codes: <b>SOCIAL5</b>, <b>TASK10</b>, <b>EVENT25</b>, <b>BIG50</b>, <b>MOVE100</b></div>
+<div class="map-wrap" id="wrap">
+  <!-- Inline SVG BACKDROP + ROUTE (no external assets) -->
+  <svg id="backdrop" viewBox="0 0 1792 1024" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
+    <!-- Soft sky/ground -->
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#3a93d8"/><stop offset="70%" stop-color="#a3d68e"/>
+      </linearGradient>
+      <radialGradient id="field" cx="50%" cy="60%">
+        <stop offset="0%" stop-color="#9bd37f"/><stop offset="100%" stop-color="#78b867"/>
+      </radialGradient>
+      <linearGradient id="trackGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#d50000"/><stop offset="100%" stop-color="#ff6d6d"/>
+      </linearGradient>
+      <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge>
+        <feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#sky)"/>
+    <ellipse cx="50%" cy="70%" rx="60%" ry="45%" fill="url(#field)"/>
+
+    <!-- Simple landmark icons (illustrative) -->
+    <g fill="#e46e5a" stroke="#3b2b2b" stroke-width="6" opacity=".95">
+      <!-- Start (Lyden-ish) -->
+      <rect x="140" y="780" width="180" height="120" rx="12"/>
+      <!-- Stadium -->
+      <rect x="1180" y="250" width="280" height="160" rx="16"/>
+      <!-- Courtyard cluster -->
+      <rect x="980" y="580" width="120" height="90" rx="10"/>
+      <rect x="1110" y="600" width="110" height="80" rx="10"/>
+      <!-- Finish tower (Kilcawley-ish) -->
+      <rect x="1600" y="150" width="80" height="260" rx="12" fill="#f3b22f" stroke="#6d4b00"/>
+    </g>
+
+    <!-- ROUTE (edit points below in JS if you like) -->
+    <g id="route">
+      <path id="routePath" d="" fill="none" stroke="url(#trackGrad)" stroke-width="14" filter="url(#glow)"/>
+      <g id="dots" fill="#ffcc00" opacity=".9"></g>
+    </g>
+  </svg>
+
+  <!-- Penguin marker with crown (leader) -->
+  <div id="marker" class="marker" style="left:0;top:0">
+    <div class="bubble">
+      <span class="penguin">🐧</span>
+      <span class="crown">👑</span>
     </div>
   </div>
-</main>
+</div>
 
-<footer>Live board demo • Smooth interpolation along custom route • GitHub Pages friendly</footer>
+<div class="hud">
+  <input id="code" placeholder="Enter code: SOCIAL5 / TASK10 / EVENT25 / BIG50 / MOVE100" />
+  <button id="redeem">Redeem</button>
+  <button id="reset" title="Clear saved points">Reset</button>
+</div>
+<div class="note">Test codes → <b>SOCIAL5</b>=5, <b>TASK10</b>=10, <b>EVENT25</b>=25, <b>BIG50</b>=50, <b>MOVE100</b>=100. Progress saves locally for this demo.</div>
 
-<!-- Firebase (optional). If not configured, app runs in Demo Mode. -->
-<script type="module">
-/** =========================
- *  CONFIG
- *  ========================= */
-const MAP_URL = "assets/ysu_game_map.png"; // <-- put your generated backdrop here
-const FINISH_POINTS = 700;                 // finish line
-const DOT_EVERY_PTS = 10;                  // for visual tiles
-const STATUS = document.getElementById('status');
-const PTS_EL = document.getElementById('pointsVal');
-const PTS_MAX_EL = document.getElementById('pointsMax'); PTS_MAX_EL.textContent = FINISH_POINTS;
-const PENGUIN = document.getElementById('penguin');
-const MAP = document.getElementById('map');
-MAP.style.backgroundImage = `url('${MAP_URL}')`;
+<script>
+/* ====== ultra-simple demo logic (no Firebase) ====== */
+const FINISH = 700;
+const CODES = { SOCIAL5:5, TASK10:10, EVENT25:25, BIG50:50, MOVE100:100 };
+const ptsEl = document.getElementById('pts');
+const codeEl = document.getElementById('code');
+const marker = document.getElementById('marker');
+const svg = document.getElementById('backdrop');
+const pathEl = document.getElementById('routePath');
+const dotsEl = document.getElementById('dots');
+document.getElementById('instructionsLink').href = "https://example.com/instructions"; // replace later
+document.getElementById('registerLink').href = "https://forms.gle/your-google-form";   // replace later
 
-/** Route definition:
- *  Use coordinates in the SVG viewBox space (1792x1024). These are sample waypoints.
- *  Adjust to trace your visual path (click-export tool later).
- */
-const ROUTE_POINTS = [
-  [140,850],[260,810],[380,770],[510,740],[660,700],
-  [820,660],[980,640],[1120,600],[1240,540],[1350,480],
-  [1460,430],[1550,380],[1620,330],[1660,280],[1700,230],
-  [1730,190],[1750,150]
+// Route (viewBox 1792x1024) – tweak points to match your final art
+const P = [
+  [150, 840],[280, 810],[420, 770],[560, 730],[710, 700],
+  [860, 660],[1000, 620],[1120, 560],[1240, 500],
+  [1360, 440],[1460, 380],[1540, 330],[1620, 280],[1690,230]
 ];
 
-/** Built-in test codes (works in Demo Mode and in Firestore if documents match). */
-const CODEBOOK = {
-  "SOCIAL5":5, "TASK10":10, "EVENT25":25, "BIG50":50, "MOVE100":100
-};
-
-/** =========================
- *  GEOMETRY: path lengths & interpolation
- *  ========================= */
-const segLens=[], cum=[], N=ROUTE_POINTS.length;
-let total=0;
-for(let i=0;i<N-1;i++){
-  const [x1,y1]=ROUTE_POINTS[i], [x2,y2]=ROUTE_POINTS[i+1];
-  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
-  segLens.push(len); total+=len; cum.push(total);
+// Draw route & dots
+pathEl.setAttribute("d","M " + P.map(p=>p.join(" ")).join(" L "));
+const seg = []; let total=0, cum=[0];
+for(let i=0;i<P.length-1;i++){ const dx=P[i+1][0]-P[i][0], dy=P[i+1][1]-P[i][1]; const L=Math.hypot(dx,dy); seg.push(L); total+=L; cum.push(total); }
+// dots every 10 pts
+for(let pts=0; pts<=FINISH; pts+=10){
+  const d = (pts/FINISH)*total; const {x,y}=ptAtDist(d);
+  const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","6"); dotsEl.appendChild(c);
 }
-function distanceAtProgress(p){ return Math.max(0, Math.min(1,p)) * total; }
-function pointAtDistance(d){
-  if(d<=0) return {x:ROUTE_POINTS[0][0], y:ROUTE_POINTS[0][1]};
-  if(d>=total) return {x:ROUTE_POINTS[N-1][0], y:ROUTE_POINTS[N-1][1]};
+
+function ptAtDist(d){
+  if(d<=0) return {x:P[0][0],y:P[0][1]};
+  if(d>=total) return {x:P.at(-1)[0],y:P.at(-1)[1]};
   let acc=0;
-  for(let i=0;i<segLens.length;i++){
-    const L=segLens[i];
+  for(let i=0;i<seg.length;i++){
+    const L=seg[i];
     if(d<=acc+L){
-      const t=(d-acc)/L;
-      const [x1,y1]=ROUTE_POINTS[i], [x2,y2]=ROUTE_POINTS[i+1];
-      return {x: x1 + t*(x2-x1), y: y1 + t*(y2-y1)};
+      const t=(d-acc)/L; const x=P[i][0]+t*(P[i+1][0]-P[i][0]); const y=P[i][1]+t*(P[i+1][1]-P[i][1]);
+      return {x,y};
     }
     acc+=L;
   }
-  return {x:ROUTE_POINTS[N-1][0], y:ROUTE_POINTS[N-1][1]};
-}
-function xyFromPoints(points){ return points.map(p=>p.join(",")).join(" "); }
-
-/** Draw path & dots (visual tiles every DOT_EVERY_PTS) */
-const pathEl = document.getElementById('routePath');
-pathEl.setAttribute("d","M "+ROUTE_POINTS.map(p=>p.join(" ")).join(" L "));
-const dotsEl = document.getElementById('routeDots');
-(function drawDots(){
-  const totalDots = Math.floor(FINISH_POINTS / DOT_EVERY_PTS);
-  for(let i=0;i<=totalDots;i++){
-    const progress = i*DOT_EVERY_PTS / FINISH_POINTS;
-    const d = distanceAtProgress(progress);
-    const {x,y} = pointAtDistance(d);
-    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
-    c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r","7");
-    dotsEl.appendChild(c);
-  }
-})();
-
-/** =========================
- *  PLAYER STATE
- *  ========================= */
-let appMode = "DEMO";          // "DEMO" or "FIREBASE"
-let uid = "demo-player";
-let displayName = "Guest Penguin";
-let points = 0;
-
-/** Move penguin to position derived from points */
-function renderPenguin(){
-  const progress = Math.max(0, Math.min(1, points/FINISH_POINTS));
-  const d = distanceAtProgress(progress);
-  const {x,y} = pointAtDistance(d);
-  const wrap = document.getElementById('overlay');
-  // overlay viewBox is 1792x1024, translate to pixel position within map-wrap
-  const rect = wrap.getBoundingClientRect();
-  const left = (x / 1792) * rect.width;
-  const top  = (y / 1024) * rect.height;
-  // trigger waddle animation by toggling class
-  PENGUIN.classList.remove('moving'); void PENGUIN.offsetWidth; PENGUIN.classList.add('moving');
-  PENGUIN.style.left = `${left}px`;
-  PENGUIN.style.top  = `${top}px`;
-  PTS_EL.textContent = Math.round(points);
-}
-window.addEventListener('resize', renderPenguin);
-
-/** =========================
- *  DEMO MODE (LocalStorage)
- *  ========================= */
-const LS_KEY="rth_demo_points_v1";
-function loadDemo(){ points = +localStorage.getItem(LS_KEY) || 0; renderPenguin(); }
-function saveDemo(){ localStorage.setItem(LS_KEY, String(points)); }
-async function redeemDemo(code){
-  const up = CODEBOOK[code.toUpperCase()];
-  if(!up){ alert("Invalid code"); return; }
-  points = Math.min(FINISH_POINTS, points + up);
-  saveDemo(); renderPenguin();
+  return {x:P.at(-1)[0],y:P.at(-1)[1]};
 }
 
-/** =========================
- *  FIREBASE (optional)
- *  ========================= */
-import { initializeApp }      from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+function render(){
+  const pts = getPoints();
+  ptsEl.textContent = pts;
+  const d = (Math.max(0,Math.min(1, pts/FINISH)))*total;
+  const {x,y} = ptAtDist(d);
+  const rect = svg.getBoundingClientRect();
+  const left = (x/1792)*rect.width, top=(y/1024)*rect.height;
+  marker.style.left = left+"px";
+  marker.style.top  = top +"px";
+}
+function getPoints(){ return +(localStorage.getItem("rth_demo_pts")||0); }
+function setPoints(v){ localStorage.setItem("rth_demo_pts", Math.max(0, Math.min(FINISH, v))); render(); }
 
-const firebaseConfig = {
-  apiKey:     "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId:  "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId:      "APP_ID",
+// redeem
+document.getElementById('redeem').onclick = ()=>{
+  const code = (codeEl.value||"").trim().toUpperCase();
+  codeEl.value="";
+  if(!CODES[code]){ alert("Invalid code"); return; }
+  setPoints(getPoints() + CODES[code]);
 };
-let db, auth;
+// reset
+document.getElementById('reset').onclick = ()=>{ localStorage.removeItem("rth_demo_pts"); render(); };
+// responsive
+addEventListener('resize', render);
 
-function tryInitFirebase(){
-  try{
-    // naive check: if keys are still placeholders, stay in demo
-    if(firebaseConfig.projectId === "YOUR_PROJECT_ID") throw new Error("placeholder");
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    auth = getAuth(app);
-    appMode = "FIREBASE";
-    STATUS.textContent = "Connected";
-  }catch(e){
-    appMode = "DEMO";
-    STATUS.textContent = "Demo Mode";
-  }
-}
-tryInitFirebase();
-
-async function ensurePlayerDoc(uid){
-  const ref = doc(db,"players",uid);
-  const snap = await getDoc(ref);
-  if(!snap.exists()){
-    await setDoc(ref,{
-      nickname: displayName || "Penguin",
-      points: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-  }
-  return ref;
-}
-async function listenPlayer(uid){
-  const ref = doc(db,"players",uid);
-  onSnapshot(ref,(s)=>{
-    if(s.exists()){
-      const data = s.data();
-      points = data.points || 0;
-      displayName = data.nickname || "Penguin";
-      document.getElementById('playerName').textContent = displayName;
-      renderPenguin();
-    }
-  });
-}
-async function redeemFirebase(code){
-  const upper = code.toUpperCase();
-  const val = CODEBOOK[upper];
-  if(!val){ alert("Invalid code"); return; }
-  const pRef = doc(db,"players",uid);
-  const cRef = doc(db,"codes", upper); // expect doc id = code string
-  const claimsRef = doc(db, `players/${uid}/claims/${upper}`);
-
-  await runTransaction(db, async (tx)=>{
-    const [pSnap, cSnap, clSnap] = await Promise.all([
-      tx.get(pRef), tx.get(cRef), tx.get(claimsRef)
-    ]);
-    if(!pSnap.exists()) throw new Error("Player missing");
-    if(!cSnap.exists()) throw new Error("Code not found");
-    if(clSnap.exists()) throw new Error("Code already used by this player");
-
-    const curr = pSnap.data().points || 0;
-    const add = cSnap.data().value || val; // fallback to CODEBOOK value
-    const next = Math.min(FINISH_POINTS, curr + add);
-
-    tx.update(pRef,{ points: next, updatedAt: serverTimestamp(), lastClaimAt: serverTimestamp() });
-    tx.set(claimsRef,{ code: upper, value: add, claimedAt: serverTimestamp() });
-  }).catch(e=>{ alert(e.message); });
-}
-
-/** =========================
- *  UI HOOKS
- *  ========================= */
-document.getElementById('btnRedeem').addEventListener('click', async ()=>{
-  const code = (document.getElementById('codeInput').value||"").trim();
-  if(!code) return;
-  if(appMode==="FIREBASE") await redeemFirebase(code);
-  else await redeemDemo(code);
-  document.getElementById('codeInput').value="";
-});
-document.getElementById('btnLogin').addEventListener('click', async ()=>{
-  if(appMode!=="FIREBASE"){ alert("Running in Demo Mode. Add your Firebase config to enable cloud sync."); return; }
-  await signInAnonymously(auth);
-});
-
-if(appMode==="FIREBASE"){
-  onAuthStateChanged(getAuth(), async (user)=>{
-    if(user){
-      uid = user.uid;
-      displayName = user.isAnonymous ? "Penguin" : (user.displayName||"Penguin");
-      document.getElementById('playerName').textContent = displayName;
-      const ref = await ensurePlayerDoc(uid);
-      await listenPlayer(uid);
-    }else{
-      STATUS.textContent="Signed out";
-    }
-  });
-}else{
-  // Demo boot
-  loadDemo();
-  document.getElementById('playerName').textContent = "Guest";
-}
-
-/** Initial render */
-renderPenguin();
+// boot
+render();
 </script>
 </body>
 </html>
