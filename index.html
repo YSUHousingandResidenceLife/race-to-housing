@@ -1,55 +1,80 @@
-<script>
-  // 1) Init map
-  const map = L.map('map').setView([41.1040, -80.6470], 16);
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Race to Housing – Map Only</title>
 
-  // 2) Softer illustrated basemap (Carto Voyager)
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
-    subdomains: 'abcd',
-    maxZoom: 20
-  }).addTo(map);
+  <!-- Leaflet (no key needed) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  // 3) Icons
-  const houseIcon = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/69/69524.png',
-    iconSize: [28,28], iconAnchor:[14,28], popupAnchor:[0,-28]
-  });
-  const diningIcon = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/857/857681.png',
-    iconSize: [26,26], iconAnchor:[13,26], popupAnchor:[0,-26]
-  });
+  <style>
+    html,body { margin:0; height:100%; font-family: system-ui, Arial, sans-serif; }
+    #map { width:100%; height:420px; }
 
-  // 4) Stops
-  const STOPS = [
-    { id:'lyden',     name:'Lyden House',      lat:41.1069, lng:-80.6462, icon:houseIcon,  cat:'Housing' },
-    { id:'cafaro',    name:'Cafaro House',     lat:41.1061, lng:-80.6466, icon:houseIcon,  cat:'Housing' },
-    { id:'christman', name:'Christman Dining', lat:41.1050, lng:-80.6425, icon:diningIcon, cat:'Meal'    },
-    { id:'weller',    name:'Weller House',     lat:41.1018, lng:-80.6467, icon:houseIcon,  cat:'Housing' },
-    { id:'wick',      name:'Wick House',       lat:41.1015, lng:-80.6469, icon:houseIcon,  cat:'Housing' },
-    { id:'kilcawley', name:'Kilcawley House',  lat:41.1053, lng:-80.6518, icon:houseIcon,  cat:'Housing' }
-  ];
-  const ROUTE = ['lyden','cafaro','christman','weller','wick','kilcawley'];
+    /* Emoji-based map markers (no external images) */
+    .pin-emoji {
+      background: transparent;
+      border: 0;
+      transform: translate(-50%, -80%);
+      font-size: 28px;           /* size of the emoji marker */
+      line-height: 1;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
 
-  // 5) Markers
-  const byId = Object.fromEntries(STOPS.map(s => [s.id, s]));
-  const bounds = L.latLngBounds();
-  STOPS.forEach(s => {
-    const m = L.marker([s.lat, s.lng], { icon: s.icon, title: s.name }).addTo(map);
-    m.bindPopup(`<b>${s.name}</b><br>${s.cat}`);
-    bounds.extend([s.lat, s.lng]);
-  });
+  <script>
+    // 1) Init map (YSU area)
+    const map = L.map('map').setView([41.1040, -80.6470], 16);
 
-  // 6) Route with trail style
-  const path = ROUTE.map(id => byId[id]).filter(Boolean).map(s => [s.lat, s.lng]);
+    // Softer base map (Carto Voyager). If this ever fails, switch to OSM standard tiles.
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+    }).addTo(map);
 
-  // green base
-  L.polyline(path, { color:'#00cc44', weight:8, opacity:0.9 }).addTo(map);
-  // dashed black overlay in the center
-  L.polyline(path, {
-    color:'#000000', weight:2, opacity:1,
-    dashArray:'6, 8' // pattern: 6px dash, 8px gap
-  }).addTo(map);
+    // 2) Emoji "icons" so we don’t depend on any PNGs or CORS
+    const houseIcon  = L.divIcon({ className: 'pin-emoji', html: '🏠', iconSize: [28,28], iconAnchor: [14,28] });
+    const diningIcon = L.divIcon({ className: 'pin-emoji', html: '🍽️', iconSize: [28,28], iconAnchor: [14,28] });
 
-  // 7) Fit map to route
-  map.fitBounds(bounds, { maxZoom:17 });
-</script>
+    // 3) Stops
+    const STOPS = [
+      { id:'lyden',     name:'Lyden House',      lat:41.1069, lng:-80.6462, icon:houseIcon,  cat:'Housing' },
+      { id:'cafaro',    name:'Cafaro House',     lat:41.1061, lng:-80.6466, icon:houseIcon,  cat:'Housing' },
+      { id:'christman', name:'Christman Dining', lat:41.1050, lng:-80.6425, icon:diningIcon, cat:'Meal'    },
+      { id:'weller',    name:'Weller House',     lat:41.1018, lng:-80.6467, icon:houseIcon,  cat:'Housing' },
+      { id:'wick',      name:'Wick House',       lat:41.1015, lng:-80.6469, icon:houseIcon,  cat:'Housing' },
+      { id:'kilcawley', name:'Kilcawley House',  lat:41.1053, lng:-80.6518, icon:houseIcon,  cat:'Housing' }
+    ];
+    const ROUTE = ['lyden','cafaro','christman','weller','wick','kilcawley'];
+
+    // 4) Markers
+    const byId = Object.fromEntries(STOPS.map(s => [s.id, s]));
+    const bounds = L.latLngBounds();
+    STOPS.forEach(s => {
+      const m = L.marker([s.lat, s.lng], { icon: s.icon, title: s.name }).addTo(map);
+      m.bindPopup(`<b>${s.name}</b><br>${s.cat}`);
+      bounds.extend([s.lat, s.lng]);
+    });
+
+    // 5) Trail-style route: green band + dashed black center
+    const path = ROUTE.map(id => byId[id]).filter(Boolean).map(s => [s.lat, s.lng]);
+
+    // green band
+    L.polyline(path, { color:'#00cc44', weight:8, opacity:0.95 }).addTo(map);
+    // dashed black center line
+    L.polyline(path, {
+      color:'#000',
+      weight:2,
+      opacity:1,
+      dashArray:'6,8'   // 6px dash + 8px gap
+    }).addTo(map);
+
+    // 6) Fit view
+    map.fitBounds(bounds, { maxZoom: 17 });
+  </script>
+</body>
+</html>
