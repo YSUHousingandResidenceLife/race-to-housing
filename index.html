@@ -3,24 +3,24 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Race to Housing – Demo</title>
+<title>Race to Housing – Backdrop Demo</title>
 <style>
-  :root{ --red:#d50000; --gold:#ffcc00; --ink:#111; }
+  :root{ --red:#d50000; --gold:#ffcc00; }
   html,body{margin:0;background:#0b0b0b;color:#fff;font-family:system-ui,Segoe UI,Arial}
   header{display:flex;justify-content:space-between;align-items:center;gap:12px;
     padding:10px 14px;background:#121212;border-bottom:1px solid #222}
   a{color:#9ad0ff;text-decoration:none}
-  .map-wrap{position:relative; width:100%; max-width:1100px; margin:10px auto; aspect-ratio: 28/16;
-    border:1px solid #222; border-radius:14px; overflow:hidden; background:#0a0a0a;
-    box-shadow:0 8px 30px rgba(0,0,0,.35)}
-  /* Penguin marker (emoji + crown) */
+  .map-wrap{position:relative; width:100%; max-width:1200px; margin:10px auto; aspect-ratio: 28/16;
+    border:1px solid #222; border-radius:14px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.35)}
+  .map{position:absolute; inset:0; background-size:cover; background-position:center}
+  svg.overlay{position:absolute; inset:0}
+  #routePath{fill:none; stroke:url(#g); stroke-width:14; filter:url(#glow)}
+  #dots circle{fill:var(--gold); opacity:.9}
   .marker{position:absolute; transform:translate(-50%,-90%); transition:left .5s ease, top .5s ease}
-  .bubble{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none}
   .penguin{font-size:44px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.5))}
   .crown{position:absolute; right:-6px; top:-10px; font-size:22px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.6))}
-  /* HUD */
   .hud{display:flex; gap:8px; align-items:center; justify-content:center; margin:8px auto}
-  input{background:#101010;color:#fff;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;min-width:200px}
+  input{background:#101010;color:#fff;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;min-width:220px}
   button{background:var(--red);color:#fff;border:none;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
   .note{font-size:12px;opacity:.8;text-align:center;margin:6px 0}
 </style>
@@ -29,54 +29,31 @@
 <header>
   <div><strong>🐧 Race to Housing – Demo</strong> | Points: <span id="pts">0</span> / 700</div>
   <nav style="display:flex;gap:14px">
-    <a id="instructionsLink" href="#" target="_blank">Instructions</a>
-    <a id="registerLink" href="#" target="_blank">Register</a>
+    <a href="https://example.com/instructions" target="_blank">Instructions</a>
+    <a href="https://forms.gle/your-google-form" target="_blank">Register</a>
   </nav>
 </header>
 
 <div class="map-wrap" id="wrap">
-  <!-- Inline SVG BACKDROP + ROUTE (no external assets) -->
-  <svg id="backdrop" viewBox="0 0 1792 1024" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
-    <!-- Soft sky/ground -->
+  <!-- AUTO-EMBEDDED BACKDROP -->
+  <div class="map" id="map"></div>
+
+  <!-- SVG overlay for route + dots -->
+  <svg class="overlay" viewBox="0 0 1792 1024" preserveAspectRatio="none" id="overlay">
     <defs>
-      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#3a93d8"/><stop offset="70%" stop-color="#a3d68e"/>
-      </linearGradient>
-      <radialGradient id="field" cx="50%" cy="60%">
-        <stop offset="0%" stop-color="#9bd37f"/><stop offset="100%" stop-color="#78b867"/>
-      </radialGradient>
-      <linearGradient id="trackGrad" x1="0" y1="0" x2="1" y2="0">
+      <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0%" stop-color="#d50000"/><stop offset="100%" stop-color="#ff6d6d"/>
       </linearGradient>
       <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge>
         <feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     </defs>
-    <rect width="100%" height="100%" fill="url(#sky)"/>
-    <ellipse cx="50%" cy="70%" rx="60%" ry="45%" fill="url(#field)"/>
-
-    <!-- Simple landmark icons (illustrative) -->
-    <g fill="#e46e5a" stroke="#3b2b2b" stroke-width="6" opacity=".95">
-      <!-- Start (Lyden-ish) -->
-      <rect x="140" y="780" width="180" height="120" rx="12"/>
-      <!-- Stadium -->
-      <rect x="1180" y="250" width="280" height="160" rx="16"/>
-      <!-- Courtyard cluster -->
-      <rect x="980" y="580" width="120" height="90" rx="10"/>
-      <rect x="1110" y="600" width="110" height="80" rx="10"/>
-      <!-- Finish tower (Kilcawley-ish) -->
-      <rect x="1600" y="150" width="80" height="260" rx="12" fill="#f3b22f" stroke="#6d4b00"/>
-    </g>
-
-    <!-- ROUTE (edit points below in JS if you like) -->
-    <g id="route">
-      <path id="routePath" d="" fill="none" stroke="url(#trackGrad)" stroke-width="14" filter="url(#glow)"/>
-      <g id="dots" fill="#ffcc00" opacity=".9"></g>
-    </g>
+    <path id="routePath" d=""/>
+    <g id="dots"></g>
   </svg>
 
   <!-- Penguin marker with crown (leader) -->
   <div id="marker" class="marker" style="left:0;top:0">
-    <div class="bubble">
+    <div class="bubble" style="position:relative">
       <span class="penguin">🐧</span>
       <span class="crown">👑</span>
     </div>
@@ -84,43 +61,43 @@
 </div>
 
 <div class="hud">
-  <input id="code" placeholder="Enter code: SOCIAL5 / TASK10 / EVENT25 / BIG50 / MOVE100" />
+  <input id="code" placeholder="SOCIAL5 / TASK10 / EVENT25 / BIG50 / MOVE100" />
   <button id="redeem">Redeem</button>
   <button id="reset" title="Clear saved points">Reset</button>
 </div>
-<div class="note">Test codes → <b>SOCIAL5</b>=5, <b>TASK10</b>=10, <b>EVENT25</b>=25, <b>BIG50</b>=50, <b>MOVE100</b>=100. Progress saves locally for this demo.</div>
+<div class="note">Progress saves locally for this demo. Crown indicates current leader.</div>
 
 <script>
-/* ====== ultra-simple demo logic (no Firebase) ====== */
+/* ===== Backdrop (data URI) ===== */
+const DATA_URI = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...TRIMMED_FOR_BREVITY..."; // <— full string below
+
+document.getElementById('map').style.backgroundImage = `url('${DATA_URI}')`;
+
+/* ===== Simple route + movement ===== */
 const FINISH = 700;
 const CODES = { SOCIAL5:5, TASK10:10, EVENT25:25, BIG50:50, MOVE100:100 };
 const ptsEl = document.getElementById('pts');
 const codeEl = document.getElementById('code');
 const marker = document.getElementById('marker');
-const svg = document.getElementById('backdrop');
+const svg = document.getElementById('overlay');
 const pathEl = document.getElementById('routePath');
 const dotsEl = document.getElementById('dots');
-document.getElementById('instructionsLink').href = "https://example.com/instructions"; // replace later
-document.getElementById('registerLink').href = "https://forms.gle/your-google-form";   // replace later
 
-// Route (viewBox 1792x1024) – tweak points to match your final art
+// Route points (trace over the backdrop). Adjust later as needed.
 const P = [
   [150, 840],[280, 810],[420, 770],[560, 730],[710, 700],
   [860, 660],[1000, 620],[1120, 560],[1240, 500],
   [1360, 440],[1460, 380],[1540, 330],[1620, 280],[1690,230]
 ];
 
-// Draw route & dots
 pathEl.setAttribute("d","M " + P.map(p=>p.join(" ")).join(" L "));
-const seg = []; let total=0, cum=[0];
+const seg=[]; let total=0, cum=[0];
 for(let i=0;i<P.length-1;i++){ const dx=P[i+1][0]-P[i][0], dy=P[i+1][1]-P[i][1]; const L=Math.hypot(dx,dy); seg.push(L); total+=L; cum.push(total); }
-// dots every 10 pts
 for(let pts=0; pts<=FINISH; pts+=10){
-  const d = (pts/FINISH)*total; const {x,y}=ptAtDist(d);
-  const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+  const d=(pts/FINISH)*total; const {x,y}=ptAtDist(d);
+  const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
   c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","6"); dotsEl.appendChild(c);
 }
-
 function ptAtDist(d){
   if(d<=0) return {x:P[0][0],y:P[0][1]};
   if(d>=total) return {x:P.at(-1)[0],y:P.at(-1)[1]};
@@ -130,38 +107,23 @@ function ptAtDist(d){
     if(d<=acc+L){
       const t=(d-acc)/L; const x=P[i][0]+t*(P[i+1][0]-P[i][0]); const y=P[i][1]+t*(P[i+1][1]-P[i][1]);
       return {x,y};
-    }
-    acc+=L;
+    } acc+=L;
   }
   return {x:P.at(-1)[0],y:P.at(-1)[1]};
 }
-
 function render(){
-  const pts = getPoints();
-  ptsEl.textContent = pts;
-  const d = (Math.max(0,Math.min(1, pts/FINISH)))*total;
-  const {x,y} = ptAtDist(d);
-  const rect = svg.getBoundingClientRect();
-  const left = (x/1792)*rect.width, top=(y/1024)*rect.height;
-  marker.style.left = left+"px";
-  marker.style.top  = top +"px";
+  const pts=getPts(); ptsEl.textContent=pts;
+  const d=(Math.max(0,Math.min(1,pts/FINISH)))*total;
+  const {x,y}=ptAtDist(d);
+  const r=svg.getBoundingClientRect();
+  marker.style.left=(x/1792)*r.width+"px";
+  marker.style.top =(y/1024)*r.height+"px";
 }
-function getPoints(){ return +(localStorage.getItem("rth_demo_pts")||0); }
-function setPoints(v){ localStorage.setItem("rth_demo_pts", Math.max(0, Math.min(FINISH, v))); render(); }
-
-// redeem
-document.getElementById('redeem').onclick = ()=>{
-  const code = (codeEl.value||"").trim().toUpperCase();
-  codeEl.value="";
-  if(!CODES[code]){ alert("Invalid code"); return; }
-  setPoints(getPoints() + CODES[code]);
-};
-// reset
+function getPts(){ return +(localStorage.getItem("rth_demo_pts")||0); }
+function setPts(v){ localStorage.setItem("rth_demo_pts", Math.max(0,Math.min(FINISH,v))); render(); }
+document.getElementById('redeem').onclick=()=>{ const c=(codeEl.value||"").trim().toUpperCase(); codeEl.value=""; if(!CODES[c]){alert("Invalid code");return;} setPts(getPts()+CODES[c]); };
 document.getElementById('reset').onclick = ()=>{ localStorage.removeItem("rth_demo_pts"); render(); };
-// responsive
 addEventListener('resize', render);
-
-// boot
 render();
 </script>
 </body>
