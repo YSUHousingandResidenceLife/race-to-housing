@@ -1,103 +1,65 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Race to Housing – Campus Overlay</title>
-
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Race to Housing – Tiled Campus Map</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <style>
-  html,body { margin:0; height:100%; font-family: system-ui, Arial, sans-serif; }
-  #map { width:100%; height:420px; }
-  .panel { position:absolute; right:10px; top:10px; z-index:1000; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px; font-size:.9rem; }
-  .pin-emoji { background:transparent; border:0; transform:translate(-50%,-80%); font-size:28px; line-height:1; filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); cursor:grab; }
-  .pin-emoji.dragging { cursor:grabbing; }
+  html,body {margin:0;height:100%}
+  #map {height:100vh;width:100%;}
+  .pin {background:transparent;border:0;transform:translate(-50%,-80%);font-size:28px;line-height:1;
+        filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
 </style>
 </head>
 <body>
-
 <div id="map"></div>
-<div class="panel">
-  🗺️ <b>Overlay loaded.</b> Press <b>E</b> to toggle edit mode (drag markers). Press <b>S</b> to print positions to Console.
-</div>
-
 <script>
-/* ==== CONFIG ==== */
-const IMAGE_PATH = './campus_map_clean_ultraHD.png'; // your stitched image
-// Initial marker % positions (rough). You can drag in edit mode and press S to save exact values.
+/* --- image meta from tile_image.py output --- */
+const IMG_W = 945, IMG_H = 14336, MAX_ZOOM = 6;
+
+/* --- init map (simple image CRS) --- */
+const map = L.map('map', { crs: L.CRS.Simple, minZoom: 0, maxZoom: MAX_ZOOM });
+
+/* tiles you generated: ./tiles/{z}/{x}/{y}.png */
+L.tileLayer('./tiles/{z}/{x}/{y}.png', {
+  minZoom: 0, maxZoom: MAX_ZOOM, noWrap: true
+}).addTo(map);
+
+/* fit bounds to full image */
+const southWest = map.unproject([0, IMG_H], MAX_ZOOM);
+const northEast = map.unproject([IMG_W, 0], MAX_ZOOM);
+const bounds = L.latLngBounds(southWest, northEast);
+map.setMaxBounds(bounds);
+map.fitBounds(bounds);
+
+/* helpers to place things by % of image (percent is easier to tweak) */
+const pctToLL = (px, py) => map.unproject([IMG_W * px, IMG_H * py], MAX_ZOOM);
+
+/* ---- stops (adjust px/py until it lines up perfectly) ---- */
 const STOPS = [
   { id:'lyden',     name:'Lyden House',      emoji:'🏠', px:0.55, py:0.12 },
   { id:'cafaro',    name:'Cafaro House',     emoji:'🏠', px:0.53, py:0.22 },
   { id:'christman', name:'Christman Dining', emoji:'🍽️', px:0.51, py:0.35 },
   { id:'weller',    name:'Weller House',     emoji:'🏠', px:0.48, py:0.58 },
   { id:'wick',      name:'Wick House',       emoji:'🏠', px:0.46, py:0.72 },
-  { id:'kilcawley', name:'Kilcawley House',  emoji:'🏠', px:0.44, py:0.88 },
+  { id:'kilcawley', name:'Kilcawley House',  emoji:'🏠', px:0.44, py:0.88 }
 ];
-// Trail order by id (you can reorder later)
 const ROUTE = ['lyden','cafaro','christman','weller','wick','kilcawley'];
-/* =============== */
 
-const map = L.map('map', { crs: L.CRS.Simple, minZoom: -2 });
-const img = new Image();
-img.onload = () => {
-  const w = img.naturalWidth, h = img.naturalHeight;
-  const bounds = L.latLngBounds([ [0,0], [h,w] ]); // CRS.Simple: y,x
-  L.imageOverlay(IMAGE_PATH, bounds, { opacity: 1 }).addTo(map);
-  map.fitBounds(bounds);
+/* markers */
+const byId = Object.fromEntries(STOPS.map(s => [s.id, s]));
+STOPS.forEach(s => {
+  L.marker(pctToLL(s.px, s.py), {
+    icon: L.divIcon({ className:'pin', html:s.emoji, iconSize:[28,28], iconAnchor:[14,28], title:s.name })
+  }).addTo(map).bindPopup(`<b>${s.name}</b>`);
+});
 
-  // helpers: % → latlng, latlng → %
-  const pctToLL = (px,py) => L.latLng(h*py, w*px);
-  const llToPct = (ll) => ({ px: ll.lng / w, py: ll.lat / h });
-
-  // markers
-  const markers = new Map();
-  STOPS.forEach(s => {
-    const m = L.marker(pctToLL(s.px, s.py), {
-      draggable: false,
-      icon: L.divIcon({ className:'pin-emoji', html: s.emoji, iconSize:[28,28], iconAnchor:[14,28], title: s.name })
-    }).addTo(map).bindPopup(`<b>${s.name}</b>`);
-    m._meta = s;
-    markers.set(s.id, m);
-  });
-
-  // trail (green band + dashed black center)
-  const idToStop = Object.fromEntries(STOPS.map(s=>[s.id,s]));
-  const pathLL = ROUTE.map(id => pctToLL(idToStop[id].px, idToStop[id].py));
-  L.polyline(pathLL, { color:'#00cc44', weight:8, opacity:0.95 }).addTo(map);
-  L.polyline(pathLL, { color:'#000', weight:2, opacity:1, dashArray:'6,8' }).addTo(map);
-
-  // Edit mode toggle (E) + Save positions (S)
-  let edit = false;
-  function setEdit(on) {
-    edit = on;
-    markers.forEach(m => {
-      m.dragging[edit ? 'enable' : 'disable']();
-      const el = m.getElement(); if (el) el.classList.toggle('dragging', edit);
-    });
-  }
-  setEdit(false);
-
-  window.addEventListener('keydown', (e)=>{
-    const k = e.key.toLowerCase();
-    if (k === 'e') setEdit(!edit);
-    if (k === 's') {
-      // print current positions as %
-      const out = [];
-      markers.forEach(m => {
-        const ll = m.getLatLng();
-        const p = llToPct(ll);
-        out.push({ id: m._meta.id, name: m._meta.name, emoji: m._meta.emoji,
-                   px: Number(p.px.toFixed(6)), py: Number(p.py.toFixed(6)) });
-      });
-      console.log('Marker positions (% of image):', out);
-      alert('Positions printed to Console.');
-    }
-  });
-};
-img.src = IMAGE_PATH;
+/* trail: green band + dashed black center */
+const path = ROUTE.map(id => pctToLL(byId[id].px, byId[id].py));
+L.polyline(path, { color:'#00cc44', weight:8, opacity:0.95 }).addTo(map);
+L.polyline(path, { color:'#000', weight:2, opacity:1, dashArray:'6,8' }).addTo(map);
 </script>
-
 </body>
 </html>
