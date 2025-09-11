@@ -1,40 +1,29 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>YSU Housing Race Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <title>Race to Housing • YSU</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body, html { margin: 0; padding: 0; height: 100%; }
-    #map { width: 100%; height: 100%; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    // Initialize map centered roughly on YSU campus
-    var map = L.map('map', {
-      center: [41.105, -80.65],
-      zoom: 3,
-      minZoom: 0,
-      maxZoom: 6
-    });
-
-    // Use raw.githubusercontent.com to serve tiles
-    L.tileLayer('https://raw.githubusercontent.com/YSUHousingandResidenceLife/race-to-housing/main/tiles/{z}/{x}/{y}.png', {
-      minZoom: 0,
-      maxZoom: 6,
-      attribution: 'YSU Housing Race Map'
-    }).addTo(map);
-
-    // Example marker (Lyden House)
-    L.marker([41.1064, -80.6488]).addTo(map).bindPopup('Lyden House - Start');
-  </script>
-</body>
-</html>
+    :root{
+      --ysu-red:#d50000; --ysu-black:#111; --gold:#ffca28;
+    }
+    html,body{margin:0;background:#0b0b0b;color:#fff;font-family:Inter,system-ui,Arial,sans-serif}
+    header{
+      padding:10px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between;
+      background:linear-gradient(90deg,#111, #1a1a1a);
+      border-bottom:1px solid #222;
+      position:sticky; top:0; z-index:5;
+    }
+    .brand{font-weight:800; letter-spacing:.4px}
+    .panel{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .chip{background:#191919; border:1px solid #2a2a2a; padding:6px 10px; border-radius:999px; font-size:14px}
+    .btn{
+      background:var(--ysu-red); border:none; color:#fff; font-weight:700; padding:8px 12px; border-radius:10px;
+      cursor:pointer; transition:.2s transform ease;
+    }
+    .btn:active{transform:scale(.98)}
+    #app{max-width:1400px; margin:0 auto; padding:12px}
+    .map-wrap{
+      position:relative; width:100%; aspect-ratio: 28/16; /* wide header-like banner */
+      background:#000; overflow:hidden; border-radius:14px; box-shadow:0
