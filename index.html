@@ -1,74 +1,40 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Race to Housing – Tiled Campus Map (Diagnostics)</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-  html,body{margin:0;height:100%}
-  #map{height:100vh;width:100%}
-  .pin{background:transparent;border:0;transform:translate(-50%,-80%);font-size:28px;line-height:1;
-       filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
-</style>
+  <meta charset="utf-8" />
+  <title>YSU Housing Race Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { width: 100%; height: 100%; }
+  </style>
 </head>
 <body>
-<div id="map"></div>
-<script>
-/* --- MUST MATCH tile_image.py output --- */
-const IMG_W = 945, IMG_H = 14336, MAX_ZOOM = 6;
+  <div id="map"></div>
 
-/* optional: if your site is at https://username.github.io/REPO/, keep "./tiles/..." */
-const TILE_URL = './tiles/{z}/{x}/{y}.png';
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // Initialize map centered roughly on YSU campus
+    var map = L.map('map', {
+      center: [41.105, -80.65],
+      zoom: 3,
+      minZoom: 0,
+      maxZoom: 6
+    });
 
-/* red X data-URI to visualize missing tiles */
-const ERROR_TILE =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
-    <rect width="100%" height="100%" fill="#fee2e2"/>
-    <line x1="0" y1="0" x2="256" y2="256" stroke="#b91c1c" stroke-width="12"/>
-    <line x1="256" y1="0" x2="0" y2="256" stroke="#b91c1c" stroke-width="12"/>
-  </svg>`);
+    // Use raw.githubusercontent.com to serve tiles
+    L.tileLayer('https://raw.githubusercontent.com/YSUHousingandResidenceLife/race-to-housing/main/tiles/{z}/{x}/{y}.png', {
+      minZoom: 0,
+      maxZoom: 6,
+      attribution: 'YSU Housing Race Map'
+    }).addTo(map);
 
-const map = L.map('map', { crs: L.CRS.Simple, minZoom: 0, maxZoom: MAX_ZOOM });
-
-const southWest = map.unproject([0,  IMG_H], MAX_ZOOM);
-const northEast = map.unproject([IMG_W, 0],  MAX_ZOOM);
-const bounds = L.latLngBounds(southWest, northEast);
-map.setMaxBounds(bounds);
-map.fitBounds(bounds);
-L.tileLayer('https://ysuhousingandresidencelife.github.io/race-to-housing/tiles/{z}/{x}/{y}.png', {
-  maxZoom: 6,
-  minZoom: 0,
-  attribution: 'Campus Map'
-}).addTo(map);
-
-
-/* helpers */
-const pctToLL = (px, py) => map.unproject([IMG_W * px, IMG_H * py], MAX_ZOOM);
-
-/* your markers (ok to keep—they don’t block tiles) */
-const STOPS = [
-  { id:'lyden',     name:'Lyden House',      emoji:'🏠', px:0.55, py:0.12 },
-  { id:'cafaro',    name:'Cafaro House',     emoji:'🏠', px:0.53, py:0.22 },
-  { id:'christman', name:'Christman Dining', emoji:'🍽️', px:0.51, py:0.35 },
-  { id:'weller',    name:'Weller House',     emoji:'🏠', px:0.48, py:0.58 },
-  { id:'wick',      name:'Wick House',       emoji:'🏠', px:0.46, py:0.72 },
-  { id:'kilcawley', name:'Kilcawley House',  emoji:'🏠', px:0.44, py:0.88 }
-];
-const byId = Object.fromEntries(STOPS.map(s => [s.id, s]));
-STOPS.forEach(s => {
-  L.marker(pctToLL(s.px, s.py), {
-    icon: L.divIcon({ className:'pin', html:s.emoji, iconSize:[28,28], iconAnchor:[14,28], title:s.name })
-  }).addTo(map).bindPopup(`<b>${s.name}</b>`);
-});
-
-/* trail */
-const ROUTE = ['lyden','cafaro','christman','weller','wick','kilcawley'];
-const path = ROUTE.map(id => pctToLL(byId[id].px, byId[id].py));
-L.polyline(path, { color:'#00cc44', weight:8, opacity:0.95 }).addTo(map);
-L.polyline(path, { color:'#000', weight:2, opacity:1, dashArray:'6,8' }).addTo(map);
-</script>
+    // Example marker (Lyden House)
+    L.marker([41.1064, -80.6488]).addTo(map).bindPopup('Lyden House - Start');
+  </script>
 </body>
 </html>
