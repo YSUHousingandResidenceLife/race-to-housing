@@ -38,17 +38,12 @@ const northEast = map.unproject([IMG_W, 0],  MAX_ZOOM);
 const bounds = L.latLngBounds(southWest, northEast);
 map.setMaxBounds(bounds);
 map.fitBounds(bounds);
+L.tileLayer('https://ysuhousingandresidencelife.github.io/race-to-housing/tiles/{z}/{x}/{y}.png', {
+  maxZoom: 6,
+  minZoom: 0,
+  attribution: 'Campus Map'
+}).addTo(map);
 
-/* tile layer with diagnostics */
-const tiles = L.tileLayer(TILE_URL, {
-  minZoom: 0, maxZoom: MAX_ZOOM, noWrap: true,
-  errorTileUrl: ERROR_TILE
-})
-.on('tileerror', e => {
-  // Log failing tile URLs so you can compare with your repo paths
-  console.warn('Tile failed:', e.tile.src);
-})
-.addTo(map);
 
 /* helpers */
 const pctToLL = (px, py) => map.unproject([IMG_W * px, IMG_H * py], MAX_ZOOM);
