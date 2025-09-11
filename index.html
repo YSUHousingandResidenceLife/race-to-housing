@@ -1,80 +1,103 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Race to Housing – Map Only</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Race to Housing – Campus Overlay</title>
 
-  <!-- Leaflet (no key needed) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <style>
-    html,body { margin:0; height:100%; font-family: system-ui, Arial, sans-serif; }
-    #map { width:100%; height:420px; }
-
-    /* Emoji-based map markers (no external images) */
-    .pin-emoji {
-      background: transparent;
-      border: 0;
-      transform: translate(-50%, -80%);
-      font-size: 28px;           /* size of the emoji marker */
-      line-height: 1;
-      filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
-    }
-  </style>
+<style>
+  html,body { margin:0; height:100%; font-family: system-ui, Arial, sans-serif; }
+  #map { width:100%; height:420px; }
+  .panel { position:absolute; right:10px; top:10px; z-index:1000; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px; font-size:.9rem; }
+  .pin-emoji { background:transparent; border:0; transform:translate(-50%,-80%); font-size:28px; line-height:1; filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); cursor:grab; }
+  .pin-emoji.dragging { cursor:grabbing; }
+</style>
 </head>
 <body>
-  <div id="map"></div>
 
-  <script>
-    // 1) Init map (YSU area)
-    const map = L.map('map').setView([41.1040, -80.6470], 16);
+<div id="map"></div>
+<div class="panel">
+  🗺️ <b>Overlay loaded.</b> Press <b>E</b> to toggle edit mode (drag markers). Press <b>S</b> to print positions to Console.
+</div>
 
-    // Softer base map (Carto Voyager). If this ever fails, switch to OSM standard tiles.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
-    }).addTo(map);
+<script>
+/* ==== CONFIG ==== */
+const IMAGE_PATH = './campus_map_clean_ultraHD.png'; // your stitched image
+// Initial marker % positions (rough). You can drag in edit mode and press S to save exact values.
+const STOPS = [
+  { id:'lyden',     name:'Lyden House',      emoji:'🏠', px:0.55, py:0.12 },
+  { id:'cafaro',    name:'Cafaro House',     emoji:'🏠', px:0.53, py:0.22 },
+  { id:'christman', name:'Christman Dining', emoji:'🍽️', px:0.51, py:0.35 },
+  { id:'weller',    name:'Weller House',     emoji:'🏠', px:0.48, py:0.58 },
+  { id:'wick',      name:'Wick House',       emoji:'🏠', px:0.46, py:0.72 },
+  { id:'kilcawley', name:'Kilcawley House',  emoji:'🏠', px:0.44, py:0.88 },
+];
+// Trail order by id (you can reorder later)
+const ROUTE = ['lyden','cafaro','christman','weller','wick','kilcawley'];
+/* =============== */
 
-    // 2) Emoji "icons" so we don’t depend on any PNGs or CORS
-    const houseIcon  = L.divIcon({ className: 'pin-emoji', html: '🏠', iconSize: [28,28], iconAnchor: [14,28] });
-    const diningIcon = L.divIcon({ className: 'pin-emoji', html: '🍽️', iconSize: [28,28], iconAnchor: [14,28] });
+const map = L.map('map', { crs: L.CRS.Simple, minZoom: -2 });
+const img = new Image();
+img.onload = () => {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const bounds = L.latLngBounds([ [0,0], [h,w] ]); // CRS.Simple: y,x
+  L.imageOverlay(IMAGE_PATH, bounds, { opacity: 1 }).addTo(map);
+  map.fitBounds(bounds);
 
-    // 3) Stops
-    const STOPS = [
-      { id:'lyden',     name:'Lyden House',      lat:41.1069, lng:-80.6462, icon:houseIcon,  cat:'Housing' },
-      { id:'cafaro',    name:'Cafaro House',     lat:41.1061, lng:-80.6466, icon:houseIcon,  cat:'Housing' },
-      { id:'christman', name:'Christman Dining', lat:41.1050, lng:-80.6425, icon:diningIcon, cat:'Meal'    },
-      { id:'weller',    name:'Weller House',     lat:41.1018, lng:-80.6467, icon:houseIcon,  cat:'Housing' },
-      { id:'wick',      name:'Wick House',       lat:41.1015, lng:-80.6469, icon:houseIcon,  cat:'Housing' },
-      { id:'kilcawley', name:'Kilcawley House',  lat:41.1053, lng:-80.6518, icon:houseIcon,  cat:'Housing' }
-    ];
-    const ROUTE = ['lyden','cafaro','christman','weller','wick','kilcawley'];
+  // helpers: % → latlng, latlng → %
+  const pctToLL = (px,py) => L.latLng(h*py, w*px);
+  const llToPct = (ll) => ({ px: ll.lng / w, py: ll.lat / h });
 
-    // 4) Markers
-    const byId = Object.fromEntries(STOPS.map(s => [s.id, s]));
-    const bounds = L.latLngBounds();
-    STOPS.forEach(s => {
-      const m = L.marker([s.lat, s.lng], { icon: s.icon, title: s.name }).addTo(map);
-      m.bindPopup(`<b>${s.name}</b><br>${s.cat}`);
-      bounds.extend([s.lat, s.lng]);
+  // markers
+  const markers = new Map();
+  STOPS.forEach(s => {
+    const m = L.marker(pctToLL(s.px, s.py), {
+      draggable: false,
+      icon: L.divIcon({ className:'pin-emoji', html: s.emoji, iconSize:[28,28], iconAnchor:[14,28], title: s.name })
+    }).addTo(map).bindPopup(`<b>${s.name}</b>`);
+    m._meta = s;
+    markers.set(s.id, m);
+  });
+
+  // trail (green band + dashed black center)
+  const idToStop = Object.fromEntries(STOPS.map(s=>[s.id,s]));
+  const pathLL = ROUTE.map(id => pctToLL(idToStop[id].px, idToStop[id].py));
+  L.polyline(pathLL, { color:'#00cc44', weight:8, opacity:0.95 }).addTo(map);
+  L.polyline(pathLL, { color:'#000', weight:2, opacity:1, dashArray:'6,8' }).addTo(map);
+
+  // Edit mode toggle (E) + Save positions (S)
+  let edit = false;
+  function setEdit(on) {
+    edit = on;
+    markers.forEach(m => {
+      m.dragging[edit ? 'enable' : 'disable']();
+      const el = m.getElement(); if (el) el.classList.toggle('dragging', edit);
     });
+  }
+  setEdit(false);
 
-    // 5) Trail-style route: green band + dashed black center
-    const path = ROUTE.map(id => byId[id]).filter(Boolean).map(s => [s.lat, s.lng]);
+  window.addEventListener('keydown', (e)=>{
+    const k = e.key.toLowerCase();
+    if (k === 'e') setEdit(!edit);
+    if (k === 's') {
+      // print current positions as %
+      const out = [];
+      markers.forEach(m => {
+        const ll = m.getLatLng();
+        const p = llToPct(ll);
+        out.push({ id: m._meta.id, name: m._meta.name, emoji: m._meta.emoji,
+                   px: Number(p.px.toFixed(6)), py: Number(p.py.toFixed(6)) });
+      });
+      console.log('Marker positions (% of image):', out);
+      alert('Positions printed to Console.');
+    }
+  });
+};
+img.src = IMAGE_PATH;
+</script>
 
-    // green band
-    L.polyline(path, { color:'#00cc44', weight:8, opacity:0.95 }).addTo(map);
-    // dashed black center line
-    L.polyline(path, {
-      color:'#000',
-      weight:2,
-      opacity:1,
-      dashArray:'6,8'   // 6px dash + 8px gap
-    }).addTo(map);
-
-    // 6) Fit view
-    map.fitBounds(bounds, { maxZoom: 17 });
-  </script>
 </body>
 </html>
