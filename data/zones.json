@@ -1,0 +1,8 @@
+[
+  {
+    "id": "Z1_Lyden",
+    "name": "Lyden District",
+    "cameraBounds": { "x": 0, "y": 300, "w": 2000, "h": 600 },
+    "themePalette": { "primary": "#E51C23", "accent": "#FFD166", "ground": "#F5F5F7" }
+  }
+]
