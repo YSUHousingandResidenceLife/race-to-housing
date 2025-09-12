@@ -1,8 +1,4 @@
-[
-  { "id": "Z1:N01", "zoneId": "Z1_Lyden", "type": "start", "buildingTag": "lyden" }
-]
 
-[
   { "id": "Z1:N01", "zoneId": "Z1_Lyden", "type": "start",      "buildingTag": "lyden", "x": 200,  "y": 500 },
 
   { "id": "Z1:N02", "zoneId": "Z1_Lyden", "type": "normal",     "x": 350,  "y": 460 },
