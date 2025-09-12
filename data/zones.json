@@ -4,5 +4,29 @@
     "name": "Lyden District",
     "cameraBounds": { "x": 0, "y": 300, "w": 2000, "h": 600 },
     "themePalette": { "primary": "#E51C23", "accent": "#FFD166", "ground": "#F5F5F7" }
+  },
+  {
+    "id": "Z2_Cafaro",
+    "name": "Cafaro Promenade",
+    "cameraBounds": { "x": 1800, "y": 300, "w": 1800, "h": 600 },
+    "themePalette": { "primary": "#C62828", "accent": "#64C1FF", "ground": "#F3F4F6" }
+  },
+  {
+    "id": "Z3_Christman",
+    "name": "Christman Dining Commons",
+    "cameraBounds": { "x": 3500, "y": 300, "w": 1700, "h": 600 },
+    "themePalette": { "primary": "#8E24AA", "accent": "#FFE082", "ground": "#F7F7FB" }
+  },
+  {
+    "id": "Z4_WellerWick",
+    "name": "Weller + Wick Row",
+    "cameraBounds": { "x": 5250, "y": 300, "w": 2600, "h": 600 },
+    "themePalette": { "primary": "#1565C0", "accent": "#A5D6A7", "ground": "#F4F6F8" }
+  },
+  {
+    "id": "Z5_Kilcawley",
+    "name": "Kilcawley Finale",
+    "cameraBounds": { "x": 7800, "y": 300, "w": 2400, "h": 600 },
+    "themePalette": { "primary": "#2E7D32", "accent": "#FFAB91", "ground": "#F6F8FA" }
   }
 ]
