@@ -1,0 +1,9 @@
+[
+  {
+    "tag": "lyden",
+    "zoneId": "Z1_Lyden",
+    "anchor": { "x": 200, "y": 400 },
+    "scale": 1.0,
+    "zIndex": 0
+  }
+]
