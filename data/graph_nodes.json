@@ -1,3 +1,25 @@
 [
   { "id": "Z1:N01", "zoneId": "Z1_Lyden", "type": "start", "buildingTag": "lyden" }
 ]
+
+[
+  { "id": "Z1:N01", "zoneId": "Z1_Lyden", "type": "start",      "buildingTag": "lyden", "x": 200,  "y": 500 },
+
+  { "id": "Z1:N02", "zoneId": "Z1_Lyden", "type": "normal",     "x": 350,  "y": 460 },
+  { "id": "Z1:N03", "zoneId": "Z1_Lyden", "type": "normal",     "x": 500,  "y": 430 },
+  { "id": "Z1:N04", "zoneId": "Z1_Lyden", "type": "event",      "x": 650,  "y": 460 },
+
+  { "id": "Z1:N05", "zoneId": "Z1_Lyden", "type": "normal",     "x": 320,  "y": 560 },
+  { "id": "Z1:N06", "zoneId": "Z1_Lyden", "type": "normal",     "x": 470,  "y": 600 },
+  { "id": "Z1:N07", "zoneId": "Z1_Lyden", "type": "event",      "x": 620,  "y": 580 },
+
+  { "id": "Z1:N08", "zoneId": "Z1_Lyden", "type": "normal",     "x": 800,  "y": 520 },  // branch merge
+
+  { "id": "Z1:N09", "zoneId": "Z1_Lyden", "type": "normal",     "x": 950,  "y": 500 },
+  { "id": "Z1:N10", "zoneId": "Z1_Lyden", "type": "normal",     "x": 1100, "y": 540 },
+  { "id": "Z1:N11", "zoneId": "Z1_Lyden", "type": "event",      "x": 1250, "y": 520 },
+  { "id": "Z1:N12", "zoneId": "Z1_Lyden", "type": "normal",     "x": 1400, "y": 560 },
+
+  { "id": "Z1:N13", "zoneId": "Z1_Lyden", "type": "checkpoint", "x": 1550, "y": 520 },  // Lyden Gate
+  { "id": "Z1:N14", "zoneId": "Z1_Lyden", "type": "normal",     "x": 1680, "y": 520 }   // handoff anchor toward Cafaro
+]
