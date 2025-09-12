@@ -1,0 +1,43 @@
+[
+  { "id": "Z1:E01", "zoneId": "Z1_Lyden", "from": "Z1:N01", "to": "Z1:N02",
+    "curve": [ { "x": 260, "y": 480 } ], "branchLabel": "front" },
+
+  { "id": "Z1:E02", "zoneId": "Z1_Lyden", "from": "Z1:N02", "to": "Z1:N03",
+    "curve": [ { "x": 425, "y": 445 } ], "branchLabel": "front" },
+
+  { "id": "Z1:E03", "zoneId": "Z1_Lyden", "from": "Z1:N03", "to": "Z1:N04",
+    "curve": [ { "x": 575, "y": 445 } ], "branchLabel": "front" },
+
+  { "id": "Z1:E04", "zoneId": "Z1_Lyden", "from": "Z1:N04", "to": "Z1:N08",
+    "curve": [ { "x": 720, "y": 480 }, { "x": 760, "y": 510 } ], "branchLabel": "front" },
+
+  { "id": "Z1:E05", "zoneId": "Z1_Lyden", "from": "Z1:N01", "to": "Z1:N05",
+    "curve": [ { "x": 260, "y": 540 } ], "branchLabel": "back" },
+
+  { "id": "Z1:E06", "zoneId": "Z1_Lyden", "from": "Z1:N05", "to": "Z1:N06",
+    "curve": [ { "x": 395, "y": 585 } ], "branchLabel": "back" },
+
+  { "id": "Z1:E07", "zoneId": "Z1_Lyden", "from": "Z1:N06", "to": "Z1:N07",
+    "curve": [ { "x": 545, "y": 595 } ], "branchLabel": "back" },
+
+  { "id": "Z1:E08", "zoneId": "Z1_Lyden", "from": "Z1:N07", "to": "Z1:N08",
+    "curve": [ { "x": 710, "y": 570 }, { "x": 760, "y": 540 } ], "branchLabel": "back" },
+
+  { "id": "Z1:E09", "zoneId": "Z1_Lyden", "from": "Z1:N08", "to": "Z1:N09",
+    "curve": [ { "x": 875, "y": 510 } ] },
+
+  { "id": "Z1:E10", "zoneId": "Z1_Lyden", "from": "Z1:N09", "to": "Z1:N10",
+    "curve": [ { "x": 1025, "y": 520 } ] },
+
+  { "id": "Z1:E11", "zoneId": "Z1_Lyden", "from": "Z1:N10", "to": "Z1:N11",
+    "curve": [ { "x": 1175, "y": 530 } ] },
+
+  { "id": "Z1:E12", "zoneId": "Z1_Lyden", "from": "Z1:N11", "to": "Z1:N12",
+    "curve": [ { "x": 1325, "y": 540 } ] },
+
+  { "id": "Z1:E13", "zoneId": "Z1_Lyden", "from": "Z1:N12", "to": "Z1:N13",
+    "curve": [ { "x": 1475, "y": 540 } ] },
+
+  { "id": "Z1:E14", "zoneId": "Z1_Lyden", "from": "Z1:N13", "to": "Z1:N14",
+    "curve": [ { "x": 1615, "y": 520 } ] }
+]
