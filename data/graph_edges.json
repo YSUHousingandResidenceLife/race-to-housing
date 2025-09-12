@@ -1,43 +1,122 @@
 [
-  { "id": "Z1:E01", "zoneId": "Z1_Lyden", "from": "Z1:N01", "to": "Z1:N02",
-    "curve": [ { "x": 260, "y": 480 } ], "branchLabel": "front" },
+  /* =======================
+     Zone 1 — Lyden District
+     ======================= */
+  { "id": "Z1:E01", "zoneId": "Z1_Lyden", "from": "Z1:N01", "to": "Z1:N02", "curve": [ { "x": 260, "y": 480 } ], "branchLabel": "front" },
+  { "id": "Z1:E02", "zoneId": "Z1_Lyden", "from": "Z1:N02", "to": "Z1:N03", "curve": [ { "x": 425, "y": 445 } ], "branchLabel": "front" },
+  { "id": "Z1:E03", "zoneId": "Z1_Lyden", "from": "Z1:N03", "to": "Z1:N04", "curve": [ { "x": 575, "y": 445 } ], "branchLabel": "front" },
+  { "id": "Z1:E04", "zoneId": "Z1_Lyden", "from": "Z1:N04", "to": "Z1:N08", "curve": [ { "x": 720, "y": 480 }, { "x": 760, "y": 510 } ], "branchLabel": "front" },
 
-  { "id": "Z1:E02", "zoneId": "Z1_Lyden", "from": "Z1:N02", "to": "Z1:N03",
-    "curve": [ { "x": 425, "y": 445 } ], "branchLabel": "front" },
+  { "id": "Z1:E05", "zoneId": "Z1_Lyden", "from": "Z1:N01", "to": "Z1:N05", "curve": [ { "x": 260, "y": 540 } ], "branchLabel": "back" },
+  { "id": "Z1:E06", "zoneId": "Z1_Lyden", "from": "Z1:N05", "to": "Z1:N06", "curve": [ { "x": 395, "y": 585 } ], "branchLabel": "back" },
+  { "id": "Z1:E07", "zoneId": "Z1_Lyden", "from": "Z1:N06", "to": "Z1:N07", "curve": [ { "x": 545, "y": 595 } ], "branchLabel": "back" },
+  { "id": "Z1:E08", "zoneId": "Z1_Lyden", "from": "Z1:N07", "to": "Z1:N08", "curve": [ { "x": 710, "y": 570 }, { "x": 760, "y": 540 } ], "branchLabel": "back" },
 
-  { "id": "Z1:E03", "zoneId": "Z1_Lyden", "from": "Z1:N03", "to": "Z1:N04",
-    "curve": [ { "x": 575, "y": 445 } ], "branchLabel": "front" },
+  { "id": "Z1:E09", "zoneId": "Z1_Lyden", "from": "Z1:N08", "to": "Z1:N09", "curve": [ { "x": 875, "y": 510 } ] },
+  { "id": "Z1:E10", "zoneId": "Z1_Lyden", "from": "Z1:N09", "to": "Z1:N10", "curve": [ { "x": 1025, "y": 520 } ] },
+  { "id": "Z1:E11", "zoneId": "Z1_Lyden", "from": "Z1:N10", "to": "Z1:N11", "curve": [ { "x": 1175, "y": 530 } ] },
+  { "id": "Z1:E12", "zoneId": "Z1_Lyden", "from": "Z1:N11", "to": "Z1:N12", "curve": [ { "x": 1325, "y": 540 } ] },
+  { "id": "Z1:E13", "zoneId": "Z1_Lyden", "from": "Z1:N12", "to": "Z1:N13", "curve": [ { "x": 1475, "y": 540 } ] },
+  { "id": "Z1:E14", "zoneId": "Z1_Lyden", "from": "Z1:N13", "to": "Z1:N14", "curve": [ { "x": 1615, "y": 520 } ] },
 
-  { "id": "Z1:E04", "zoneId": "Z1_Lyden", "from": "Z1:N04", "to": "Z1:N08",
-    "curve": [ { "x": 720, "y": 480 }, { "x": 760, "y": 510 } ], "branchLabel": "front" },
+  /* Inter-zone: Lyden → Cafaro */
+  { "id": "I:E1_Z1toZ2", "zoneId": "inter", "from": "Z1:N14", "to": "Z2:N01", "curve": [ { "x": 1780, "y": 520 }, { "x": 1850, "y": 520 } ] },
 
-  { "id": "Z1:E05", "zoneId": "Z1_Lyden", "from": "Z1:N01", "to": "Z1:N05",
-    "curve": [ { "x": 260, "y": 540 } ], "branchLabel": "back" },
+  /* =======================
+     Zone 2 — Cafaro Promenade
+     ======================= */
+  { "id": "Z2:E01", "zoneId": "Z2_Cafaro", "from": "Z2:N01", "to": "Z2:N02", "curve": [ { "x": 1970, "y": 500 } ], "branchLabel": "front" },
+  { "id": "Z2:E02", "zoneId": "Z2_Cafaro", "from": "Z2:N02", "to": "Z2:N03", "curve": [ { "x": 2080, "y": 480 } ], "branchLabel": "front" },
+  { "id": "Z2:E03", "zoneId": "Z2_Cafaro", "from": "Z2:N03", "to": "Z2:N04", "curve": [ { "x": 2200, "y": 480 } ], "branchLabel": "front" },
+  { "id": "Z2:E04", "zoneId": "Z2_Cafaro", "from": "Z2:N04", "to": "Z2:N08", "curve": [ { "x": 2320, "y": 500 }, { "x": 2360, "y": 515 } ], "branchLabel": "front" },
 
-  { "id": "Z1:E06", "zoneId": "Z1_Lyden", "from": "Z1:N05", "to": "Z1:N06",
-    "curve": [ { "x": 395, "y": 585 } ], "branchLabel": "back" },
+  { "id": "Z2:E05", "zoneId": "Z2_Cafaro", "from": "Z2:N01", "to": "Z2:N05", "curve": [ { "x": 1970, "y": 540 } ], "branchLabel": "garden" },
+  { "id": "Z2:E06", "zoneId": "Z2_Cafaro", "from": "Z2:N05", "to": "Z2:N06", "curve": [ { "x": 2070, "y": 575 } ], "branchLabel": "garden" },
+  { "id": "Z2:E07", "zoneId": "Z2_Cafaro", "from": "Z2:N06", "to": "Z2:N07", "curve": [ { "x": 2190, "y": 585 } ], "branchLabel": "garden" },
+  { "id": "Z2:E08", "zoneId": "Z2_Cafaro", "from": "Z2:N07", "to": "Z2:N08", "curve": [ { "x": 2315, "y": 560 }, { "x": 2360, "y": 540 } ], "branchLabel": "garden" },
 
-  { "id": "Z1:E07", "zoneId": "Z1_Lyden", "from": "Z1:N06", "to": "Z1:N07",
-    "curve": [ { "x": 545, "y": 595 } ], "branchLabel": "back" },
+  { "id": "Z2:E09",  "zoneId": "Z2_Cafaro", "from": "Z2:N08", "to": "Z2:N09",  "curve": [ { "x": 2450, "y": 515 } ] },
+  { "id": "Z2:E10",  "zoneId": "Z2_Cafaro", "from": "Z2:N09", "to": "Z2:N10",  "curve": [ { "x": 2590, "y": 525 } ] },
+  { "id": "Z2:E11",  "zoneId": "Z2_Cafaro", "from": "Z2:N10", "to": "Z2:N11",  "curve": [ { "x": 2730, "y": 525 } ] },
+  { "id": "Z2:E12",  "zoneId": "Z2_Cafaro", "from": "Z2:N11", "to": "Z2:N12",  "curve": [ { "x": 2870, "y": 540 } ] },
+  { "id": "Z2:E13",  "zoneId": "Z2_Cafaro", "from": "Z2:N12", "to": "Z2:N13",  "curve": [ { "x": 3010, "y": 530 } ] },
+  { "id": "Z2:E14",  "zoneId": "Z2_Cafaro", "from": "Z2:N13", "to": "Z2:N14",  "curve": [ { "x": 3145, "y": 520 } ] },
+  { "id": "Z2:E15",  "zoneId": "Z2_Cafaro", "from": "Z2:N14", "to": "Z2:N15",  "curve": [ { "x": 3275, "y": 520 } ] },
+  { "id": "Z2:E16",  "zoneId": "Z2_Cafaro", "from": "Z2:N15", "to": "Z2:N16",  "curve": [ { "x": 3405, "y": 520 } ] },
 
-  { "id": "Z1:E08", "zoneId": "Z1_Lyden", "from": "Z1:N07", "to": "Z1:N08",
-    "curve": [ { "x": 710, "y": 570 }, { "x": 760, "y": 540 } ], "branchLabel": "back" },
+  /* Inter-zone: Cafaro → Christman */
+  { "id": "I:E2_Z2toZ3", "zoneId": "inter", "from": "Z2:N16", "to": "Z3:N01", "curve": [ { "x": 3570, "y": 520 }, { "x": 3610, "y": 510 } ] },
 
-  { "id": "Z1:E09", "zoneId": "Z1_Lyden", "from": "Z1:N08", "to": "Z1:N09",
-    "curve": [ { "x": 875, "y": 510 } ] },
+  /* =======================
+     Zone 3 — Christman Dining
+     ======================= */
+  { "id": "Z3:E01", "zoneId": "Z3_Christman", "from": "Z3:N01", "to": "Z3:N02", "curve": [ { "x": 3720, "y": 485 } ] },
+  { "id": "Z3:E02", "zoneId": "Z3_Christman", "from": "Z3:N02", "to": "Z3:N03", "curve": [ { "x": 3850, "y": 480 } ] },
+  { "id": "Z3:E03", "zoneId": "Z3_Christman", "from": "Z3:N03", "to": "Z3:N04", "curve": [ { "x": 3980, "y": 500 } ] },
+  { "id": "Z3:E04", "zoneId": "Z3_Christman", "from": "Z3:N04", "to": "Z3:N05", "curve": [ { "x": 4105, "y": 505 } ] },
 
-  { "id": "Z1:E10", "zoneId": "Z1_Lyden", "from": "Z1:N09", "to": "Z1:N10",
-    "curve": [ { "x": 1025, "y": 520 } ] },
+  { "id": "Z3:E05", "zoneId": "Z3_Christman", "from": "Z3:N05", "to": "Z3:N06", "curve": [ { "x": 4235, "y": 505 } ] },
+  { "id": "Z3:E06", "zoneId": "Z3_Christman", "from": "Z3:N06", "to": "Z3:N07", "curve": [ { "x": 4365, "y": 530 } ] },
+  { "id": "Z3:E07", "zoneId": "Z3_Christman", "from": "Z3:N07", "to": "Z3:N08", "curve": [ { "x": 4495, "y": 530 } ] },
+  { "id": "Z3:E08", "zoneId": "Z3_Christman", "from": "Z3:N08", "to": "Z3:N09", "curve": [ { "x": 4625, "y": 510 } ] },
+  { "id": "Z3:E09", "zoneId": "Z3_Christman", "from": "Z3:N09", "to": "Z3:N10", "curve": [ { "x": 4755, "y": 510 } ] },
+  { "id": "Z3:E10", "zoneId": "Z3_Christman", "from": "Z3:N10", "to": "Z3:N11", "curve": [ { "x": 4885, "y": 530 } ] },
+  { "id": "Z3:E11", "zoneId": "Z3_Christman", "from": "Z3:N11", "to": "Z3:N12", "curve": [ { "x": 5015, "y": 530 } ] },
 
-  { "id": "Z1:E11", "zoneId": "Z1_Lyden", "from": "Z1:N10", "to": "Z1:N11",
-    "curve": [ { "x": 1175, "y": 530 } ] },
+  /* Inter-zone: Christman → Weller/Wick */
+  { "id": "I:E3_Z3toZ4", "zoneId": "inter", "from": "Z3:N12", "to": "Z4:N01", "curve": [ { "x": 5200, "y": 520 }, { "x": 5250, "y": 510 } ] },
 
-  { "id": "Z1:E12", "zoneId": "Z1_Lyden", "from": "Z1:N11", "to": "Z1:N12",
-    "curve": [ { "x": 1325, "y": 540 } ] },
+  /* =======================
+     Zone 4 — Weller + Wick Row
+     ======================= */
+  /* Branch A — Weller-first */
+  { "id": "Z4:E01", "zoneId": "Z4_WellerWick", "from": "Z4:N01", "to": "Z4:N02", "curve": [ { "x": 5370, "y": 485 } ], "branchLabel": "weller" },
+  { "id": "Z4:E02", "zoneId": "Z4_WellerWick", "from": "Z4:N02", "to": "Z4:N03", "curve": [ { "x": 5510, "y": 455 } ], "branchLabel": "weller" },
+  { "id": "Z4:E03", "zoneId": "Z4_WellerWick", "from": "Z4:N03", "to": "Z4:N04", "curve": [ { "x": 5650, "y": 460 } ], "branchLabel": "weller" },
+  { "id": "Z4:E04", "zoneId": "Z4_WellerWick", "from": "Z4:N04", "to": "Z4:N05", "curve": [ { "x": 5790, "y": 480 } ], "branchLabel": "weller" },
 
-  { "id": "Z1:E13", "zoneId": "Z1_Lyden", "from": "Z1:N12", "to": "Z1:N13",
-    "curve": [ { "x": 1475, "y": 540 } ] },
+  /* Branch B — Wick-first */
+  { "id": "Z4:E05", "zoneId": "Z4_WellerWick", "from": "Z4:N01", "to": "Z4:N06", "curve": [ { "x": 5370, "y": 540 } ], "branchLabel": "wick" },
+  { "id": "Z4:E06", "zoneId": "Z4_WellerWick", "from": "Z4:N06", "to": "Z4:N07", "curve": [ { "x": 5510, "y": 570 } ], "branchLabel": "wick" },
+  { "id": "Z4:E07", "zoneId": "Z4_WellerWick", "from": "Z4:N07", "to": "Z4:N08", "curve": [ { "x": 5650, "y": 590 } ], "branchLabel": "wick" },
+  { "id": "Z4:E08", "zoneId": "Z4_WellerWick", "from": "Z4:N08", "to": "Z4:N09", "curve": [ { "x": 5790, "y": 585 } ], "branchLabel": "wick" },
+  { "id": "Z4:E09", "zoneId": "Z4_WellerWick", "from": "Z4:N09", "to": "Z4:N10", "curve": [ { "x": 5930, "y": 570 } ], "branchLabel": "wick" },
 
-  { "id": "Z1:E14", "zoneId": "Z1_Lyden", "from": "Z1:N13", "to": "Z1:N14",
-    "curve": [ { "x": 1615, "y": 520 } ] }
+  /* Merge both branches at N11, continue the row spine */
+  { "id": "Z4:E10", "zoneId": "Z4_WellerWick", "from": "Z4:N05", "to": "Z4:N11", "curve": [ { "x": 6070, "y": 540 } ], "branchLabel": "merge" },
+  { "id": "Z4:E11", "zoneId": "Z4_WellerWick", "from": "Z4:N10", "to": "Z4:N11", "curve": [ { "x": 6070, "y": 540 } ], "branchLabel": "merge" },
+
+  { "id": "Z4:E12", "zoneId": "Z4_WellerWick", "from": "Z4:N11", "to": "Z4:N12", "curve": [ { "x": 6210, "y": 540 } ] },
+  { "id": "Z4:E13", "zoneId": "Z4_WellerWick", "from": "Z4:N12", "to": "Z4:N13", "curve": [ { "x": 6350, "y": 540 } ] },
+  { "id": "Z4:E14", "zoneId": "Z4_WellerWick", "from": "Z4:N13", "to": "Z4:N14", "curve": [ { "x": 6490, "y": 550 } ] },
+  { "id": "Z4:E15", "zoneId": "Z4_WellerWick", "from": "Z4:N14", "to": "Z4:N15", "curve": [ { "x": 6630, "y": 550 } ] },
+  { "id": "Z4:E16", "zoneId": "Z4_WellerWick", "from": "Z4:N15", "to": "Z4:N16", "curve": [ { "x": 6770, "y": 535 } ] },
+  { "id": "Z4:E17", "zoneId": "Z4_WellerWick", "from": "Z4:N16", "to": "Z4:N17", "curve": [ { "x": 6910, "y": 535 } ] },
+  { "id": "Z4:E18", "zoneId": "Z4_WellerWick", "from": "Z4:N17", "to": "Z4:N18", "curve": [ { "x": 7050, "y": 550 } ] },
+  { "id": "Z4:E19", "zoneId": "Z4_WellerWick", "from": "Z4:N18", "to": "Z4:N19", "curve": [ { "x": 7190, "y": 545 } ] },
+  { "id": "Z4:E20", "zoneId": "Z4_WellerWick", "from": "Z4:N19", "to": "Z4:N20", "curve": [ { "x": 7330, "y": 530 } ] },
+  { "id": "Z4:E21", "zoneId": "Z4_WellerWick", "from": "Z4:N20", "to": "Z4:N21", "curve": [ { "x": 7470, "y": 520 } ] },
+  { "id": "Z4:E22", "zoneId": "Z4_WellerWick", "from": "Z4:N21", "to": "Z4:N22", "curve": [ { "x": 7610, "y": 520 } ] },
+
+  /* Inter-zone: Weller/Wick → Kilcawley */
+  { "id": "I:E4_Z4toZ5", "zoneId": "inter", "from": "Z4:N22", "to": "Z5:N01", "curve": [ { "x": 7820, "y": 520 }, { "x": 7870, "y": 520 } ] },
+
+  /* =======================
+     Zone 5 — Kilcawley Finale
+     ======================= */
+  { "id": "Z5:E01", "zoneId": "Z5_Kilcawley", "from": "Z5:N01", "to": "Z5:N02", "curve": [ { "x": 7970, "y": 505 } ] },
+  { "id": "Z5:E02", "zoneId": "Z5_Kilcawley", "from": "Z5:N02", "to": "Z5:N03", "curve": [ { "x": 8110, "y": 480 } ] },
+  { "id": "Z5:E03", "zoneId": "Z5_Kilcawley", "from": "Z5:N03", "to": "Z5:N04", "curve": [ { "x": 8250, "y": 490 } ] },
+  { "id": "Z5:E04", "zoneId": "Z5_Kilcawley", "from": "Z5:N04", "to": "Z5:N05", "curve": [ { "x": 8390, "y": 505 } ] },
+  { "id": "Z5:E05", "zoneId": "Z5_Kilcawley", "from": "Z5:N05", "to": "Z5:N06", "curve": [ { "x": 8530, "y": 535 } ] },
+  { "id": "Z5:E06", "zoneId": "Z5_Kilcawley", "from": "Z5:N06", "to": "Z5:N07", "curve": [ { "x": 8670, "y": 535 } ] },
+  { "id": "Z5:E07", "zoneId": "Z5_Kilcawley", "from": "Z5:N07", "to": "Z5:N08", "curve": [ { "x": 8810, "y": 510 } ] },
+  { "id": "Z5:E08", "zoneId": "Z5_Kilcawley", "from": "Z5:N08", "to": "Z5:N09", "curve": [ { "x": 8950, "y": 515 } ] },
+  { "id": "Z5:E09", "zoneId": "Z5_Kilcawley", "from": "Z5:N09", "to": "Z5:N10", "curve": [ { "x": 9090, "y": 535 } ] },
+  { "id": "Z5:E10", "zoneId": "Z5_Kilcawley", "from": "Z5:N10", "to": "Z5:N11", "curve": [ { "x": 9230, "y": 530 } ] },
+  { "id": "Z5:E11", "zoneId": "Z5_Kilcawley", "from": "Z5:N11", "to": "Z5:N12", "curve": [ { "x": 9370, "y": 505 } ] },
+  { "id": "Z5:E12", "zoneId": "Z5_Kilcawley", "from": "Z5:N12", "to": "Z5:N13", "curve": [ { "x": 9510, "y": 515 } ] },
+  { "id": "Z5:E13", "zoneId": "Z5_Kilcawley", "from": "Z5:N13", "to": "Z5:N14", "curve": [ { "x": 9650, "y": 535 } ] },
+  { "id": "Z5:E14", "zoneId": "Z5_Kilcawley", "from": "Z5:N14", "to": "Z5:N15", "curve": [ { "x": 9790, "y": 525 } ] },
+  { "id": "Z5:E15", "zoneId": "Z5_Kilcawley", "from": "Z5:N15", "to": "Z5:N16", "curve": [ { "x": 9930, "y": 520 } ] }
 ]
