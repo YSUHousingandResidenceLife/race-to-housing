@@ -1,6 +1,29 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>HELLO TEST</title>
-<style>html,body{height:100%;margin:0;background:#111;color:#fff;font:48px/1.2 Arial,Helvetica,sans-serif;display:grid;place-items:center}</style>
-</head><body>
-HELLO 👋
-</body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>CDN Check</title>
+  <style>html,body{height:100%;margin:0;background:#0e0f12;color:#e5e7eb;display:grid;place-items:center;font:20px system-ui}</style>
+</head>
+<body>
+  <div id="status">Checking CDN…</div>
+
+  <!-- Try jsDelivr first -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"
+          onload="document.getElementById('status').textContent='Phaser loaded ✅ via jsDelivr'"
+          onerror="document.getElementById('status').textContent='Phaser failed to load ❌ via jsDelivr'"></script>
+
+  <!-- Fallback: unpkg (loads only if jsDelivr failed) -->
+  <script>
+    setTimeout(() => {
+      if (!window.Phaser) {
+        const s=document.createElement('script');
+        s.src='https://unpkg.com/phaser@3.80.0/dist/phaser.min.js';
+        s.onload=()=>document.getElementById('status').textContent='Phaser loaded ✅ via unpkg';
+        s.onerror=()=>document.getElementById('status').textContent='Phaser failed ❌ via unpkg';
+        document.body.appendChild(s);
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
