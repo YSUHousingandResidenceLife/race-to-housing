@@ -2,11 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Phaser Draw Test</title>
+  <title>Zone Test — Lyden</title>
   <style>
-    html, body { height:100%; margin:0; background:#0e0f12; }
-    #game { width:100%; height:100%; display:block; }
+    html,body{height:100%;margin:0;background:#0e0f12;}
+    #game{width:100%;height:100%}
   </style>
 </head>
 <body>
@@ -18,21 +17,17 @@
       parent: 'game',
       backgroundColor: '#0e0f12',
       scale: { mode: Phaser.Scale.RESIZE, width: 1280, height: 720 },
-      scene: { create }
+      scene: { preload, create }
     };
     new Phaser.Game(config);
 
-    function create () {
-      const g = this.add.graphics();
-      // green rectangle like a zone background (no image)
-      g.fillStyle(0x2ecc71, 1);
-      g.fillRect(100, 300, 800, 250);
-      // a “sidewalk” stripe
-      g.fillStyle(0xe5e7eb, 1);
-      g.fillRect(100, 450, 800, 30);
-      this.add.text(120, 320, 'Lyden Zone (drawn, not image)', {
-        font: '24px Arial', fill: '#ffffff'
-      });
+    function preload() {
+      this.load.image('zone_lyden', 'assets/zones/zone_lyden.png');
+    }
+
+    function create() {
+      this.add.image(640, 360, 'zone_lyden').setOrigin(0.5, 0.5).setScale(0.7);
+      this.add.text(50, 50, 'Lyden zone loaded ✅', { font: '24px Arial', fill: '#ffffff' });
     }
   </script>
 </body>
