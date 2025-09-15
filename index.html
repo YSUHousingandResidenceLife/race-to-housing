@@ -3,46 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Race to Housing — Map Preview</title>
+  <title>Map Preview — Boot Test</title>
   <style>
-    html, body { height:100%; margin:0; background:#0e0f12; }
+    html, body { height:100%; margin:0; background:#0e0f12; color:#e5e7eb; }
     #game { width:100%; height:100%; display:block; }
   </style>
 </head>
 <body>
   <div id="game"></div>
 
-  <!-- Phaser 3 CDN -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
-
-  <!-- Your game logic all inline -->
   <script>
     const config = {
       type: Phaser.AUTO,
       parent: 'game',
       backgroundColor: '#0e0f12',
-      scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH, width: 1280, height: 720 },
-      scene: { preload, create }
+      scale: { mode: Phaser.Scale.RESIZE, width: 1280, height: 720 },
+      scene: {
+        create() {
+          this.add.text(100, 100, 'Phaser boot OK ✅', { font: '28px Arial', fill: '#ffffff' });
+        }
+      }
     };
     new Phaser.Game(config);
-
-    function preload() {
-      this.load.json('zones', 'data/zones.json');
-      this.load.json('buildings', 'data/buildings.json');
-      this.load.image('zone_lyden', 'assets/zones/zone_lyden.png');
-      this.load.image('bld_lyden', 'assets/buildings/bld_lyden.png');
-    }
-
-    function create() {
-      const zones = this.cache.json.get('zones');
-      const buildings = this.cache.json.get('buildings');
-
-      const zone = zones.find(z => z.id === "Z1_Lyden");
-      this.add.image(zone.cameraBounds.x, zone.cameraBounds.y, 'zone_lyden').setOrigin(0,0);
-
-      const lyden = buildings.find(b => b.tag === "lyden");
-      this.add.image(lyden.anchor.x, lyden.anchor.y, 'bld_lyden').setOrigin(0.5,1);
-    }
   </script>
 </body>
 </html>
