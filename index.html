@@ -2,32 +2,126 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Zone Test — Lyden</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Race to Housing — Full Map Preview</title>
   <style>
-    html,body{height:100%;margin:0;background:#0e0f12;}
-    #game{width:100%;height:100%}
+    html, body { height:100%; margin:0; background:#0e0f12; }
+    #game { width:100%; height:100%; display:block; }
+    .hint { position:fixed; left:12px; bottom:12px; color:#cbd5e1; font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; opacity:.9; }
   </style>
 </head>
 <body>
   <div id="game"></div>
+  <div class="hint">drag to pan • wheel/trackpad to zoom</div>
+
+  <!-- Phaser -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
+
   <script>
     const config = {
       type: Phaser.AUTO,
       parent: 'game',
       backgroundColor: '#0e0f12',
-      scale: { mode: Phaser.Scale.RESIZE, width: 1280, height: 720 },
+      scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH, width: 1280, height: 720 },
       scene: { preload, create }
     };
     new Phaser.Game(config);
 
     function preload() {
-      this.load.image('zone_lyden', 'assets/zones/zone_lyden.png');
+      // Data
+      this.load.json('zones', 'data/zones.json');
+      this.load.json('buildings', 'data/buildings.json');
+
+      // Zone backgrounds (put these PNGs in assets/zones/)
+      this.load.image('zone_lyden',       'assets/zones/zone_lyden.png');
+      this.load.image('zone_cafaro',      'assets/zones/zone_cafaro.png');
+      this.load.image('zone_christman',   'assets/zones/zone_christman.png');
+      this.load.image('zone_wellerwick',  'assets/zones/zone_wellerwick.png');
+      this.load.image('zone_kilcawley',   'assets/zones/zone_kilcawley.png');
+
+      // Buildings (put these PNGs in assets/buildings/)
+      this.load.image('bld_lyden',      'assets/buildings/bld_lyden.png');
+      this.load.image('bld_cafaro',     'assets/buildings/bld_cafaro.png');
+      this.load.image('bld_christman',  'assets/buildings/bld_christman.png');
+      this.load.image('bld_weller',     'assets/buildings/bld_weller.png');
+      this.load.image('bld_wick',       'assets/buildings/bld_wick.png');
+      this.load.image('bld_kilcawley',  'assets/buildings/bld_kilcawley.png');
+
+      // nice cursor for panning
+      this.input.setDefaultCursor('grab');
     }
 
     function create() {
-      this.add.image(640, 360, 'zone_lyden').setOrigin(0.5, 0.5).setScale(0.7);
-      this.add.text(50, 50, 'Lyden zone loaded ✅', { font: '24px Arial', fill: '#ffffff' });
+      const zones = this.cache.json.get('zones') || [];
+      const buildings = this.cache.json.get('buildings') || [];
+
+      // Compute world bounds from zones cameraBounds
+      const worldW = Math.max(...zones.map(z => (z.cameraBounds.x + z.cameraBounds.w)), 4000);
+      const worldH = 1400;
+      this.cameras.main.setBounds(0, 0, worldW, worldH);
+
+      // Map zone ids to image keys
+      const zoneKeyMap = {
+        'Z1_Lyden': 'zone_lyden',
+        'Z2_Cafaro': 'zone_cafaro',
+        'Z3_Christman': 'zone_christman',
+        'Z4_WellerWick': 'zone_wellerwick',
+        'Z5_Kilcawley': 'zone_kilcawley'
+      };
+
+      // Draw zone backgrounds at their camera bounds origin
+      zones.forEach(z => {
+        const key = zoneKeyMap[z.id];
+        if (key && this.textures.exists(key)) {
+          const img = this.add.image(z.cameraBounds.x, z.cameraBounds.y, key)
+            .setOrigin(0, 0)
+            .setScrollFactor(1)
+            .setDepth(0);
+          // optional: scale to fit your bounds if the art is smaller/larger
+          // img.setScale(1);
+        }
+      });
+
+      // Map building tags to image keys
+      const bldKeyMap = {
+        lyden: 'bld_lyden',
+        cafaro: 'bld_cafaro',
+        christman: 'bld_christman',
+        weller: 'bld_weller',
+        wick: 'bld_wick',
+        kilcawley: 'bld_kilcawley'
+      };
+
+      // Place buildings at anchors from buildings.json
+      buildings.forEach(b => {
+        const key = bldKeyMap[b.tag];
+        if (key && this.textures.exists(key)) {
+          this.add.image(b.anchor.x, b.anchor.y, key)
+            .setOrigin(0.5, 1)              // anchored at feet
+            .setScale(b.scale ?? 1)
+            .setDepth((b.zIndex ?? 0) + 10);
+        }
+      });
+
+      // Camera controls: drag to pan, wheel to zoom
+      const cam = this.cameras.main;
+      let isDown = false, last = new Phaser.Math.Vector2();
+      this.input.on('pointerdown', p => { isDown = true; last.set(p.x, p.y); this.input.setDefaultCursor('grabbing'); });
+      this.input.on('pointerup',   () => { isDown = false; this.input.setDefaultCursor('grab'); });
+      this.input.on('pointermove', p => {
+        if (!isDown) return;
+        cam.scrollX -= (p.x - last.x);
+        cam.scrollY -= (p.y - last.y);
+        last.set(p.x, p.y);
+      });
+      this.input.on('wheel', (_p, dx, dy) => {
+        const z = Phaser.Math.Clamp(cam.zoom - dy * 0.0015, 0.4, 2.0);
+        cam.setZoom(z);
+      });
+
+      // Start near Lyden
+      cam.setZoom(0.9);
+      cam.centerOn(900, 600);
     }
   </script>
 </body>
