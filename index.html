@@ -1,236 +1,29 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-<meta charset="utf-8" />
-<title>Race to Housing — Board Demo</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-  html,body { margin:0; height:100%; background:#0e0f12; font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#e5e7eb; }
-  #hud { position:fixed; left:12px; top:12px; background:#0b0c10cc; border:1px solid #222836; padding:10px 12px; border-radius:10px; box-shadow:0 8px 20px #0008; }
-  #hud kbd { background:#111722; border:1px solid #2a3347; border-bottom-width:3px; padding:2px 6px; border-radius:6px; font-weight:600; }
-  #wrap { width:100%; height:100%; }
-  canvas { width:100%; height:100%; display:block; }
-</style>
+  <meta charset="utf-8">
+  <title>Race to Housing Map</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <!-- Mapbox GL JS CSS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  </style>
 </head>
 <body>
-<div id="hud">
-  <div><b>Board Demo</b> — drag to pan • wheel to zoom</div>
-  <div style="margin-top:6px">Move token: <kbd>[</kbd> back • <kbd>]</kbd> forward</div>
-</div>
-<div id="wrap"><canvas id="board" width="1600" height="900"></canvas></div>
+  <div id="map"></div>
 
-<script>
-(() => {
-  const canvas = document.getElementById('board');
-  const ctx = canvas.getContext('2d');
-
-  // --- BOARD DATA (you can tweak coordinates later) ---
-  const zones = [
-    { id:'Z1', name:'Lyden',         x:    0, y: 80,  w: 1200, h: 700, color:'#112b22' },
-    { id:'Z2', name:'Cafaro',        x: 1300, y: 80,  w: 1200, h: 700, color:'#142032' },
-    { id:'Z3', name:'Christman DC',  x: 2600, y: 80,  w: 1100, h: 700, color:'#1c2333' },
-    { id:'Z4', name:'Weller',        x: 3800, y: 80,  w: 1100, h: 700, color:'#13272f' },
-    { id:'Z5', name:'Wick',          x: 5000, y: 80,  w: 1000, h: 700, color:'#14222f' },
-    { id:'Z6', name:'Kilcawley',     x: 6100, y: 80,  w: 1200, h: 700, color:'#10242b' },
-  ];
-
-  // Create a long serpentine path through the zones
-  // Each node is a stepping stone (you can add/remove easily).
-  const stones = [];
-  function addArcPath(x0,y0,x1,y1,steps) {
-    for (let i=0;i<=steps;i++){
-      const t=i/steps;
-      // slight sine wobble for fun
-      const x = x0 + (x1-x0)*t;
-      const y = y0 + (y1-y0)*t + Math.sin(t*Math.PI)*40;
-      stones.push({x,y});
-    }
-  }
-  // Build path: Lyden circle → Cafaro sweep → Christman → Weller → Wick → Kilcawley plaza
-  addArcPath(200,480, 1100,420, 20);      // Z1
-  addArcPath(1300,420, 2350,520, 22);     // Z2
-  addArcPath(2600,520, 3600,430, 20);     // Z3
-  addArcPath(3800,430, 4800,480, 20);     // Z4
-  addArcPath(5000,480, 5950,420, 18);     // Z5
-  addArcPath(6100,420, 7200,420, 24);     // Z6
-
-  // Camera state
-  let cam = { x: -100, y: -50, z: 1.0 };
-  let dragging=false, last={x:0,y:0};
-
-  // Progress index & token
-  let idx = 0;
-  const token = '🐧'; // emoji penguin
-
-  // Resize handler (keeps canvas crisp)
-  const resize = () => {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width  = Math.floor(canvas.clientWidth  * dpr);
-    canvas.height = Math.floor(canvas.clientHeight * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    draw();
-  };
-  new ResizeObserver(resize).observe(canvas);
-
-  // World bounds for clamping
-  const world = {
-    x: 0,
-    y: 0,
-    w: zones[zones.length-1].x + zones[zones.length-1].w + 200,
-    h: 900
-  };
-
-  // Draw helpers
-  function toScreen(x,y){
-    return { x:(x - cam.x)*cam.z, y:(y - cam.y)*cam.z };
-  }
-  function roundRect(g,x,y,w,h,r){
-    g.beginPath();
-    g.moveTo(x+r, y);
-    g.arcTo(x+w, y,   x+w, y+h, r);
-    g.arcTo(x+w, y+h, x,   y+h, r);
-    g.arcTo(x,   y+h, x,   y,   r);
-    g.arcTo(x,   y,   x+w, y,   r);
-    g.closePath();
-  }
-
-  function drawZone(z) {
-    const pad=18, r=22;
-    // zone background panel
-    const p = toScreen(z.x, z.y);
-    const w = z.w*cam.z, h = z.h*cam.z;
-    ctx.save();
-    // shadow
-    ctx.globalAlpha = 0.35;
-    roundRect(ctx, p.x+6, p.y+10, w, h, r);
-    ctx.fillStyle = '#000000';
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // panel
-    roundRect(ctx, p.x, p.y, w, h, r);
-    ctx.fillStyle = z.color;
-    ctx.fill();
-
-    // header bar
-    ctx.fillStyle = '#0b0e14';
-    roundRect(ctx, p.x, p.y, w, 54*cam.z, r);
-    ctx.fill();
-
-    // title
-    ctx.fillStyle = '#e5e7eb';
-    ctx.font = `${Math.max(14, 18*cam.z)}px system-ui, Segoe UI, Roboto, sans-serif`;
-    ctx.fillText(z.name, p.x + pad*cam.z, p.y + 34*cam.z);
-    ctx.restore();
-  }
-
-  function drawEdges() {
-    // subtle path line under stones
-    ctx.save();
-    ctx.lineWidth = Math.max(2, 6*cam.z);
-    ctx.strokeStyle = '#273142';
-    ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    for (let i=0;i<stones.length;i++){
-      const s = toScreen(stones[i].x, stones[i].y);
-      if (i===0) ctx.moveTo(s.x,s.y);
-      else ctx.lineTo(s.x,s.y);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawStones() {
-    // black base + red ring (active stone is brighter)
-    for (let i=0;i<stones.length;i++){
-      const s = stones[i];
-      const p = toScreen(s.x, s.y);
-      const R = Math.max(6, 18*cam.z);
-
-      // base
-      ctx.beginPath();
-      ctx.fillStyle = '#0b0b0c';
-      ctx.arc(p.x, p.y, R, 0, Math.PI*2);
-      ctx.fill();
-
-      // ring
-      ctx.lineWidth = Math.max(2, 6*cam.z);
-      ctx.strokeStyle = (i===idx) ? '#f43f5e' : '#991b1b';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, R-4*cam.z, 0, Math.PI*2);
-      ctx.stroke();
-
-      // small inner dot for completed steps
-      if (i < idx) {
-        ctx.beginPath();
-        ctx.fillStyle = '#f87171';
-        ctx.arc(p.x, p.y, Math.max(1, 4*cam.z), 0, Math.PI*2);
-        ctx.fill();
-      }
-    }
-  }
-
-  function drawToken() {
-    const s = stones[idx];
-    const p = toScreen(s.x, s.y - 48); // float above stone
-    ctx.font = `${Math.max(18, 40*cam.z)}px Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, system-ui`;
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.fillText(token, p.x, p.y);
-  }
-
-  function draw() {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // draw zones first
-    zones.forEach(drawZone);
-    // then edges + stones + token
-    drawEdges();
-    drawStones();
-    drawToken();
-  }
-
-  // Interaction: pan / zoom / keys
-  canvas.addEventListener('pointerdown', e => {
-    dragging=true; last.x=e.clientX; last.y=e.clientY; canvas.style.cursor='grabbing';
-  });
-  window.addEventListener('pointerup', () => { dragging=false; canvas.style.cursor='grab'; });
-  window.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    const dx = (e.clientX - last.x)/cam.z;
-    const dy = (e.clientY - last.y)/cam.z;
-    cam.x -= dx; cam.y -= dy;
-    last.x = e.clientX; last.y = e.clientY;
-    // clamp roughly to world
-    cam.x = Math.max(-200, Math.min(cam.x, world.w - 200));
-    cam.y = Math.max(-300, Math.min(cam.y, world.h - 300));
-    draw();
-  });
-  canvas.addEventListener('wheel', e => {
-    const prevZ = cam.z;
-    cam.z = Math.max(0.45, Math.min(2.0, cam.z - e.deltaY * 0.0015));
-    // zoom to mouse position
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) / (rect.width)  * canvas.width;
-    const my = (e.clientY - rect.top)  / (rect.height) * canvas.height;
-    const wx = cam.x + mx/prevZ;
-    const wy = cam.y + my/prevZ;
-    cam.x = wx - mx/cam.z;
-    cam.y = wy - my/cam.z;
-    draw();
-  }, { passive:true });
-
-  window.addEventListener('keydown', e => {
-    if (e.key === ']') { idx = Math.min(idx+1, stones.length-1); draw(); }
-    if (e.key === '[') { idx = Math.max(idx-1, 0); draw(); }
-  });
-
-  // init
-  canvas.style.cursor='grab';
-  resize();
-  // start near Lyden
-  cam.x = -100; cam.y = -50; cam.z = 0.95; draw();
-})();
-</script>
+  <!-- Mapbox GL JS -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/ysu-hrl/cmfmrdx2a005n01qhemvyawqj',
+      center: [-80.6495, 41.1066], // YSU campus
+      zoom: 14
+    });
+  </script>
 </body>
 </html>
