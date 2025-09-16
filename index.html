@@ -1,112 +1,95 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Race to Housing — Full Map Preview</title>
-  <style>
-    html,body{height:100%;margin:0;background:#0e0f12}
-    #game{width:100%;height:100%}
-    .hint{position:fixed;left:12px;bottom:12px;color:#cbd5e1;font:14px system-ui;opacity:.9}
-  </style>
-</head>
-<body>
-  <div id="game"></div>
-  <div class="hint">drag to pan • wheel to zoom</div>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
-  <script>
-    const config={type:Phaser.AUTO,parent:'game',backgroundColor:'#0e0f12',
-      scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH,width:1280,height:720},
-      scene:{preload,create}};
-    new Phaser.Game(config);
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Race to Housing — Full Map Preview</title>
+<style>html,body{height:100%;margin:0;background:#0e0f12}#game{width:100%;height:100%}.hint{position:fixed;left:12px;bottom:12px;color:#cbd5e1;font:14px system-ui;opacity:.9}</style>
+</head><body>
+<div id="game"></div><div class="hint">drag to pan • wheel to zoom</div>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser.min.js"></script>
+<script>
+const config={type:Phaser.AUTO,parent:'game',backgroundColor:'#0e0f12',
+  scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH,width:1280,height:720},
+  scene:{preload,create}};
+new Phaser.Game(config);
 
-    function preload(){
-      this.load.json('zones','data/zones.json');
-      this.load.json('buildings','data/buildings.json');
+function preload(){
+  this.load.json('zones','data/zones.json');
+  this.load.json('buildings','data/buildings.json');
 
-      // Zone backgrounds (optional; placeholders will draw if any are missing)
-      this.load.image('zone_lyden','assets/zones/zone_lyden.png');
-      this.load.image('zone_cafaro','assets/zones/zone_cafaro.png');
-      this.load.image('zone_christman','assets/zones/zone_christman.png');
-      this.load.image('zone_wellerwick','assets/zones/zone_wellerwick.png');
-      this.load.image('zone_kilcawley','assets/zones/zone_kilcawley.png');
+  // zones
+  this.load.image('zone_lyden','assets/zones/zone_lyden.png');
+  this.load.image('zone_cafaro','assets/zones/zone_cafaro.png');
+  this.load.image('zone_christman','assets/zones/zone_christman.png');
+  this.load.image('zone_wellerwick','assets/zones/zone_wellerwick.png');
+  this.load.image('zone_kilcawley','assets/zones/zone_kilcawley.png');
 
-      // Building art
-      this.load.image('bld_lyden','assets/buildings/bld_lyden.png');
-      this.load.image('bld_cafaro','assets/buildings/bld_cafaro.png');
-      this.load.image('bld_christman','assets/buildings/bld_christman.png');
-      this.load.image('bld_weller','assets/buildings/bld_weller.png');
-      this.load.image('bld_wick','assets/buildings/bld_wick.png');
-      this.load.image('bld_kilcawley','assets/buildings/bld_kilcawley.png');
+  // buildings
+  this.load.image('bld_lyden','assets/buildings/bld_lyden.png');
+  this.load.image('bld_cafaro','assets/buildings/bld_cafaro.png');
+  this.load.image('bld_christman','assets/buildings/bld_christman.png');
+  this.load.image('bld_weller','assets/buildings/bld_weller.png');
+  this.load.image('bld_wick','assets/buildings/bld_wick.png');
+  this.load.image('bld_kilcawley','assets/buildings/bld_kilcawley.png');
 
-      this.input.setDefaultCursor('grab');
+  this.input.setDefaultCursor('grab');
+}
+
+function create(){
+  const zones=this.cache.json.get('zones')||[];
+  const blds=this.cache.json.get('buildings')||[];
+
+  const zoneKeyMap={
+    'Z1_Lyden':'zone_lyden',
+    'Z2_Cafaro':'zone_cafaro',
+    'Z3_Christman':'zone_christman',
+    'Z4_WellerWick':'zone_wellerwick',
+    'Z5_Kilcawley':'zone_kilcawley'
+  };
+
+  const worldW=Math.max(...zones.map(z=>z.cameraBounds.x+z.cameraBounds.w),4000);
+  const worldH=1000;
+  this.cameras.main.setBounds(0,0,worldW,worldH);
+
+  // draw each zone at y=0 and fit to its camera bounds
+  const zoneById={};
+  zones.forEach(z=>{
+    zoneById[z.id]=z;
+    const key=zoneKeyMap[z.id];
+    const x=z.cameraBounds.x, y=0, w=z.cameraBounds.w, h=z.cameraBounds.h;
+    if(key && this.textures.exists(key)){
+      const img=this.add.image(x,y,key).setOrigin(0,0).setDepth(0);
+      img.setDisplaySize(w,h);
+    }else{
+      const g=this.add.graphics().setDepth(0);
+      g.fillStyle(0x1f2937,1).fillRect(x,y,w,h);
+      g.lineStyle(4,0x334155,1).strokeRect(x+2,y+2,w-4,h-4);
+      this.add.text(x+16,y+16,z.name||z.id,{font:'20px system-ui',fill:'#e5e7eb'});
+      this.add.text(x+16,y+44,'(no zone PNG found)',{font:'14px system-ui',fill:'#94a3b8'});
     }
+  });
 
-    function create(){
-      const zones=this.cache.json.get('zones')||[];
-      const blds=this.cache.json.get('buildings')||[];
+  // map tags to textures
+  const tex={lyden:'bld_lyden',cafaro:'bld_cafaro',christman:'bld_christman',
+             weller:'bld_weller',wick:'bld_wick',kilcawley:'bld_kilcawley'};
 
-      const zoneKeyMap={
-        'Z1_Lyden':'zone_lyden',
-        'Z2_Cafaro':'zone_cafaro',
-        'Z3_Christman':'zone_christman',
-        'Z4_WellerWick':'zone_wellerwick',
-        'Z5_Kilcawley':'zone_kilcawley'
-      };
+  // place buildings so their feet sit on the zone's ground line
+  blds.forEach(b=>{
+    const k=tex[b.tag]; if(!k || !this.textures.exists(k)) return;
+    const z = zoneById[b.zoneId]; // we stored zoneId in buildings.json
+    const groundY = z ? (0 + z.cameraBounds.h) : 600; // y=0 + zone height
+    const x = b.anchor.x;           // keep your X
+    const y = groundY + (b.yOffset||0); // compute Y from zone bottom
+    this.add.image(x,y,k).setOrigin(0.5,1).setScale(b.scale??1).setDepth((b.zIndex??0)+10);
+  });
 
-      // world bounds from zones
-      const worldW=Math.max(...zones.map(z=>z.cameraBounds.x+z.cameraBounds.w),4000);
-      const worldH=1000;
-      this.cameras.main.setBounds(0,0,worldW,worldH);
+  // camera controls
+  const cam=this.cameras.main;
+  let down=false,last=new Phaser.Math.Vector2();
+  this.input.on('pointerdown',p=>{down=true;last.set(p.x,p.y);this.input.setDefaultCursor('grabbing');});
+  this.input.on('pointerup',()=>{down=false;this.input.setDefaultCursor('grab');});
+  this.input.on('pointermove',p=>{ if(!down) return; cam.scrollX-=(p.x-last.x); cam.scrollY-=(p.y-last.y); last.set(p.x,p.y); });
+  this.input.on('wheel',(_p,dx,dy)=>{ cam.setZoom(Phaser.Math.Clamp(cam.zoom - dy*0.0015,0.5,2)); });
 
-      // draw zones side-by-side with y=0 and scale to their bounds
-      zones.forEach(z=>{
-        const key=zoneKeyMap[z.id];
-        const x=z.cameraBounds.x, y=0, w=z.cameraBounds.w, h=z.cameraBounds.h;
-
-        if(key && this.textures.exists(key)){
-          const img=this.add.image(x,y,key).setOrigin(0,0).setDepth(0);
-          // fit image into the zone bounds
-          img.setDisplaySize(w,h);
-        }else{
-          // fallback placeholder if image missing
-          const g=this.add.graphics().setDepth(0);
-          g.fillStyle(0x1f2937,1).fillRect(x,y,w,h); // dark panel
-          g.lineStyle(4,0x334155,1).strokeRect(x+2,y+2,w-4,h-4);
-          this.add.text(x+16,y+16, z.name || z.id, {font:'20px system-ui',fill:'#e5e7eb'});
-          this.add.text(x+16,y+44,'(no zone PNG found)',{font:'14px system-ui',fill:'#94a3b8'});
-        }
-      });
-
-      // building tag -> key
-      const tex={
-        lyden:'bld_lyden', cafaro:'bld_cafaro', christman:'bld_christman',
-        weller:'bld_weller', wick:'bld_wick', kilcawley:'bld_kilcawley'
-      };
-
-      // place buildings
-      blds.forEach(b=>{
-        const k=tex[b.tag];
-        if(k && this.textures.exists(k)){
-          this.add.image(b.anchor.x,b.anchor.y,k).setOrigin(0.5,1).setScale(b.scale??1).setDepth((b.zIndex??0)+10);
-        }else{
-          // small crosshair if building art missing
-          const g=this.add.graphics().setDepth(15);
-          g.lineStyle(3,0xf43f5e,1).strokeCircle(b.anchor.x,b.anchor.y-10,12);
-          this.add.text(b.anchor.x+16,b.anchor.y-24, b.tag+' (missing art)', {font:'14px system-ui',fill:'#fca5a5'});
-        }
-      });
-
-      // camera controls
-      const cam=this.cameras.main;
-      let down=false,last=new Phaser.Math.Vector2();
-      this.input.on('pointerdown',p=>{down=true;last.set(p.x,p.y);this.input.setDefaultCursor('grabbing');});
-      this.input.on('pointerup',()=>{down=false;this.input.setDefaultCursor('grab');});
-      this.input.on('pointermove',p=>{ if(!down) return; cam.scrollX-=(p.x-last.x); cam.scrollY-=(p.y-last.y); last.set(p.x,p.y); });
-      this.input.on('wheel',(_p,dx,dy)=>{ cam.setZoom(Phaser.Math.Clamp(cam.zoom - dy*0.0015,0.5,2)); });
-
-      cam.setZoom(0.9); cam.centerOn(900, 400);
-    }
-  </script>
-</body>
-</html>
+  cam.setZoom(0.9); cam.centerOn(900, 400);
+}
+</script>
+</body></html>
