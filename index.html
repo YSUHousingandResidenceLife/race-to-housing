@@ -2,27 +2,34 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Race to Housing Map</title>
+  <title>Race to Housing Map — Test Style</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-  <!-- Mapbox GL JS CSS -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
-    body { margin: 0; padding: 0; }
-    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    html, body { height: 100%; margin: 0; }
+    #map { position: absolute; inset: 0; }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+
     const map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/ysu-hrl/cmfmrdx2a005n01qhemvyawqj',
+      style: 'mapbox://styles/mapbox/light-v11', // built-in style for debugging
       center: [-80.6495, 41.1066], // YSU campus
       zoom: 14
+    });
+
+    // Optional: basic controls
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    // Log any errors to the browser console (helps debug token/restrictions)
+    map.on('error', (e) => {
+      if (e && e.error) console.error('Mapbox error:', e.error);
     });
   </script>
 </body>
