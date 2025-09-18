@@ -19,18 +19,20 @@
     mapboxgl.accessToken =
       'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
     const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    // filename has a space -> encode it
-    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson');
+    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // same folder
     const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
+    const PITCH = 60;
+    const BEARING = -133.6;
 
     // --- Map ---
     const map = new mapboxgl.Map({
       container: 'map',
       style: STYLE_ID,
-      center: [-80.644685, 41.107524],
-      zoom: 17.2,
-      pitch: 60,
-      bearing: -133.6,
+      // temporary center; we'll fit to data after it loads
+      center: [-80.6458, 41.1090],
+      zoom: 16.8,
+      pitch: PITCH,
+      bearing: BEARING,
       minZoom: 15,
       maxZoom: 19,
       maxBounds: CAMPUS_BOUNDS
@@ -57,21 +59,32 @@
       return r.json();
     }
 
+    function bboxFromFeatures(fc) {
+      let minX= Infinity, minY= Infinity, maxX=-Infinity, maxY=-Infinity;
+      for (const f of fc.features || []) {
+        const g = f.geometry;
+        if (!g) continue;
+        const stack = g.type === 'Polygon' ? [g.coordinates]
+                   : g.type === 'MultiPolygon' ? g.coordinates
+                   : [];
+        for (const poly of stack) {
+          for (const ring of poly) {
+            for (const [x,y] of ring) {
+              if (x<minX) minX=x; if (y<minY) minY=y;
+              if (x>maxX) maxX=x; if (y>maxY) maxY=y;
+            }
+          }
+        }
+      }
+      return [[minX, minY],[maxX, maxY]];
+    }
+
     map.on('load', async () => {
       hideLabelsAndBaseBuildings();
 
-      let data;
-      try {
-        data = await loadJSON(GEOJSON_URL);
-        console.log('Loaded buildings:', data?.features?.length ?? 0);
-      } catch (err) {
-        console.error(err);
-        alert('Could not load the GeoJSON file. Make sure it is in the same folder as index.html.');
-        return;
-      }
+      const data = await loadJSON(GEOJSON_URL);
 
       map.addSource('race', { type: 'geojson', data, generateId: true });
-
       map.addLayer({
         id: 'race-buildings',
         type: 'fill-extrusion',
@@ -81,6 +94,17 @@
           'fill-extrusion-height': ['coalesce', ['get','height'], 22],
           'fill-extrusion-opacity': 0.96
         }
+      });
+
+      // Fit the camera to ALL buildings so Lyden/Cafaro aren't clipped
+      const bounds = bboxFromFeatures(data);
+      // Padding can be asymmetric; increase left/right if a side is still tight
+      map.fitBounds(bounds, {
+        padding: { top: 80, right: 160, bottom: 120, left: 260 },
+        maxZoom: 18,
+        pitch: PITCH,
+        bearing: BEARING,
+        duration: 600
       });
     });
   </script>
