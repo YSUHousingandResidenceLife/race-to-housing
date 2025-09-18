@@ -15,52 +15,89 @@
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
-    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+    mapboxgl.accessToken =
+      'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+
+    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+    const DATA_URL = 'ysu_race_buildings_exact.geojson'; // <-- your saved file (same folder as index.html)
 
     const map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q', // your custom style
-      center: [-80.644685, 41.107524],   // centered near campus housing
+      style: STYLE_ID,
+      center: [-80.644685, 41.107524],
       zoom: 17.2,
-      pitch: 60,                         // angled 3D view you liked
-      bearing: -133.6,                   // rotated to match your preferred screenshot
+      pitch: 60,
+      bearing: -133.6,
       minZoom: 15,
       maxZoom: 19,
       maxBounds: [
-        [-80.6570, 41.1026], // SW campus boundary
-        [-80.6415, 41.1120]  // NE campus boundary
+        [-80.6570, 41.1026], // SW
+        [-80.6415, 41.1120]  // NE
       ]
     });
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    map.on('load', () => {
-      // Hide all labels from the base style
-      const layers = map.getStyle().layers || [];
-      for (const layer of layers) {
-        if (layer.type === 'symbol' || /label/i.test(layer.id)) {
-          try { map.setLayoutProperty(layer.id, 'visibility', 'none'); } catch(e){}
+    // Helper: fetch JSON safely and log issues
+    async function loadJSON(url) {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`Failed to load ${url} (${r.status})`);
+      return r.json();
+    }
+
+    map.on('load', async () => {
+      // 1) Hide ALL labels
+      for (const lyr of (map.getStyle().layers || [])) {
+        if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
+          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
+        }
+      }
+      // 2) Also hide base-style building extrusions so our colored ones are obvious
+      for (const lyr of (map.getStyle().layers || [])) {
+        if (/building/i.test(lyr.id) && (lyr.type === 'fill-extrusion' || lyr.type === 'fill')) {
+          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
         }
       }
 
-      // Add your finalized GeoJSON with exact building footprints
-      map.addSource('race', {
-        type: 'geojson',
-        data: 'ysu_race_buildings_exact.geojson'
-      });
+      // 3) Load your saved GeoJSON
+      let data;
+      try {
+        data = await loadJSON(DATA_URL);
+        console.log('Loaded GeoJSON:', DATA_URL, data);
+      } catch (err) {
+        console.error(err);
+        alert('Could not load ysu_race_buildings_exact.geojson. Make sure it is in the same folder as index.html.');
+        return;
+      }
 
-      // Render buildings in 3D with their assigned colors
+      // Quick sanity check + auto-fix: ensure features have a color
+      if (data && data.features) {
+        for (const f of data.features) {
+          // If no color found, assign a default (YSU red) so it shows up
+          if (!f.properties) f.properties = {};
+          if (!('fill' in f.properties)) f.properties.fill = '#d6001c';
+          // Tag as building if missing, so future filters work
+          if (!('type' in f.properties)) f.properties.type = 'building';
+        }
+      }
+
+      // 4) Add your data source and colored 3D layer
+      map.addSource('race', { type: 'geojson', data, generateId: true });
+
       map.addLayer({
         id: 'race-buildings',
         type: 'fill-extrusion',
         source: 'race',
-        filter: ['==', ['get', 'type'], 'building'],
+        // No filter → render all polygons from your file
         paint: {
-          'fill-extrusion-color': ['get', 'fill'],
-          'fill-extrusion-height': ['coalesce', ['get','height'], 22],
+          'fill-extrusion-color': ['coalesce', ['get', 'fill'], '#d6001c'],
+          'fill-extrusion-height': ['coalesce', ['get', 'height'], 22],
           'fill-extrusion-opacity': 0.96
         }
       });
+
+      // Surface any style errors
+      map.on('error', e => { if (e && e.error) console.error('Mapbox error:', e.error); });
     });
   </script>
 </body>
