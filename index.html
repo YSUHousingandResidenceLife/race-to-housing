@@ -8,130 +8,28 @@
   <style>
     html, body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-  <script>
-    mapboxgl.accessToken =
-      'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-
-    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const DATA_URL = 'ysu_race_buildings_exact.geojson'; // <-- your saved file (same folder as index.html)
-
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: STYLE_ID,
-      center: [-80.644685, 41.107524],
-      zoom: 17.2,
-      pitch: 60,
-      bearing: -133.6,
-      minZoom: 15,
-      maxZoom: 19,
-      maxBounds: [
-        [-80.6570, 41.1026], // SW
-        [-80.6415, 41.1120]  // NE
-      ]
-    });
-
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-    // Helper: fetch JSON safely and log issues
-    async function loadJSON(url) {
-      const r = await fetch(url, { cache: 'no-store' });
-      if (!r.ok) throw new Error(`Failed to load ${url} (${r.status})`);
-      return r.json();
-    }
-
-    map.on('load', async () => {
-      // 1) Hide ALL labels
-      for (const lyr of (map.getStyle().layers || [])) {
-        if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-        }
-      }
-      // 2) Also hide base-style building extrusions so our colored ones are obvious
-      for (const lyr of (map.getStyle().layers || [])) {
-        if (/building/i.test(lyr.id) && (lyr.type === 'fill-extrusion' || lyr.type === 'fill')) {
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-        }
-      }
-
-      // 3) Load your saved GeoJSON
-      let data;
-      try {
-        data = await loadJSON(DATA_URL);
-        console.log('Loaded GeoJSON:', DATA_URL, data);
-      } catch (err) {
-        console.error(err);
-        alert('Could not load ysu_race_buildings_exact.geojson. Make sure it is in the same folder as index.html.');
-        return;
-      }
-
-      // Quick sanity check + auto-fix: ensure features have a color
-      if (data && data.features) {
-        for (const f of data.features) {
-          // If no color found, assign a default (YSU red) so it shows up
-          if (!f.properties) f.properties = {};
-          if (!('fill' in f.properties)) f.properties.fill = '#d6001c';
-          // Tag as building if missing, so future filters work
-          if (!('type' in f.properties)) f.properties.type = 'building';
-        }
-      }
-
-      // 4) Add your data source and colored 3D layer
-      map.addSource('race', { type: 'geojson', data, generateId: true });
-
-      map.addLayer({
-        id: 'race-buildings',
-        type: 'fill-extrusion',
-        source: 'race',
-        // No filter → render all polygons from your file
-        paint: {
-          'fill-extrusion-color': ['coalesce', ['get', 'fill'], '#d6001c'],
-          'fill-extrusion-height': ['coalesce', ['get', 'height'], 22],
-          'fill-extrusion-opacity': 0.96
-        }
-      });
-
-      // Surface any style errors
-      map.on('error', e => { if (e && e.error) console.error('Mapbox error:', e.error); });
-    });
-  </script>
-</body>
-</html>
-
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Race to Housing — Capture Building Footprints</title>
-  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
-  <style>
-    html,body{height:100%;margin:0}
-    #map{position:absolute;inset:0}
-    .ui{position:absolute;top:12px;left:12px;z-index:10;display:flex;gap:8px;align-items:center}
-    .btn{background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px 12px;font:14px system-ui;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.1)}
-    .pill{background:#000;color:#fff;border-radius:999px;padding:6px 10px;font:12px system-ui;opacity:.8}
+    .ui { position:absolute; top:12px; left:12px; z-index:10; display:flex; gap:8px; align-items:center; }
+    .btn { background:#fff; border:1px solid #ddd; border-radius:8px; padding:8px 12px; font:14px system-ui; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.1) }
+    .pill { background:#000; color:#fff; border-radius:999px; padding:6px 10px; font:12px system-ui; opacity:.85; }
+    .hidden { display:none; }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="ui">
-    <button id="downloadBtn" class="btn">Download buildings (.geojson)</button>
-    <span id="status" class="pill">Capturing…</span>
+    <button id="downloadBtn" class="btn hidden">Download buildings (.geojson)</button>
+    <span id="status" class="pill">Loading…</span>
   </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
+    // ===== CONFIG =====
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-    const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const campusBounds = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
+    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+    const SAVED_URL = 'ysu_race_buildings_exact.geojson'; // prefer this if present & non-empty
+    const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
 
-    // Your buildings (name, color, [lng,lat])
+    // Your target dorms (name, color, [lng,lat]) for auto-capture fallback
     const TARGETS = [
       {name:'Lyden House',       color:'#FFD94A', coord:[-80.647458, 41.111143]},
       {name:'Cafaro House',      color:'#FF8A00', coord:[-80.6461376731338, 41.11100745921387]},
@@ -141,23 +39,36 @@
       {name:'Kilcawley House',   color:'#00A651', coord:[-80.64731987291158, 41.10673909169142]},
     ];
 
+    // ===== UI =====
+    const statusEl = document.getElementById('status');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    // ===== MAP BOOT =====
     const map = new mapboxgl.Map({
       container: 'map',
-      style: STYLE,
+      style: STYLE_ID,
       center: [-80.644685, 41.107524],
       zoom: 17.2,
       pitch: 60,
       bearing: -133.6,
-      maxBounds: campusBounds,
       minZoom: 15,
-      maxZoom: 19
+      maxZoom: 19,
+      maxBounds: CAMPUS_BOUNDS
     });
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    const statusEl = document.getElementById('status');
-
     // Helpers
+    async function tryLoadSaved(url) {
+      try {
+        const r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) return null;
+        const json = await r.json();
+        if (!json || !json.features || !json.features.length) return null;
+        return json;
+      } catch { return null; }
+    }
+
     function downloadJSON(obj, filename) {
       const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
       const url = URL.createObjectURL(blob);
@@ -169,70 +80,92 @@
       for (const pad of paddings) {
         const bbox = [[pointPx.x - pad, pointPx.y - pad],[pointPx.x + pad, pointPx.y + pad]];
         const feats = map.queryRenderedFeatures(bbox);
-        let best = null, bestArea = 0;
+        let best = null, bestScore = 0;
         for (const f of feats) {
-          const isBuilding = (f.sourceLayer && /building/i.test(f.sourceLayer)) || (f.layer && /building/i.test(f.layer.id));
-          if (!isBuilding || !f.geometry) continue;
+          const isB = (f.sourceLayer && /building/i.test(f.sourceLayer)) || (f.layer && /building/i.test(f.layer.id));
+          if (!isB || !f.geometry) continue;
           const g = f.geometry;
-          const polys = g.type === 'Polygon' ? [g.coordinates] :
-                        g.type === 'MultiPolygon' ? g.coordinates : null;
+          const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : null;
           if (!polys) continue;
-          // crude "size" metric: total ring vertex count
-          let size = 0;
-          for (const poly of polys) for (const ring of poly) size += ring.length;
-          if (size > bestArea) { bestArea = size; best = g; }
+          // score by total vertices
+          let score = 0; for (const poly of polys) for (const ring of poly) score += ring.length;
+          if (score > bestScore) { bestScore = score; best = g; }
         }
         if (best) return best;
       }
       return null;
     }
 
-    // Wait for style + tiles to settle, then capture
-    map.once('idle', () => {
-      const board = { type:'FeatureCollection', features: [] };
-      let captured = 0;
-
-      for (const t of TARGETS) {
-        const pt = map.project(t.coord);
-        const geom = getFootprintAt(pt);
-        if (geom) {
-          board.features.push({
-            type:'Feature',
-            properties:{ type:'building', name:t.name, fill:t.color, height:22 },
-            geometry: geom
-          });
-          captured++;
-        } else {
-          console.warn('No footprint found for', t.name, 'at', t.coord);
+    function hideLabelsAndBaseBuildings() {
+      const layers = map.getStyle().layers || [];
+      for (const lyr of layers) {
+        if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
+          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
         }
       }
+      for (const lyr of layers) {
+        if (/building/i.test(lyr.id) && (lyr.type === 'fill-extrusion' || lyr.type === 'fill')) {
+          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
+        }
+      }
+    }
 
-      // Add to map so you can see colors immediately
+    map.on('load', async () => {
+      statusEl.textContent = 'Loading saved board…';
+      // 1) Prefer saved file
+      let board = await tryLoadSaved(SAVED_URL);
+
+      if (board) {
+        statusEl.textContent = `Loaded ${board.features.length} features`;
+      } else {
+        statusEl.textContent = 'Capturing buildings…';
+        // 2) Auto-capture fallback
+        // ensure consistent camera (affects screen pixels)
+        map.jumpTo({ zoom: 17.2, pitch: 60, bearing: -133.6 });
+
+        board = { type:'FeatureCollection', features: [] };
+        let captured = 0;
+        // wait for style tiles to be ready so queryRenderedFeatures returns buildings
+        await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+
+        for (const t of TARGETS) {
+          const pt = map.project(t.coord);
+          const geom = getFootprintAt(pt);
+          if (geom) {
+            board.features.push({
+              type:'Feature',
+              properties:{ type:'building', name:t.name, fill:t.color, height:22 },
+              geometry: geom
+            });
+            captured++;
+          } else {
+            console.warn('No footprint found for', t.name, 'at', t.coord);
+          }
+        }
+        statusEl.textContent = `Captured ${captured}/${TARGETS.length}`;
+        // show download so you can save it
+        downloadBtn.classList.remove('hidden');
+        downloadBtn.onclick = () => downloadJSON(board, 'ysu_race_buildings_exact.geojson');
+      }
+
+      // 3) Add source + colored 3D layer
       map.addSource('race', { type:'geojson', data: board });
       map.addLayer({
-        id:'race-buildings',
-        type:'fill-extrusion',
-        source:'race',
-        paint:{
-          'fill-extrusion-color': ['get','fill'],
+        id: 'race-buildings',
+        type: 'fill-extrusion',
+        source: 'race',
+        paint: {
+          'fill-extrusion-color': ['coalesce', ['get','fill'], '#d6001c'],
           'fill-extrusion-height': ['coalesce', ['get','height'], 22],
           'fill-extrusion-opacity': 0.96
         }
       });
 
-      statusEl.textContent = `Captured ${captured}/${TARGETS.length}`;
-      if (captured === 0) statusEl.textContent += ' — zoom in a bit and refresh.';
-      // Hide all labels AFTER capture (so building layers were queryable)
-      for (const lyr of (map.getStyle().layers||[])) {
-        if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-        }
-      }
+      // 4) Hide labels/base buildings last (so capture had access to them)
+      hideLabelsAndBaseBuildings();
 
-      // Download button
-      document.getElementById('downloadBtn').onclick = () => {
-        downloadJSON(board, 'ysu_race_buildings_exact.geojson');
-      };
+      // Surface any errors
+      map.on('error', e => { if (e && e.error) console.error('Mapbox error:', e.error); });
     });
   </script>
 </body>
