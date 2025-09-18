@@ -2,129 +2,65 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Race to Housing — Exact Building Shapes</title>
+  <title>Race to Housing Board</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
     html, body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
-    .toolbar{position:absolute;top:12px;left:12px;z-index:10;display:flex;gap:8px}
-    .btn{background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px 12px;font:14px system-ui;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.1)}
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="toolbar">
-    <button id="downloadBtn" class="btn">Download buildings (.geojson)</button>
-  </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-    const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const campusBounds = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
-
-    // Your buildings (name, color, [lng,lat])
-    const TARGETS = [
-      {name:'Lyden House',       color:'#FFD94A', coord:[-80.647458, 41.111143]},
-      {name:'Cafaro House',      color:'#FF8A00', coord:[-80.6461376731338, 41.11100745921387]},
-      {name:'Christman Dining',  color:'#808000', coord:[-80.64724052183561, 41.110525670257104]},
-      {name:'Weller House',      color:'#00FFFF', coord:[-80.64483333333334, 41.10769444444445]}, // 80°38'41.4"W, 41°06'27.7"N
-      {name:'Wick House (Art)',  color:'#B67BFF', coord:[-80.64426251711262, 41.107489184836176]},
-      {name:'Kilcawley House',   color:'#00A651', coord:[-80.64731987291158, 41.10673909169142]},
-    ];
-
     const map = new mapboxgl.Map({
       container: 'map',
-      style: STYLE,
-      center: [-80.644685, 41.107524],
+      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q', // your custom style
+      center: [-80.644685, 41.107524],   // centered near campus housing
       zoom: 17.2,
-      pitch: 60,
-      bearing: -133.6,
-      maxBounds: campusBounds,
+      pitch: 60,                         // angled 3D view you liked
+      bearing: -133.6,                   // rotated to match your preferred screenshot
       minZoom: 15,
-      maxZoom: 19
+      maxZoom: 19,
+      maxBounds: [
+        [-80.6570, 41.1026], // SW campus boundary
+        [-80.6415, 41.1120]  // NE campus boundary
+      ]
     });
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Utility: download JSON
-    function downloadJSON(obj, filename) {
-      const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    // Query a building polygon around a point on screen
-    function getFootprintAt(pointPx, padding=10){
-      const bbox = [
-        [pointPx.x - padding, pointPx.y - padding],
-        [pointPx.x + padding, pointPx.y + padding]
-      ];
-      const feats = map.queryRenderedFeatures(bbox);
-      // pick the largest polygon from any building layer
-      let best = null, bestArea = 0;
-      for (const f of feats) {
-        const isBuilding = (f.sourceLayer && /building/i.test(f.sourceLayer)) || (f.layer && /building/i.test(f.layer.id));
-        if (!isBuilding || !f.geometry) continue;
-        // Rough area proxy: count ring length
-        const geom = f.geometry;
-        const rings = geom.type === 'Polygon' ? geom.coordinates : geom.type === 'MultiPolygon' ? geom.coordinates.flat() : null;
-        if (!rings) continue;
-        let size = 0;
-        for (const ring of rings) size += ring.length;
-        if (size > bestArea) { bestArea = size; best = f; }
-      }
-      return best ? best.geometry : null;
-    }
-
-    map.on('load', async () => {
-      // Hide all labels
-      for (const lyr of (map.getStyle().layers||[])) {
-        if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
+    map.on('load', () => {
+      // Hide all labels from the base style
+      const layers = map.getStyle().layers || [];
+      for (const layer of layers) {
+        if (layer.type === 'symbol' || /label/i.test(layer.id)) {
+          try { map.setLayoutProperty(layer.id, 'visibility', 'none'); } catch(e){}
         }
       }
 
-      // Prepare empty collection
-      const board = { type:'FeatureCollection', features: [] };
+      // Add your finalized GeoJSON with exact building footprints
+      map.addSource('race', {
+        type: 'geojson',
+        data: 'ysu_race_buildings_exact.geojson'
+      });
 
-      // Ensure consistent capture view (zoom/tilt affects screen pixels)
-      map.jumpTo({zoom: 17.2, pitch: 60, bearing: -133.6});
-
-      // For each target, query the visible building footprint and store it
-      for (const t of TARGETS) {
-        const pt = map.project(t.coord);
-        const geom = getFootprintAt(pt, 14); // try 14px search window
-        if (!geom) { console.warn('No footprint found for', t.name); continue; }
-        board.features.push({
-          type:'Feature',
-          properties:{ type:'building', name:t.name, fill:t.color, height:22 },
-          geometry: geom
-        });
-      }
-
-      // Add source/layer
-      map.addSource('race', { type:'geojson', data: board });
-
+      // Render buildings in 3D with their assigned colors
       map.addLayer({
-        id:'race-buildings',
-        type:'fill-extrusion',
-        source:'race',
-        filter:['==', ['get','type'], 'building'],
-        paint:{
-          'fill-extrusion-color': ['get','fill'],
+        id: 'race-buildings',
+        type: 'fill-extrusion',
+        source: 'race',
+        filter: ['==', ['get', 'type'], 'building'],
+        paint: {
+          'fill-extrusion-color': ['get', 'fill'],
           'fill-extrusion-height': ['coalesce', ['get','height'], 22],
           'fill-extrusion-opacity': 0.96
         }
       });
-
-      // Download button
-      document.getElementById('downloadBtn').onclick = () => {
-        downloadJSON(board, 'ysu_race_buildings_exact.geojson');
-      };
     });
   </script>
 </body>
