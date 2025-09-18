@@ -2,27 +2,66 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Race to Housing Map (Editor)</title>
+  <title>Race to Housing Board</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
     html, body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
-    .toolbar {
-      position: absolute; top: 12px; left: 12px; z-index: 10;
-      display: flex; gap: 8px; flex-wrap: wrap;
-    }
-    .btn {
-      background:#fff; border:1px solid #ddd; border-radius:8px;
-      padding:8px 12px; font:14px/1.2 system-ui, sans-serif; cursor:pointer;
-      box-shadow:0 1px 4px rgba(0,0,0,0.1);
-    }
-    .btn.active { border-color:#d6001c; box-shadow:0 0 0 2px rgba(214,0,28,0.2); }
-    .hint {
-      position:absolute; bottom:12px; left:12px; background:#000; color:#fff;
-      padding:6px 10px; border-radius:6px; font:12px/1.2 system-ui; opacity:.8;
-    }
   </style>
 </head>
 <body>
-  <div id="m
+  <div id="map"></div>
+
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q', // your custom style
+      center: [-80.6468, 41.1090],   // centered near YSU dorms
+      zoom: 17.2,
+      pitch: 60,                     // tilted for 3D board view
+      bearing: -133.6,               // angled like your preferred screenshot
+      minZoom: 15,
+      maxZoom: 19,
+      maxBounds: [
+        [-80.6570, 41.1026], // SW corner of campus
+        [-80.6415, 41.1120]  // NE corner of campus
+      ]
+    });
+
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    map.on('load', () => {
+      // Hide ALL labels from the base style (streets, POI, buildings, etc.)
+      const layers = map.getStyle().layers || [];
+      for (const layer of layers) {
+        if (layer.type === 'symbol' || /label/i.test(layer.id)) {
+          try { map.setLayoutProperty(layer.id, 'visibility', 'none'); } catch(e){}
+        }
+      }
+
+      // Add your custom GeoJSON source (only buildings you defined)
+      map.addSource('race', {
+        type: 'geojson',
+        data: 'ysu_race_buildings_only.geojson'
+      });
+
+      // Colored 3D building extrusions
+      map.addLayer({
+        id: 'race-buildings',
+        type: 'fill-extrusion',
+        source: 'race',
+        filter: ['==', ['get', 'type'], 'building'],
+        paint: {
+          'fill-extrusion-color': ['get', 'fill'],
+          'fill-extrusion-height': ['coalesce', ['get','height'], 22],
+          'fill-extrusion-opacity': 0.96
+        }
+      });
+    });
+  </script>
+</body>
+</html>
