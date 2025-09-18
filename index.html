@@ -2,12 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Race to Housing Map</title>
+  <title>Race to Housing Map — Baseline</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
     html, body { height: 100%; margin: 0; }
     #map { position: absolute; inset: 0; }
+    /* Visual cue that the page itself isn't blank */
+    body { background: #f5f5f5; }
   </style>
 </head>
 <body>
@@ -17,23 +19,25 @@
   <script>
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
+    const centerYSU = [-80.6495, 41.1066];
+
     const map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/mapbox/light-v11'
-      center: [-80.6495, 41.1066], // YSU campus center
-      zoom: 15,
-      minZoom: 14,
-      maxZoom: 18,
-      maxBounds: [
-        [-80.66, 41.10], // Southwest corner
-        [-80.63, 41.11]  // Northeast corner
-      ]
+      style: 'mapbox://styles/mapbox/light-v11', // baseline known-good style
+      center: centerYSU,
+      zoom: 15
+      // (no maxBounds/minZoom/maxZoom yet)
     });
 
-    // Navigation buttons (zoom in/out, rotate)
+    // Basic controls
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Log errors for debugging
+    // Add a test marker so you know it's centered
+    map.on('load', () => {
+      new mapboxgl.Marker().setLngLat(centerYSU).addTo(map);
+    });
+
+    // Surface any silent errors
     map.on('error', (e) => {
       if (e && e.error) console.error('Mapbox error:', e.error);
     });
