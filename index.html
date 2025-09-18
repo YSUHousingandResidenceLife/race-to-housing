@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Race to Housing Map — Test Style</title>
+  <title>Race to Housing Map</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
@@ -19,15 +19,21 @@
 
     const map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/mapbox/light-v11', // built-in style for debugging
-      center: [-80.6495, 41.1066], // YSU campus
-      zoom: 14
+      style: 'mapbox://styles/ysu-hrl/cmfmrdx2a005n01qhemvyawqj',
+      center: [-80.6495, 41.1066], // YSU campus center
+      zoom: 15,
+      minZoom: 14,
+      maxZoom: 18,
+      maxBounds: [
+        [-80.66, 41.10], // Southwest corner
+        [-80.63, 41.11]  // Northeast corner
+      ]
     });
 
-    // Optional: basic controls
+    // Navigation buttons (zoom in/out, rotate)
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Log any errors to the browser console (helps debug token/restrictions)
+    // Log errors for debugging
     map.on('error', (e) => {
       if (e && e.error) console.error('Mapbox error:', e.error);
     });
