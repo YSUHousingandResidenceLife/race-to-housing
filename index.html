@@ -6,8 +6,8 @@
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { position: absolute; inset: 0; }
+    html, body { height:100%; margin:0; }
+    #map { position:absolute; inset:0; }
   </style>
 </head>
 <body>
@@ -17,25 +17,41 @@
   <script>
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
+    // Campus bounds box (keeps map from wandering)
+    const campusBounds = [
+      [-80.6570, 41.1026], // SW
+      [-80.6415, 41.1120]  // NE
+    ];
+
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
-      center: [-80.6495, 41.1066],
-      zoom: 16,
-      pitch: 45,
-      bearing: -17.6
+      center: [-80.644685, 41.107524], // near the view you liked
+      zoom: 17.2,
+      pitch: 60,           // steeper, game-board angle
+      bearing: -133.6,     // match the oblique view you showed
+      maxBounds: campusBounds,
+      minZoom: 15,
+      maxZoom: 19
     });
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     map.on('load', () => {
-      // Add the GeoJSON source
+      // 1) Hide ALL labels (place, road, POI, building names)
+      const layers = map.getStyle().layers || [];
+      for (const layer of layers) {
+        if (layer.type === 'symbol' || /label/i.test(layer.id)) {
+          try { map.setLayoutProperty(layer.id, 'visibility', 'none'); } catch(e){}
+        }
+      }
+
+      // 2) Add your custom board data (buildings + route)
       map.addSource('race', {
         type: 'geojson',
-        data: 'ysu_race_board_starter.geojson'  // must be in same folder as index.html
+        data: 'ysu_race_board_starter.geojson' // keep this file next to index.html
       });
 
-      // Buildings layer
       map.addLayer({
         id: 'race-buildings',
         type: 'fill-extrusion',
@@ -43,12 +59,11 @@
         filter: ['==', ['get', 'type'], 'building'],
         paint: {
           'fill-extrusion-color': ['get', 'fill'],
-          'fill-extrusion-height': 20,
-          'fill-extrusion-opacity': 0.95
+          'fill-extrusion-height': 22,
+          'fill-extrusion-opacity': 0.96
         }
       });
 
-      // Route layer
       map.addLayer({
         id: 'race-route',
         type: 'line',
@@ -56,7 +71,8 @@
         filter: ['==', ['get', 'type'], 'route'],
         paint: {
           'line-color': ['get', 'stroke'],
-          'line-width': ['get', 'stroke-width']
+          'line-width': ['get', 'stroke-width'],
+          'line-opacity': 1
         }
       });
     });
