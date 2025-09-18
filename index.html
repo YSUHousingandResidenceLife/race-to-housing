@@ -25,9 +25,10 @@
     // ===== CONFIG =====
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
     const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const SAVED_URL = 'ysu_race_buildings_exact.geojson';
+    const SAVED_URL = 'ysu_race_buildings_exact.geojson';   // if present & non-empty, we’ll use it
     const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
 
+    // Your targets (name, color, [lng,lat])
     const TARGETS = [
       {name:'Lyden House',       color:'#FFD94A', coord:[-80.647458, 41.111143]},
       {name:'Cafaro House',      color:'#FF8A00', coord:[-80.6461376731338, 41.11100745921387]},
@@ -43,7 +44,7 @@
     const map = new mapboxgl.Map({
       container: 'map',
       style: STYLE_ID,
-      center: [-80.644685, 41.107524],
+      center: [-80.644685, 41.107524],   // your preferred view
       zoom: 17.2,
       pitch: 60,
       bearing: -133.6,
@@ -54,7 +55,7 @@
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Helpers
+    // ========== helpers ==========
     async function tryLoadSaved(url) {
       try {
         const r = await fetch(url, { cache: 'no-store' });
@@ -84,26 +85,19 @@
       }
     }
 
-    // Capture helpers using an explicit buildings source/layer
+    // Add an explicit streets source + invisible building layer so we can query footprints
     function ensureCaptureLayer(){
-      // Add streets vector source if missing
       if (!map.getSource('mbx-streets')) {
-        map.addSource('mbx-streets', {
-          type: 'vector',
-          url: 'mapbox://mapbox.mapbox-streets-v8'
-        });
+        map.addSource('mbx-streets', { type: 'vector', url: 'mapbox://mapbox.mapbox-streets-v8' });
       }
-      // Add a nearly invisible building fill layer so features are "rendered"
       if (!map.getLayer('capture-buildings')) {
         map.addLayer({
           id: 'capture-buildings',
           type: 'fill',
           source: 'mbx-streets',
           'source-layer': 'building',
-          paint: {
-            'fill-color': 'rgba(0,0,0,0.001)'  // effectively invisible but renders
-          }
-        }, map.getStyle().layers[0]?.id); // insert low in stack
+          paint: { 'fill-color': 'rgba(0,0,0,0.001)' } // renders but invisible
+        });
       }
     }
     function removeCaptureLayer(){
@@ -114,11 +108,10 @@
       for (const pad of paddings) {
         const bbox = [[pointPx.x - pad, pointPx.y - pad],[pointPx.x + pad, pointPx.y + pad]];
         const feats = map.queryRenderedFeatures(bbox, { layers: ['capture-buildings'] });
-        // choose the "largest" polygon (more vertices)
         let best = null, bestScore = 0;
         for (const f of feats) {
-          if (!f.geometry) continue;
           const g = f.geometry;
+          if (!g) continue;
           const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : null;
           if (!polys) continue;
           let score = 0; for (const poly of polys) for (const ring of poly) score += ring.length;
@@ -128,23 +121,29 @@
       }
       return null;
     }
+    function idleOnce() {
+      return new Promise(res => map.once('idle', res));
+    }
+    function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
+    // ========== main ==========
     map.on('load', async () => {
-      // Prefer a saved file if present and non-empty
+      // If a saved file exists and has features, just use it
       let board = await tryLoadSaved(SAVED_URL);
       if (board) {
-        statusEl.textContent = `Loaded ${board.features.length} saved features`;
+        statusEl.textContent = `Loaded ${board.features.length} saved features — Done`;
       } else {
-        statusEl.textContent = 'Capturing buildings…';
-        // Add temp capture layer from streets v8
+        statusEl.textContent = 'Capturing 0/6…';
         ensureCaptureLayer();
-        // make sure tiles are ready
-        await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
 
         board = { type:'FeatureCollection', features: [] };
         let captured = 0;
 
+        // Visit each building so it's on-screen, then capture its footprint
         for (const t of TARGETS) {
+          map.easeTo({ center: t.coord, zoom: 18, pitch: 60, bearing: -133.6, duration: 300 });
+          await idleOnce();       // wait for tiles to render
+          await sleep(100);       // small buffer (some devices load slow)
           const pt = map.project(t.coord);
           const geom = queryBuildingAtScreenPoint(pt);
           if (geom) {
@@ -154,18 +153,17 @@
               geometry: geom
             });
             captured++;
+            statusEl.textContent = `Capturing ${captured}/6…`;
           } else {
             console.warn('No footprint found for', t.name, 'at', t.coord);
           }
         }
-        statusEl.textContent = `Captured ${captured}/${TARGETS.length}`;
+        statusEl.textContent = `Captured ${captured}/6 — Done`;
         downloadBtn.onclick = () => downloadJSON(board, 'ysu_race_buildings_exact.geojson');
       }
 
       // Add your colored 3D buildings
-      if (map.getSource('race')) map.removeSource('race');
       map.addSource('race', { type:'geojson', data: board });
-      if (map.getLayer('race-buildings')) map.removeLayer('race-buildings');
       map.addLayer({
         id: 'race-buildings',
         type: 'fill-extrusion',
@@ -177,12 +175,11 @@
         }
       });
 
-      // Now clean up + hide labels/base buildings
+      // Return to your favorite overview, then hide labels/base buildings
+      map.easeTo({ center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6, duration: 300 });
+      await idleOnce();
       removeCaptureLayer();
       hideLabelsAndBaseBuildings();
-
-      statusEl.textContent += ' — Done';
-      map.on('error', e => { if (e && e.error) console.error('Mapbox error:', e.error); });
     });
   </script>
 </body>
