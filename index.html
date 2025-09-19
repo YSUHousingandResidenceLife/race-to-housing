@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Route Editor + Live Board</title>
+  <title>Race to Housing — Y Route Editor + Board</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
@@ -12,7 +12,6 @@
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     #map{position:absolute;inset:0}
 
-    /* Panels */
     .panel{position:absolute;top:12px;z-index:20;width:360px;background:var(--card-bg);
       border:1px solid var(--card-border);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.1);
       overflow:hidden;display:flex;flex-direction:column}
@@ -21,7 +20,6 @@
     .panel header h3{margin:0;font-size:16px}
     .panel .content{padding:12px 14px;max-height:48vh;overflow:auto}
 
-    /* Editor toolbar */
     .toolbar{
       position:absolute; left:50%; top:12px; transform:translateX(-50%); z-index:25;
       display:flex; gap:8px; background:var(--card-bg); border:1px solid var(--card-border);
@@ -35,12 +33,10 @@
     .toolbar .ghost{ background:#fff }
     .toolbar .hint{ align-self:center; color:#384151; font-size:13px; padding:0 6px }
 
-    /* Instructions */
     .steps{display:grid;gap:10px}
     .step{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:10px}
     .step .num{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
 
-    /* Players */
     .players .content{display:grid;gap:8px}
     .player{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:8px 10px}
     .token{width:24px;height:24px;border-radius:6px;border:1px solid rgba(0,0,0,.1);background:#222}
@@ -58,27 +54,24 @@
 <body>
   <div id="map"></div>
 
-  <!-- Editor toolbar -->
   <div class="toolbar" id="toolbar">
     <button id="btnDraw" class="primary">Start / Resume Route</button>
     <button id="btnSave" class="ghost">Finish & Save</button>
     <button id="btnClear" class="ghost">Clear</button>
-    <div class="hint">Click to add points • drag to refine • double-click to end</div>
+    <div class="hint">Draw the “Y”: click to add points • drag to refine • double-click to end</div>
   </div>
 
-  <!-- Instructions -->
   <section class="panel instructions" id="instructionsPanel">
     <header><h3>Race to Housing — How to Play</h3></header>
     <div class="content">
       <div class="steps">
-        <div class="step"><div class="num">1</div><div>Use the toolbar to draw the red route on the ground. Double-click to finish; drag vertices to refine.</div></div>
-        <div class="step"><div class="num">2</div><div>Click <b>Finish & Save</b> to download <code>route.geojson</code>. Place it next to this page to auto-load next time.</div></div>
-        <div class="step"><div class="num">3</div><div>Later we’ll snap penguin movement to this exact line.</div></div>
+        <div class="step"><div class="num">1</div><div>Use the toolbar to draw the red “Y” route on the ground. Double-click to finish; drag vertices to refine.</div></div>
+        <div class="step"><div class="num">2</div><div>Click <b>Finish & Save</b> to download <code>route.geojson</code>. Put it next to this page to auto-load next time.</div></div>
+        <div class="step"><div class="num">3</div><div>The board is live; later each penguin will move along this exact Y path by points.</div></div>
       </div>
     </div>
   </section>
 
-  <!-- Players (live from Firestore) -->
   <section class="panel players" id="playersPanel">
     <header><h3>Players Board</h3></header>
     <div class="content">
@@ -96,7 +89,7 @@
     const GEOJSON_URL= encodeURI('ysu_race_buildings_exact final.geojson');
     const ROUTE_URL  = 'route.geojson'; // auto-load if present
     const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
-    const PITCH = 60, BEARING = -133.6;
+    const PITCH = 60, BEARING = -133.6;  // landing angle that showcases the Y
 
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
@@ -169,7 +162,7 @@
         }
       ]
     });
-    map.addControl(Draw, 'top-right'); // shortcut icons
+    map.addControl(Draw, 'top-right');
 
     function startDraw(){
       map.doubleClickZoom.disable();
@@ -183,24 +176,58 @@
       }
     });
 
+    // Densify the drawn line into ground-locked points (no drift)
+    function haversineMeters(a,b){
+      const R=6371000;
+      const toRad=d=>d*Math.PI/180;
+      const [lon1,lat1]=a,[lon2,lat2]=b;
+      const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+      const s=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+      return 2*R*Math.asin(Math.sqrt(s));
+    }
+    function interpolateLL(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t]; }
+    function pointsAlongLine(line, spacing=3){ // meters
+      const coords=line.geometry.coordinates;
+      const pts=[];
+      let carry=0, idx=0;
+      for(let i=0;i<coords.length-1;i++){
+        const A=coords[i], B=coords[i+1];
+        const segLen=haversineMeters(A,B);
+        let d=carry;
+        while(d<=segLen){
+          const t=d/segLen;
+          const ll=interpolateLL(A,B,t);
+          pts.push({ type:'Feature', properties:{ i:idx++ }, geometry:{ type:'Point', coordinates: ll }});
+          d += spacing;
+        }
+        carry = d - segLen;
+      }
+      return { type:'FeatureCollection', features: pts };
+    }
+
+    // Keep sources in sync with draw line
     function syncRouteFromDraw(){
       const fc = Draw.getAll();
       const line = fc.features.find(f => f.geometry?.type==='LineString');
       const out = { type:'FeatureCollection', features: line ? [line] : [] };
-      const src = map.getSource('route-src');
-      if (src) src.setData(out);
+      const srcLine = map.getSource('route-line-src');
+      if (srcLine) srcLine.setData(out);
+
+      // densify to points
+      const srcPts = map.getSource('route-points-src');
+      if (srcPts){
+        const pts = line ? pointsAlongLine(line, 2.5) : { type:'FeatureCollection', features:[] };
+        srcPts.setData(pts);
+      }
       localStorage.setItem('race_route_draft', JSON.stringify(out));
     }
-    map.on('draw.create', syncRouteFromDraw);
-    map.on('draw.update', syncRouteFromDraw);
-    map.on('draw.delete', syncRouteFromDraw);
 
     document.getElementById('btnDraw').onclick  = startDraw;
     document.getElementById('btnClear').onclick = ()=>{ Draw.deleteAll(); syncRouteFromDraw(); startDraw(); };
     document.getElementById('btnSave').onclick  = ()=>{
       const fc = Draw.getAll();
       const line = fc.features.find(f => f.geometry?.type==='LineString');
-      if (!line){ alert('Draw a route first (a single LineString).'); return; }
+      if (!line){ alert('Draw the Y route first (a single LineString).'); return; }
       const out = { type:'FeatureCollection', features:[ line ] };
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], {type:'application/json'}));
@@ -225,83 +252,59 @@
         }
       });
 
-      // Route source
-      map.addSource('route-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
+      // Route sources: line (for editing/storage) + densified points (for rendering)
+      map.addSource('route-line-src',   { type:'geojson', data:{type:'FeatureCollection', features:[]} });
+      map.addSource('route-points-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
 
-      // Put route layers BELOW buildings so they hug the ground
+      // Render route as ground-locked circles (no drift)
       const beforeId = 'race-buildings';
-
-      // Base red track (ground-locked)
+      // Thick red band
       map.addLayer({
-        id:'route-track',
-        type:'line',
-        source:'route-src',
+        id:'route-band',
+        type:'circle',
+        source:'route-points-src',
         layout:{
-          'line-cap':'round',
-          'line-join':'round',
-          'line-sort-key': 0,
-          'line-pitch-alignment':'map'
+          'circle-pitch-alignment':'map',   // lock to ground
+          'circle-sort-key': 0
         },
         paint:{
-          'line-color':'#D62D20',
-          'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
-          'line-opacity': 0.96
+          'circle-color':'#D62D20',
+          'circle-radius': ['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.5],
+          'circle-opacity': 0.95,
+          'circle-pitch-scale': 'map'       // keep size consistent on ground
         }
       }, beforeId);
 
-      // Plank tiles
+      // Darker “plank” dots on top (every Nth point)
       map.addLayer({
-        id:'route-tiles',
-        type:'line',
-        source:'route-src',
+        id:'route-planks',
+        type:'circle',
+        source:'route-points-src',
         layout:{
-          'line-cap':'round',
-          'line-join':'round',
-          'line-sort-key': 1,
-          'line-pitch-alignment':'map'
+          'circle-pitch-alignment':'map',
+          'circle-sort-key': 1
         },
         paint:{
-          'line-color':'#9C1A13',
-          'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
-          'line-dasharray':[0, 2, 1.2, 2]
-        }
-      }, beforeId);
-
-      // Animated lights
-      const dashSeq = [[0,4,3,4],[1,4,2,4],[2,4,1,4],[3,4,0,4],[4,4,0,4],[3,4,1,4],[2,4,2,4],[1,4,3,4]];
-      let dashIndex = 0;
-      map.addLayer({
-        id:'route-lights',
-        type:'line',
-        source:'route-src',
-        layout:{
-          'line-cap':'round',
-          'line-join':'round',
-          'line-sort-key': 2,
-          'line-pitch-alignment':'map'
+          'circle-color':'#9C1A13',
+          'circle-radius': ['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.5],
+          'circle-opacity': 0.9,
+          'circle-pitch-scale': 'map'
         },
-        paint:{
-          'line-color':'#FFD54A',
-          'line-width': ['interpolate',['linear'],['zoom'],14,5,16,7,18,9],
-          'line-dasharray': dashSeq[0]
-        }
+        filter: ['==', ['%', ['get','i'], 6], 0]  // every 6th point ≈ plank spacing
       }, beforeId);
 
-      (function animateLights(){
-        dashIndex = (dashIndex + 1) % dashSeq.length;
-        map.setPaintProperty('route-lights','line-dasharray', dashSeq[dashIndex]);
-        requestAnimationFrame(animateLights);
-      })();
-
-      // Load saved route if present
+      // Try to load saved route.geojson from repo
       try {
         const r = await fetch(ROUTE_URL, {cache:'no-store'});
         if (r.ok) {
           const route = await r.json();
-          map.getSource('route-src').setData(route);
-          if (route.features?.length) Draw.add(route.features[0]);
+          map.getSource('route-line-src').setData(route);
+          const line = route.features?.find(f=>f.geometry?.type==='LineString');
+          const pts = line ? pointsAlongLine(line, 2.5) : {type:'FeatureCollection',features:[]};
+          map.getSource('route-points-src').setData(pts);
+          if (line) Draw.add(line);
         }
-      } catch(e){ /* ignore */ }
+      } catch(e){ /* ignore if missing */ }
 
       // Or load in-browser draft
       if (!Draw.getAll().features.length) {
@@ -309,15 +312,21 @@
         if (draft) {
           try {
             const fc = JSON.parse(draft);
-            if (fc.features?.length) {
-              map.getSource('route-src').setData(fc);
-              Draw.add(fc.features[0]);
-            }
+            map.getSource('route-line-src').setData(fc);
+            const line = fc.features?.find(f=>f.geometry?.type==='LineString');
+            const pts = line ? pointsAlongLine(line, 2.5) : {type:'FeatureCollection',features:[]};
+            map.getSource('route-points-src').setData(pts);
+            if (line) Draw.add(line);
           } catch(e){}
         }
       }
 
-      // Fit to buildings, then nudge zoom
+      // Keep sources synced as you edit
+      map.on('draw.create', syncRouteFromDraw);
+      map.on('draw.update', syncRouteFromDraw);
+      map.on('draw.delete', syncRouteFromDraw);
+
+      // Fit to buildings so the Y reads nicely on load
       const bounds = bboxFromFeatures(bldg);
       map.fitBounds(bounds, {
         padding:{ top:80, right:160, bottom:120, left:320 },
