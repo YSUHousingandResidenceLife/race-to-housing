@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Route Editor</title>
+  <title>Race to Housing — Route Editor + Live Board</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
@@ -19,7 +19,6 @@
     .panel.instructions{left:12px} .panel.players{right:12px}
     .panel header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--card-border);background:#fff}
     .panel header h3{margin:0;font-size:16px}
-    .panel header button{border:1px solid var(--card-border);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
     .panel .content{padding:12px 14px;max-height:48vh;overflow:auto}
 
     /* Editor toolbar */
@@ -48,7 +47,6 @@
     .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .score{color:var(--muted);font-size:13px}
 
-    /* Responsive */
     @media (max-width:960px){
       .panel{width:min(92vw,380px)}
       .panel.instructions{left:8px}
@@ -70,13 +68,11 @@
 
   <!-- Instructions -->
   <section class="panel instructions" id="instructionsPanel">
-    <header>
-      <h3>Race to Housing — How to Play</h3>
-    </header>
+    <header><h3>Race to Housing — How to Play</h3></header>
     <div class="content">
       <div class="steps">
         <div class="step"><div class="num">1</div><div>Use the toolbar to draw the red route on the ground. Double-click to finish; drag vertices to refine.</div></div>
-        <div class="step"><div class="num">2</div><div>Click <b>Finish & Save</b> to download <code>route.geojson</code>. Put it in the repo root (same folder as this page) to load next time.</div></div>
+        <div class="step"><div class="num">2</div><div>Click <b>Finish & Save</b> to download <code>route.geojson</code>. Place it next to this page to auto-load next time.</div></div>
         <div class="step"><div class="num">3</div><div>Later we’ll snap penguin movement to this exact line.</div></div>
       </div>
     </div>
@@ -84,9 +80,7 @@
 
   <!-- Players (live from Firestore) -->
   <section class="panel players" id="playersPanel">
-    <header>
-      <h3>Players Board</h3>
-    </header>
+    <header><h3>Players Board</h3></header>
     <div class="content">
       <div id="playersList"></div>
       <div class="meta" id="playersMeta">Loading players…</div>
@@ -95,11 +89,12 @@
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
+
   <script type="module">
     /************ MAP ************/
-    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson');
-    const ROUTE_URL = 'route.geojson'; // if present in repo, it will auto-load
+    const STYLE_ID   = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+    const GEOJSON_URL= encodeURI('ysu_race_buildings_exact final.geojson');
+    const ROUTE_URL  = 'route.geojson'; // auto-load if present
     const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
     const PITCH = 60, BEARING = -133.6;
 
@@ -141,90 +136,181 @@
         }}
       return [[minX,minY],[maxX,maxY]];
     }
-/************ DRAW (editor) ************/
-const Draw = new MapboxDraw({
-  displayControlsDefault: false,
-  controls: { line_string: true, trash: true },   // show the line + trash icons
-  defaultMode: 'simple_select',
-  styles: [
-    {
-      id:'gl-draw-polygon-and-line-vertex-halo-active',
-      type:'circle',
-      filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-      paint:{'circle-radius':7,'circle-color':'#fff'}
-    },
-    {
-      id:'gl-draw-polygon-and-line-vertex-active',
-      type:'circle',
-      filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-      paint:{'circle-radius':5,'circle-color':'#d6001c'}
-    },
-    {
-      id:'gl-draw-line',
-      type:'line',
-      filter:['all',['==','$type','LineString'],['!=','mode','static']],
-      paint:{'line-color':'#d6001c','line-width':3}
-    },
-    {
-      id:'gl-draw-line-static',
-      type:'line',
-      filter:['all',['==','$type','LineString'],['==','mode','static']],
-      paint:{'line-color':'#d6001c','line-width':3}
+
+    /************ DRAW (editor) ************/
+    const Draw = new MapboxDraw({
+      displayControlsDefault:false,
+      controls:{ line_string:true, trash:true },
+      defaultMode:'simple_select',
+      styles:[
+        {
+          id:'gl-draw-polygon-and-line-vertex-halo-active',
+          type:'circle',
+          filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
+          paint:{'circle-radius':7,'circle-color':'#fff'}
+        },
+        {
+          id:'gl-draw-polygon-and-line-vertex-active',
+          type:'circle',
+          filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
+          paint:{'circle-radius':5,'circle-color':'#d6001c'}
+        },
+        {
+          id:'gl-draw-line',
+          type:'line',
+          filter:['all',['==','$type','LineString'],['!=','mode','static']],
+          paint:{'line-color':'#d6001c','line-width':3}
+        },
+        {
+          id:'gl-draw-line-static',
+          type:'line',
+          filter:['all',['==','$type','LineString'],['==','mode','static']],
+          paint:{'line-color':'#d6001c','line-width':3}
+        }
+      ]
+    });
+    map.addControl(Draw, 'top-right'); // show line+trash icons as a fallback
+
+    // start draw mode & disable double-click zoom while drawing
+    function startDraw(){
+      map.doubleClickZoom.disable();
+      Draw.changeMode('draw_line_string');
+      map.getCanvas().style.cursor = 'crosshair';
     }
-  ]
-});
+    map.on('draw.modechange', (e)=>{
+      if (e.mode !== 'draw_line_string'){
+        map.doubleClickZoom.enable();
+        map.getCanvas().style.cursor = '';
+      }
+    });
 
-// add the control as soon as the map is created (you already call this on load)
-map.addControl(Draw, 'top-right');
+    // keep route source in sync with draw layer + persist browser draft
+    function syncRouteFromDraw(){
+      const fc = Draw.getAll();
+      const line = fc.features.find(f => f.geometry?.type==='LineString');
+      const out = { type:'FeatureCollection', features: line ? [line] : [] };
+      const src = map.getSource('route-src');
+      if (src) src.setData(out);
+      localStorage.setItem('race_route_draft', JSON.stringify(out));
+    }
+    map.on('draw.create', syncRouteFromDraw);
+    map.on('draw.update', syncRouteFromDraw);
+    map.on('draw.delete', syncRouteFromDraw);
 
-// helper: start draw mode and set the cursor
-function startDraw() {
-  map.doubleClickZoom.disable();          // prevents zoom from eating your double-click to finish
-  Draw.changeMode('draw_line_string');    // enter route drawing mode
-  map.getCanvas().style.cursor = 'crosshair';
-}
+    // toolbar actions
+    document.getElementById('btnDraw').onclick  = startDraw;
+    document.getElementById('btnClear').onclick = ()=>{ Draw.deleteAll(); syncRouteFromDraw(); startDraw(); };
+    document.getElementById('btnSave').onclick  = ()=>{
+      const fc = Draw.getAll();
+      const line = fc.features.find(f => f.geometry?.type==='LineString');
+      if (!line){ alert('Draw a route first (a single LineString).'); return; }
+      const out = { type:'FeatureCollection', features:[ line ] };
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], {type:'application/json'}));
+      a.download = 'route.geojson';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
 
-// when you leave draw mode, restore default behavior
-map.on('draw.modechange', (e) => {
-  if (e.mode !== 'draw_line_string') {
-    map.doubleClickZoom.enable();
-    map.getCanvas().style.cursor = '';
-  }
-});
+    /************ BUILDINGS + ROUTE LAYERS ************/
+    map.on('load', async () => {
+      hideLabelsAndBaseBuildings();
 
-// keep the source in sync (unchanged from before)
-function refreshRouteFromDraw() {
-  const fc = Draw.getAll();
-  const line = fc.features.find(f => f.geometry?.type==='LineString');
-  const out = { type:'FeatureCollection', features: line ? [line] : [] };
-  const src = map.getSource('route-src');
-  if (src) src.setData(out);
-  localStorage.setItem('race_route_draft', JSON.stringify(out));
-}
-map.on('draw.create', refreshRouteFromDraw);
-map.on('draw.update', refreshRouteFromDraw);
-map.on('draw.delete', refreshRouteFromDraw);
+      // Buildings
+      const bldg = await loadJSON(GEOJSON_URL);
+      map.addSource('race-buildings-src', { type:'geojson', data:bldg, generateId:true });
+      map.addLayer({
+        id:'race-buildings', type:'fill-extrusion', source:'race-buildings-src',
+        paint:{
+          'fill-extrusion-color':['coalesce',['get','fill'],'#d6001c'],
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96
+        }
+      });
 
-// toolbar buttons
-document.getElementById('btnDraw').onclick = startDraw;
-document.getElementById('btnClear').onclick = () => {
-  Draw.deleteAll();
-  refreshRouteFromDraw();
-  startDraw(); // keep you in drawing mode after clearing
-};
-document.getElementById('btnSave').onclick = () => {
-  const fc = Draw.getAll();
-  const line = fc.features.find(f => f.geometry?.type==='LineString');
-  if (!line) { alert('Draw a route first (a single LineString).'); return; }
-  const out = { type:'FeatureCollection', features:[ line ] };
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], {type:'application/json'}));
-  a.download = 'route.geojson';
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
+      // Empty route source (filled from saved file / draft / draw)
+      map.addSource('route-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
 
-    /************ FIRESTORE (read-only board stays the same) ************/
+      // Red track (ground)
+      map.addLayer({
+        id:'route-track',
+        type:'line',
+        source:'route-src',
+        layout:{ 'line-cap':'round', 'line-join':'round' },
+        paint:{
+          'line-color':'#D62D20',
+          'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
+          'line-opacity': 0.96
+        }
+      });
+
+      // Plank tiles (dashed caps over the red track)
+      map.addLayer({
+        id:'route-tiles',
+        type:'line',
+        source:'route-src',
+        layout:{ 'line-cap':'round', 'line-join':'round' },
+        paint:{
+          'line-color':'#9C1A13',
+          'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
+          'line-dasharray':[0, 2, 1.2, 2]
+        }
+      });
+
+      // Animated lights on top
+      const dashSeq = [[0,4,3,4],[1,4,2,4],[2,4,1,4],[3,4,0,4],[4,4,0,4],[3,4,1,4],[2,4,2,4],[1,4,3,4]];
+      let dashIndex = 0;
+      map.addLayer({
+        id:'route-lights',
+        type:'line',
+        source:'route-src',
+        layout:{ 'line-cap':'round', 'line-join':'round' },
+        paint:{
+          'line-color':'#FFD54A',
+          'line-width': ['interpolate',['linear'],['zoom'],14,5,16,7,18,9],
+          'line-dasharray': dashSeq[0]
+        }
+      });
+      (function animateLights(){
+        dashIndex = (dashIndex + 1) % dashSeq.length;
+        map.setPaintProperty('route-lights','line-dasharray', dashSeq[dashIndex]);
+        requestAnimationFrame(animateLights);
+      })();
+
+      // Try to load saved route.geojson from repo
+      try {
+        const r = await fetch(ROUTE_URL, {cache:'no-store'});
+        if (r.ok) {
+          const route = await r.json();
+          map.getSource('route-src').setData(route);
+          if (route.features?.length) Draw.add(route.features[0]);
+        }
+      } catch(e){ /* ignore if missing */ }
+
+      // Load in-browser draft if no route loaded
+      if (!Draw.getAll().features.length) {
+        const draft = localStorage.getItem('race_route_draft');
+        if (draft) {
+          try {
+            const fc = JSON.parse(draft);
+            if (fc.features?.length) {
+              map.getSource('route-src').setData(fc);
+              Draw.add(fc.features[0]);
+            }
+          } catch(e){}
+        }
+      }
+
+      // Fit to buildings, then nudge zoom
+      const bounds = bboxFromFeatures(bldg);
+      map.fitBounds(bounds, {
+        padding:{ top:80, right:160, bottom:120, left:320 },
+        maxZoom:18, pitch:PITCH, bearing:BEARING, duration:500
+      });
+      map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:400}));
+    });
+
+    /************ FIRESTORE (Players Board) ************/
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js';
     import { getFirestore, collection, query, where, orderBy, limit, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
 
