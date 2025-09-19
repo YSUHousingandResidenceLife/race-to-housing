@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Live Board</title>
+  <title>Race to Housing — Live Board + Route</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
@@ -29,7 +29,7 @@
     /* Players */
     .players .content{display:grid;gap:8px}
     .player{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:8px 10px}
-    .token{width:24px;height:24px;border-radius:6px;border:1px solid rgba(0,0,0,.1)}
+    .token{width:24px;height:24px;border-radius:6px;border:1px solid rgba(0,0,0,.1);background:#222}
     .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .score{color:var(--muted);font-size:13px}
 
@@ -52,10 +52,10 @@
     </header>
     <div class="content">
       <div class="steps">
-        <div class="step"><div class="num">1</div><div>Pick a team token. Everyone starts at <b>Lyden</b> (yellow).</div></div>
-        <div class="step"><div class="num">2</div><div>On your turn, spin/roll and follow the campus route (coming next).</div></div>
-        <div class="step"><div class="num">3</div><div>Landing on a building? Do the mini-challenge for bonus points.</div></div>
-        <div class="step"><div class="num">4</div><div>Reach <b>Kilcawley</b> with required points to win the Race to Housing!</div></div>
+        <div class="step"><div class="num">1</div><div>Pick a team token. Everyone starts at <b>Lyden</b>.</div></div>
+        <div class="step"><div class="num">2</div><div>Spin / roll and follow the red route tiles.</div></div>
+        <div class="step"><div class="num">3</div><div>Complete building challenges to earn points and move.</div></div>
+        <div class="step"><div class="num">4</div><div>Reach <b>Kilcawley</b> first with required points to win.</div></div>
       </div>
     </div>
   </section>
@@ -119,19 +119,117 @@
       return [[minX,minY],[maxX,maxY]];
     }
 
+    // --- Route GeoJSON (approximate waypoints through your six buildings) ---
+    const ROUTE = {
+      "type":"FeatureCollection",
+      "features":[
+        {
+          "type":"Feature",
+          "properties":{"name":"Race Route"},
+          "geometry":{
+            "type":"LineString",
+            "coordinates":[
+              [-80.647458, 41.111143],                          /* Lyden */
+              [-80.64698, 41.11098],
+              [-80.6461376731338, 41.11100745921387],           /* Cafaro */
+              [-80.64675, 41.11078],
+              [-80.64724052183561, 41.110525670257104],         /* Christman */
+              [-80.64655, 41.10990],
+              [-80.64590, 41.10920],
+              [-80.64540, 41.10860],
+              [-80.64483333333334, 41.10769444444445],          /* Weller */
+              [-80.64455, 41.10759],
+              [-80.64426251711262, 41.107489184836176],         /* Wick */
+              [-80.64505, 41.10725],
+              [-80.64600, 41.10695],
+              [-80.64731987291158, 41.10673909169142]           /* Kilcawley */
+            ]
+          }
+        }
+      ]
+    };
+
+    // dashed “tiles” animation sequence (Mapbox demo style)
+    const dashSeq = [
+      [0, 4, 3, 4],
+      [1, 4, 2, 4],
+      [2, 4, 1, 4],
+      [3, 4, 0, 4],
+      [4, 4, 0, 4],
+      [3, 4, 1, 4],
+      [2, 4, 2, 4],
+      [1, 4, 3, 4]
+    ];
+    let dashIndex = 0;
+
     map.on('load', async () => {
       hideLabelsAndBaseBuildings();
       const data = await loadJSON(GEOJSON_URL);
 
-      map.addSource('race', { type:'geojson', data, generateId:true });
+      // Buildings
+      map.addSource('race-buildings-src', { type:'geojson', data, generateId:true });
       map.addLayer({
-        id:'race-buildings', type:'fill-extrusion', source:'race',
+        id:'race-buildings', type:'fill-extrusion', source:'race-buildings-src',
         paint:{
           'fill-extrusion-color':['coalesce',['get','fill'],'#d6001c'],
           'fill-extrusion-height':['coalesce',['get','height'],22],
           'fill-extrusion-opacity':0.96
         }
       });
+
+      // Route sources
+      map.addSource('race-route', { type:'geojson', data: ROUTE });
+
+      // Base red track
+      map.addLayer({
+        id:'route-track',
+        type:'line',
+        source:'race-route',
+        paint:{
+          'line-color':'#D62D20',
+          'line-width': 16,
+          'line-opacity': 0.95,
+          'line-cap':'round',
+          'line-join':'round'
+        }
+      });
+
+      // “Plank steps” (static dots on top)
+      map.addLayer({
+        id:'route-steps',
+        type:'line',
+        source:'race-route',
+        paint:{
+          'line-color':'#9C1A13',
+          'line-width': 16,
+          'line-cap':'round',
+          'line-join':'round',
+          // dash creates spaced round caps that read like tiles
+          'line-dasharray':[0, 2, 1.2, 2]
+        }
+      });
+
+      // Animated moving lights (golden dots)
+      map.addLayer({
+        id:'route-lights',
+        type:'line',
+        source:'race-route',
+        paint:{
+          'line-color':'#FFD54A',
+          'line-width': 8,
+          'line-cap':'round',
+          'line-join':'round',
+          'line-dasharray': dashSeq[0]
+        }
+      });
+
+      // Animate the lights
+      function animateLights(){
+        dashIndex = (dashIndex + 1) % dashSeq.length;
+        map.setPaintProperty('route-lights','line-dasharray', dashSeq[dashIndex]);
+        requestAnimationFrame(animateLights);
+      }
+      animateLights();
 
       // Fit to all buildings, then nudge ~0.6 zoom closer
       const bounds = bboxFromFeatures(data);
@@ -153,11 +251,10 @@
       });
     });
 
-    /************ FIRESTORE ************/
+    /************ FIRESTORE (read-only board) ************/
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js';
     import { getFirestore, collection, query, where, orderBy, limit, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
 
-    // Your Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
       authDomain: "race-to-housing.firebaseapp.com",
@@ -191,12 +288,11 @@
         const row = document.createElement('div');
         row.className = 'player';
 
-        // Token
+        // neutral token (no color)
         const token = document.createElement('div');
         token.className = 'token';
-        token.style.background = p.tokenColor || '#111';
 
-        // Crown for #1
+        // crown for #1
         if (idx === 0) {
           token.style.position = "relative";
           const crown = document.createElement('span');
@@ -209,7 +305,6 @@
           token.appendChild(crown);
         }
 
-        // Name + score
         const name = document.createElement('div');
         name.className = 'name';
         name.textContent = p.name || '(unnamed)';
