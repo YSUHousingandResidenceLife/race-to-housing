@@ -128,7 +128,7 @@
     }
     async function loadJSON(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(url); return r.json(); }
     function bboxFromFeatures(fc){
-      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=Infinity*-1;
       for(const f of fc.features||[]){ const g=f.geometry; if(!g) continue;
         const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
         for(const poly of polys) for(const ring of poly) for(const [x,y] of ring){
@@ -169,9 +169,8 @@
         }
       ]
     });
-    map.addControl(Draw, 'top-right'); // show line+trash icons as a fallback
+    map.addControl(Draw, 'top-right');
 
-    // start draw mode & disable double-click zoom while drawing
     function startDraw(){
       map.doubleClickZoom.disable();
       Draw.changeMode('draw_line_string');
@@ -184,7 +183,6 @@
       }
     });
 
-    // keep route source in sync with draw layer + persist browser draft
     function syncRouteFromDraw(){
       const fc = Draw.getAll();
       const line = fc.features.find(f => f.geometry?.type==='LineString');
@@ -197,7 +195,6 @@
     map.on('draw.update', syncRouteFromDraw);
     map.on('draw.delete', syncRouteFromDraw);
 
-    // toolbar actions
     document.getElementById('btnDraw').onclick  = startDraw;
     document.getElementById('btnClear').onclick = ()=>{ Draw.deleteAll(); syncRouteFromDraw(); startDraw(); };
     document.getElementById('btnSave').onclick  = ()=>{
@@ -228,10 +225,12 @@
         }
       });
 
-      // Empty route source (filled from saved file / draft / draw)
+      // Route source
       map.addSource('route-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
 
-      // Red track (ground)
+      // Insert route BELOW the building extrusions so it hugs ground on refresh
+      const beforeId = 'race-buildings';
+
       map.addLayer({
         id:'route-track',
         type:'line',
@@ -240,11 +239,13 @@
         paint:{
           'line-color':'#D62D20',
           'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
-          'line-opacity': 0.96
+          'line-opacity': 0.96,
+          'line-translate':[0,0],
+          'line-translate-anchor':'map',
+          'line-emissive-strength': 0.15
         }
-      });
+      }, beforeId);
 
-      // Plank tiles (dashed caps over the red track)
       map.addLayer({
         id:'route-tiles',
         type:'line',
@@ -253,11 +254,13 @@
         paint:{
           'line-color':'#9C1A13',
           'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
-          'line-dasharray':[0, 2, 1.2, 2]
+          'line-dasharray':[0, 2, 1.2, 2],
+          'line-translate':[0,0],
+          'line-translate-anchor':'map',
+          'line-emissive-strength': 0.1
         }
-      });
+      }, beforeId);
 
-      // Animated lights on top
       const dashSeq = [[0,4,3,4],[1,4,2,4],[2,4,1,4],[3,4,0,4],[4,4,0,4],[3,4,1,4],[2,4,2,4],[1,4,3,4]];
       let dashIndex = 0;
       map.addLayer({
@@ -268,16 +271,20 @@
         paint:{
           'line-color':'#FFD54A',
           'line-width': ['interpolate',['linear'],['zoom'],14,5,16,7,18,9],
-          'line-dasharray': dashSeq[0]
+          'line-dasharray': dashSeq[0],
+          'line-translate':[0,0],
+          'line-translate-anchor':'map',
+          'line-emissive-strength': 0.25
         }
-      });
+      }, beforeId);
+
       (function animateLights(){
         dashIndex = (dashIndex + 1) % dashSeq.length;
         map.setPaintProperty('route-lights','line-dasharray', dashSeq[dashIndex]);
         requestAnimationFrame(animateLights);
       })();
 
-      // Try to load saved route.geojson from repo
+      // Load saved route if present
       try {
         const r = await fetch(ROUTE_URL, {cache:'no-store'});
         if (r.ok) {
@@ -287,7 +294,7 @@
         }
       } catch(e){ /* ignore if missing */ }
 
-      // Load in-browser draft if no route loaded
+      // Or load in-browser draft
       if (!Draw.getAll().features.length) {
         const draft = localStorage.getItem('race_route_draft');
         if (draft) {
