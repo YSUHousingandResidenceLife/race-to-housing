@@ -141,194 +141,88 @@
         }}
       return [[minX,minY],[maxX,maxY]];
     }
-
-    /************ DRAW (editor) ************/
-    const Draw = new MapboxDraw({
-      displayControlsDefault:false,
-      controls:{ line_string:true, trash:true },
-      defaultMode:'simple_select',
-      styles:[
-        // vertices while editing
-        {
-          id:'gl-draw-polygon-and-line-vertex-halo-active',
-          type:'circle', filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':7,'circle-color':'#fff'}
-        },
-        {
-          id:'gl-draw-polygon-and-line-vertex-active',
-          type:'circle', filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':5,'circle-color':'#d6001c'}
-        },
-        // the editable line itself (thin, so our preview layers sit over it)
-        {
-          id:'gl-draw-line',
-          type:'line', filter:['all',['==','$type','LineString'],['!=','mode','static']],
-          paint:{'line-color':'#d6001c','line-width':3}
-        },
-        // static features (unused here)
-        {
-          id:'gl-draw-line-static',
-          type:'line', filter:['all',['==','$type','LineString'],['==','mode','static']],
-          paint:{'line-color':'#d6001c','line-width':3}
-        }
-      ]
-    });
-
-    // utility to trigger download
-    function download(name, text){
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([text], {type:'application/json'}));
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(a.href);
+/************ DRAW (editor) ************/
+const Draw = new MapboxDraw({
+  displayControlsDefault: false,
+  controls: { line_string: true, trash: true },   // show the line + trash icons
+  defaultMode: 'simple_select',
+  styles: [
+    {
+      id:'gl-draw-polygon-and-line-vertex-halo-active',
+      type:'circle',
+      filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
+      paint:{'circle-radius':7,'circle-color':'#fff'}
+    },
+    {
+      id:'gl-draw-polygon-and-line-vertex-active',
+      type:'circle',
+      filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
+      paint:{'circle-radius':5,'circle-color':'#d6001c'}
+    },
+    {
+      id:'gl-draw-line',
+      type:'line',
+      filter:['all',['==','$type','LineString'],['!=','mode','static']],
+      paint:{'line-color':'#d6001c','line-width':3}
+    },
+    {
+      id:'gl-draw-line-static',
+      type:'line',
+      filter:['all',['==','$type','LineString'],['==','mode','static']],
+      paint:{'line-color':'#d6001c','line-width':3}
     }
+  ]
+});
 
-    // Add once on style load
-    map.on('load', async () => {
-      hideLabelsAndBaseBuildings();
+// add the control as soon as the map is created (you already call this on load)
+map.addControl(Draw, 'top-right');
 
-      // Buildings (unchanged)
-      const bldg = await loadJSON(GEOJSON_URL);
-      map.addSource('race-buildings-src', { type:'geojson', data:bldg, generateId:true });
-      map.addLayer({
-        id:'race-buildings', type:'fill-extrusion', source:'race-buildings-src',
-        paint:{
-          'fill-extrusion-color':['coalesce',['get','fill'],'#d6001c'],
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96
-        }
-      });
+// helper: start draw mode and set the cursor
+function startDraw() {
+  map.doubleClickZoom.disable();          // prevents zoom from eating your double-click to finish
+  Draw.changeMode('draw_line_string');    // enter route drawing mode
+  map.getCanvas().style.cursor = 'crosshair';
+}
 
-      // Route source (empty to start; we’ll fill from draw or existing file)
-      map.addSource('route-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
+// when you leave draw mode, restore default behavior
+map.on('draw.modechange', (e) => {
+  if (e.mode !== 'draw_line_string') {
+    map.doubleClickZoom.enable();
+    map.getCanvas().style.cursor = '';
+  }
+});
 
-      // Base red track (ground-hugging)
-      map.addLayer({
-        id:'route-track',
-        type:'line',
-        source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
-        paint:{
-          'line-color':'#D62D20',
-          'line-width': [
-            'interpolate',['linear'],['zoom'],
-            14, 10,
-            16, 14,
-            18, 18
-          ],
-          'line-opacity': 0.96
-        }
-      });
+// keep the source in sync (unchanged from before)
+function refreshRouteFromDraw() {
+  const fc = Draw.getAll();
+  const line = fc.features.find(f => f.geometry?.type==='LineString');
+  const out = { type:'FeatureCollection', features: line ? [line] : [] };
+  const src = map.getSource('route-src');
+  if (src) src.setData(out);
+  localStorage.setItem('race_route_draft', JSON.stringify(out));
+}
+map.on('draw.create', refreshRouteFromDraw);
+map.on('draw.update', refreshRouteFromDraw);
+map.on('draw.delete', refreshRouteFromDraw);
 
-      // “plank” tiles
-      map.addLayer({
-        id:'route-tiles',
-        type:'line',
-        source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
-        paint:{
-          'line-color':'#9C1A13',
-          'line-width': [
-            'interpolate',['linear'],['zoom'],
-            14, 10,
-            16, 14,
-            18, 18
-          ],
-          'line-dasharray':[0, 2, 1.2, 2]
-        }
-      });
-
-      // Subtle moving lights on top (optional)
-      const dashSeq = [
-        [0,4,3,4],[1,4,2,4],[2,4,1,4],[3,4,0,4],[4,4,0,4],[3,4,1,4],[2,4,2,4],[1,4,3,4]
-      ];
-      let dashIndex = 0;
-      map.addLayer({
-        id:'route-lights',
-        type:'line',
-        source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
-        paint:{
-          'line-color':'#FFD54A',
-          'line-width': [
-            'interpolate',['linear'],['zoom'],
-            14, 5,
-            16, 7,
-            18, 9
-          ],
-          'line-dasharray': dashSeq[0]
-        }
-      });
-      function animateLights(){
-        dashIndex = (dashIndex + 1) % dashSeq.length;
-        map.setPaintProperty('route-lights','line-dasharray', dashSeq[dashIndex]);
-        requestAnimationFrame(animateLights);
-      }
-      animateLights();
-
-      // draw control
-      map.addControl(Draw, 'top-right');
-
-      // load previous route if available in repo
-      try {
-        const r = await fetch(ROUTE_URL, {cache:'no-store'});
-        if (r.ok) {
-          const route = await r.json();
-          map.getSource('route-src').setData(route);
-          // also mirror into draw for editing
-          if (route.features?.length) Draw.add(route.features[0]);
-        }
-      } catch(e){/* ignore if missing */ }
-
-      // load draft from localStorage
-      const draft = localStorage.getItem('race_route_draft');
-      if (!Draw.getAll().features.length && draft) {
-        try {
-          const fc = JSON.parse(draft);
-          if (fc.features?.length) {
-            map.getSource('route-src').setData(fc);
-            Draw.add(fc.features[0]);
-          }
-        } catch(e){}
-      }
-
-      // Fit to buildings, then a tiny zoom nudge
-      const bounds = bboxFromFeatures(bldg);
-      map.fitBounds(bounds, {
-        padding:{ top:80, right:160, bottom:120, left:320 },
-        maxZoom:18, pitch:PITCH, bearing:BEARING, duration:500
-      });
-      map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:400}));
-    });
-
-    // keep route-src in sync with draw edits
-    function refreshRouteFromDraw(){
-      const fc = Draw.getAll();
-      const line = fc.features.find(f => f.geometry?.type==='LineString');
-      const out = { type:'FeatureCollection', features: line ? [line] : [] };
-      const src = map.getSource('route-src');
-      if (src) src.setData(out);
-      localStorage.setItem('race_route_draft', JSON.stringify(out));
-    }
-    map.on('draw.create', refreshRouteFromDraw);
-    map.on('draw.update', refreshRouteFromDraw);
-    map.on('draw.delete', refreshRouteFromDraw);
-
-    // toolbar actions
-    document.getElementById('btnDraw').onclick = () => {
-      Draw.changeMode('draw_line_string');
-    };
-    document.getElementById('btnClear').onclick = () => {
-      Draw.deleteAll();
-      refreshRouteFromDraw();
-    };
-    document.getElementById('btnSave').onclick = () => {
-      const fc = Draw.getAll();
-      const line = fc.features.find(f => f.geometry?.type==='LineString');
-      if (!line) { alert('Draw a route first (a single LineString).'); return; }
-      const out = { type:'FeatureCollection', features:[ line ] };
-      download('route.geojson', JSON.stringify(out, null, 2));
-    };
+// toolbar buttons
+document.getElementById('btnDraw').onclick = startDraw;
+document.getElementById('btnClear').onclick = () => {
+  Draw.deleteAll();
+  refreshRouteFromDraw();
+  startDraw(); // keep you in drawing mode after clearing
+};
+document.getElementById('btnSave').onclick = () => {
+  const fc = Draw.getAll();
+  const line = fc.features.find(f => f.geometry?.type==='LineString');
+  if (!line) { alert('Draw a route first (a single LineString).'); return; }
+  const out = { type:'FeatureCollection', features:[ line ] };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], {type:'application/json'}));
+  a.download = 'route.geojson';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
 
     /************ FIRESTORE (read-only board stays the same) ************/
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js';
