@@ -2,9 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Live Board + Route</title>
+  <title>Race to Housing — Route Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
   <style>
     :root{ --card-bg:rgba(255,255,255,.96); --card-border:#e5e5e5; --accent:#d6001c; --muted:#6b7280; }
     *{box-sizing:border-box}
@@ -20,6 +21,20 @@
     .panel header h3{margin:0;font-size:16px}
     .panel header button{border:1px solid var(--card-border);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
     .panel .content{padding:12px 14px;max-height:48vh;overflow:auto}
+
+    /* Editor toolbar */
+    .toolbar{
+      position:absolute; left:50%; top:12px; transform:translateX(-50%); z-index:25;
+      display:flex; gap:8px; background:var(--card-bg); border:1px solid var(--card-border);
+      border-radius:12px; padding:8px; box-shadow:0 10px 25px rgba(0,0,0,.1)
+    }
+    .toolbar button{
+      background:#fff; border:1px solid var(--card-border); border-radius:8px; padding:8px 10px;
+      cursor:pointer; font-weight:600;
+    }
+    .toolbar .primary{ background:#d6001c; color:#fff; border-color:#c01a1a }
+    .toolbar .ghost{ background:#fff }
+    .toolbar .hint{ align-self:center; color:#384151; font-size:13px; padding:0 6px }
 
     /* Instructions */
     .steps{display:grid;gap:10px}
@@ -38,24 +53,31 @@
       .panel{width:min(92vw,380px)}
       .panel.instructions{left:8px}
       .panel.players{right:8px}
+      .toolbar{top:auto; bottom:12px}
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
+  <!-- Editor toolbar -->
+  <div class="toolbar" id="toolbar">
+    <button id="btnDraw" class="primary">Start / Resume Route</button>
+    <button id="btnSave" class="ghost">Finish & Save</button>
+    <button id="btnClear" class="ghost">Clear</button>
+    <div class="hint">Click to add points • drag to refine • double-click to end</div>
+  </div>
+
   <!-- Instructions -->
   <section class="panel instructions" id="instructionsPanel">
     <header>
       <h3>Race to Housing — How to Play</h3>
-      <button type="button" data-toggle="#instructionsPanel">Hide</button>
     </header>
     <div class="content">
       <div class="steps">
-        <div class="step"><div class="num">1</div><div>Pick a team token. Everyone starts at <b>Lyden</b>.</div></div>
-        <div class="step"><div class="num">2</div><div>Spin / roll and follow the red route tiles.</div></div>
-        <div class="step"><div class="num">3</div><div>Complete building challenges to earn points and move.</div></div>
-        <div class="step"><div class="num">4</div><div>Reach <b>Kilcawley</b> first with required points to win.</div></div>
+        <div class="step"><div class="num">1</div><div>Use the toolbar to draw the red route on the ground. Double-click to finish; drag vertices to refine.</div></div>
+        <div class="step"><div class="num">2</div><div>Click <b>Finish & Save</b> to download <code>route.geojson</code>. Put it in the repo root (same folder as this page) to load next time.</div></div>
+        <div class="step"><div class="num">3</div><div>Later we’ll snap penguin movement to this exact line.</div></div>
       </div>
     </div>
   </section>
@@ -64,7 +86,6 @@
   <section class="panel players" id="playersPanel">
     <header>
       <h3>Players Board</h3>
-      <button type="button" data-toggle="#playersPanel">Hide</button>
     </header>
     <div class="content">
       <div id="playersList"></div>
@@ -73,10 +94,12 @@
   </section>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
   <script type="module">
     /************ MAP ************/
     const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // same folder
+    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson');
+    const ROUTE_URL = 'route.geojson'; // if present in repo, it will auto-load
     const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
     const PITCH = 60, BEARING = -133.6;
 
@@ -85,7 +108,7 @@
     const map = new mapboxgl.Map({
       container: 'map',
       style: STYLE_ID,
-      center: [-80.6458, 41.1090],   // temporary center; we'll fit to buildings
+      center: [-80.6458, 41.1090],
       zoom: 16.8,
       pitch: PITCH,
       bearing: BEARING,
@@ -108,7 +131,7 @@
         }
       }
     }
-    async function loadJSON(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(`Failed to load ${url}`); return r.json(); }
+    async function loadJSON(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(url); return r.json(); }
     function bboxFromFeatures(fc){
       let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
       for(const f of fc.features||[]){ const g=f.geometry; if(!g) continue;
@@ -119,55 +142,54 @@
       return [[minX,minY],[maxX,maxY]];
     }
 
-    // --- Route GeoJSON (approximate waypoints through your six buildings) ---
-    const ROUTE = {
-      "type":"FeatureCollection",
-      "features":[
+    /************ DRAW (editor) ************/
+    const Draw = new MapboxDraw({
+      displayControlsDefault:false,
+      controls:{ line_string:true, trash:true },
+      defaultMode:'simple_select',
+      styles:[
+        // vertices while editing
         {
-          "type":"Feature",
-          "properties":{"name":"Race Route"},
-          "geometry":{
-            "type":"LineString",
-            "coordinates":[
-              [-80.647458, 41.111143],                          /* Lyden */
-              [-80.64698, 41.11098],
-              [-80.6461376731338, 41.11100745921387],           /* Cafaro */
-              [-80.64675, 41.11078],
-              [-80.64724052183561, 41.110525670257104],         /* Christman */
-              [-80.64655, 41.10990],
-              [-80.64590, 41.10920],
-              [-80.64540, 41.10860],
-              [-80.64483333333334, 41.10769444444445],          /* Weller */
-              [-80.64455, 41.10759],
-              [-80.64426251711262, 41.107489184836176],         /* Wick */
-              [-80.64505, 41.10725],
-              [-80.64600, 41.10695],
-              [-80.64731987291158, 41.10673909169142]           /* Kilcawley */
-            ]
-          }
+          id:'gl-draw-polygon-and-line-vertex-halo-active',
+          type:'circle', filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
+          paint:{'circle-radius':7,'circle-color':'#fff'}
+        },
+        {
+          id:'gl-draw-polygon-and-line-vertex-active',
+          type:'circle', filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
+          paint:{'circle-radius':5,'circle-color':'#d6001c'}
+        },
+        // the editable line itself (thin, so our preview layers sit over it)
+        {
+          id:'gl-draw-line',
+          type:'line', filter:['all',['==','$type','LineString'],['!=','mode','static']],
+          paint:{'line-color':'#d6001c','line-width':3}
+        },
+        // static features (unused here)
+        {
+          id:'gl-draw-line-static',
+          type:'line', filter:['all',['==','$type','LineString'],['==','mode','static']],
+          paint:{'line-color':'#d6001c','line-width':3}
         }
       ]
-    };
+    });
 
-    // dashed “tiles” animation sequence (Mapbox demo style)
-    const dashSeq = [
-      [0, 4, 3, 4],
-      [1, 4, 2, 4],
-      [2, 4, 1, 4],
-      [3, 4, 0, 4],
-      [4, 4, 0, 4],
-      [3, 4, 1, 4],
-      [2, 4, 2, 4],
-      [1, 4, 3, 4]
-    ];
-    let dashIndex = 0;
+    // utility to trigger download
+    function download(name, text){
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], {type:'application/json'}));
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
 
+    // Add once on style load
     map.on('load', async () => {
       hideLabelsAndBaseBuildings();
-      const data = await loadJSON(GEOJSON_URL);
 
-      // Buildings
-      map.addSource('race-buildings-src', { type:'geojson', data, generateId:true });
+      // Buildings (unchanged)
+      const bldg = await loadJSON(GEOJSON_URL);
+      map.addSource('race-buildings-src', { type:'geojson', data:bldg, generateId:true });
       map.addLayer({
         id:'race-buildings', type:'fill-extrusion', source:'race-buildings-src',
         paint:{
@@ -177,53 +199,66 @@
         }
       });
 
-      // Route sources
-      map.addSource('race-route', { type:'geojson', data: ROUTE });
+      // Route source (empty to start; we’ll fill from draw or existing file)
+      map.addSource('route-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
 
-      // Base red track
+      // Base red track (ground-hugging)
       map.addLayer({
         id:'route-track',
         type:'line',
-        source:'race-route',
+        source:'route-src',
+        layout:{ 'line-cap':'round', 'line-join':'round' },
         paint:{
           'line-color':'#D62D20',
-          'line-width': 16,
-          'line-opacity': 0.95,
-          'line-cap':'round',
-          'line-join':'round'
+          'line-width': [
+            'interpolate',['linear'],['zoom'],
+            14, 10,
+            16, 14,
+            18, 18
+          ],
+          'line-opacity': 0.96
         }
       });
 
-      // “Plank steps” (static dots on top)
+      // “plank” tiles
       map.addLayer({
-        id:'route-steps',
+        id:'route-tiles',
         type:'line',
-        source:'race-route',
+        source:'route-src',
+        layout:{ 'line-cap':'round', 'line-join':'round' },
         paint:{
           'line-color':'#9C1A13',
-          'line-width': 16,
-          'line-cap':'round',
-          'line-join':'round',
-          // dash creates spaced round caps that read like tiles
+          'line-width': [
+            'interpolate',['linear'],['zoom'],
+            14, 10,
+            16, 14,
+            18, 18
+          ],
           'line-dasharray':[0, 2, 1.2, 2]
         }
       });
 
-      // Animated moving lights (golden dots)
+      // Subtle moving lights on top (optional)
+      const dashSeq = [
+        [0,4,3,4],[1,4,2,4],[2,4,1,4],[3,4,0,4],[4,4,0,4],[3,4,1,4],[2,4,2,4],[1,4,3,4]
+      ];
+      let dashIndex = 0;
       map.addLayer({
         id:'route-lights',
         type:'line',
-        source:'race-route',
+        source:'route-src',
+        layout:{ 'line-cap':'round', 'line-join':'round' },
         paint:{
           'line-color':'#FFD54A',
-          'line-width': 8,
-          'line-cap':'round',
-          'line-join':'round',
+          'line-width': [
+            'interpolate',['linear'],['zoom'],
+            14, 5,
+            16, 7,
+            18, 9
+          ],
           'line-dasharray': dashSeq[0]
         }
       });
-
-      // Animate the lights
       function animateLights(){
         dashIndex = (dashIndex + 1) % dashSeq.length;
         map.setPaintProperty('route-lights','line-dasharray', dashSeq[dashIndex]);
@@ -231,27 +266,71 @@
       }
       animateLights();
 
-      // Fit to all buildings, then nudge ~0.6 zoom closer
-      const bounds = bboxFromFeatures(data);
+      // draw control
+      map.addControl(Draw, 'top-right');
+
+      // load previous route if available in repo
+      try {
+        const r = await fetch(ROUTE_URL, {cache:'no-store'});
+        if (r.ok) {
+          const route = await r.json();
+          map.getSource('route-src').setData(route);
+          // also mirror into draw for editing
+          if (route.features?.length) Draw.add(route.features[0]);
+        }
+      } catch(e){/* ignore if missing */ }
+
+      // load draft from localStorage
+      const draft = localStorage.getItem('race_route_draft');
+      if (!Draw.getAll().features.length && draft) {
+        try {
+          const fc = JSON.parse(draft);
+          if (fc.features?.length) {
+            map.getSource('route-src').setData(fc);
+            Draw.add(fc.features[0]);
+          }
+        } catch(e){}
+      }
+
+      // Fit to buildings, then a tiny zoom nudge
+      const bounds = bboxFromFeatures(bldg);
       map.fitBounds(bounds, {
         padding:{ top:80, right:160, bottom:120, left:320 },
         maxZoom:18, pitch:PITCH, bearing:BEARING, duration:500
       });
-      map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:500}));
+      map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:400}));
     });
 
-    // Panel toggles
-    document.querySelectorAll('[data-toggle]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const panel = document.querySelector(btn.getAttribute('data-toggle'));
-        const content = panel.querySelector('.content');
-        const hidden = content.style.display==='none';
-        content.style.display = hidden ? '' : 'none';
-        btn.textContent = hidden ? 'Hide' : 'Show';
-      });
-    });
+    // keep route-src in sync with draw edits
+    function refreshRouteFromDraw(){
+      const fc = Draw.getAll();
+      const line = fc.features.find(f => f.geometry?.type==='LineString');
+      const out = { type:'FeatureCollection', features: line ? [line] : [] };
+      const src = map.getSource('route-src');
+      if (src) src.setData(out);
+      localStorage.setItem('race_route_draft', JSON.stringify(out));
+    }
+    map.on('draw.create', refreshRouteFromDraw);
+    map.on('draw.update', refreshRouteFromDraw);
+    map.on('draw.delete', refreshRouteFromDraw);
 
-    /************ FIRESTORE (read-only board) ************/
+    // toolbar actions
+    document.getElementById('btnDraw').onclick = () => {
+      Draw.changeMode('draw_line_string');
+    };
+    document.getElementById('btnClear').onclick = () => {
+      Draw.deleteAll();
+      refreshRouteFromDraw();
+    };
+    document.getElementById('btnSave').onclick = () => {
+      const fc = Draw.getAll();
+      const line = fc.features.find(f => f.geometry?.type==='LineString');
+      if (!line) { alert('Draw a route first (a single LineString).'); return; }
+      const out = { type:'FeatureCollection', features:[ line ] };
+      download('route.geojson', JSON.stringify(out, null, 2));
+    };
+
+    /************ FIRESTORE (read-only board stays the same) ************/
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js';
     import { getFirestore, collection, query, where, orderBy, limit, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
 
@@ -288,11 +367,9 @@
         const row = document.createElement('div');
         row.className = 'player';
 
-        // neutral token (no color)
         const token = document.createElement('div');
         token.className = 'token';
 
-        // crown for #1
         if (idx === 0) {
           token.style.position = "relative";
           const crown = document.createElement('span');
