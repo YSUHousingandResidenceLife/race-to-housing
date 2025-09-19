@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Designed Route + Editor + Board</title>
+  <title>Race to Housing — Y Corridor + Detours + Board</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
@@ -58,16 +58,16 @@
     <button id="btnDraw" class="primary">Start / Resume Route</button>
     <button id="btnSave" class="ghost">Finish & Save</button>
     <button id="btnClear" class="ghost">Clear</button>
-    <div class="hint">Draw or tweak • double-click to end • drag to refine</div>
+    <div class="hint">Edit Y • double-click to end • drag to refine</div>
   </div>
 
   <section class="panel instructions" id="instructionsPanel">
-    <header><h3>Race to Housing — How to Play</h3></header>
+    <header><h3>Race to Housing — Rules</h3></header>
     <div class="content">
       <div class="steps">
-        <div class="step"><div class="num">1</div><div>Use the toolbar to adjust the red route (ground-locked). It’s designed to look great from the landing angle.</div></div>
-        <div class="step"><div class="num">2</div><div>Click <b>Finish & Save</b> to download <code>route.geojson</code>. Put it next to this page to load on refresh.</div></div>
-        <div class="step"><div class="num">3</div><div>Penguins will move along this exact route by points.</div></div>
+        <div class="step"><div class="num">1</div><div>Follow the red <b>Y corridor</b>. Buildings inside the corridor are hidden for clarity.</div></div>
+        <div class="step"><div class="num">2</div><div>You must take the thin <b>detours</b> to each numbered <b>checkpoint</b>, then return to the Y.</div></div>
+        <div class="step"><div class="num">3</div><div>Finish at <b>Kilcawley</b>. (All movement stays at ground level.)</div></div>
       </div>
     </div>
   </section>
@@ -82,14 +82,46 @@
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
+  <!-- Turf for buffering & geometry ops -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
   <script type="module">
-    /************ MAP ************/
+    /************ CONFIG ************/
     const STYLE_ID   = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
     const GEOJSON_URL= encodeURI('ysu_race_buildings_exact final.geojson');
     const ROUTE_URL  = 'route.geojson';
     const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
-    const PITCH = 60, BEARING = -133.6;  // showcases the route from the air
+    const PITCH = 60, BEARING = -133.6;
+
+    // Corridor half-width in meters (visual + building mask)
+    const CORRIDOR_WIDTH_M = 18;   // tweak 14–24 to taste
+
+    // Detours (thin dashed lines) + checkpoints (points in order)
+    const DETOURS = {
+      type:'FeatureCollection', features:[
+        // Courtyard Apartments detour
+        {type:'Feature', properties:{name:'Courtyard Detour'}, geometry:{type:'LineString', coordinates:[
+          [-80.64620,41.10810], [-80.64595,41.10785], [-80.64570,41.10760]
+        ]}},
+        // Dining loop near Christman
+        {type:'Feature', properties:{name:'Dining Detour'}, geometry:{type:'LineString', coordinates:[
+          [-80.64678,41.11042], [-80.64655,41.11018], [-80.64632,41.11005], [-80.64655,41.11018], [-80.64678,41.11042]
+        ]}}
+      ]
+    };
+    const CHECKPOINTS = {
+      type:'FeatureCollection', features:[
+        // order matters; ids become 1..N
+        {type:'Feature', properties:{label:'1', name:'Weller'},    geometry:{type:'Point', coordinates:[-80.64483,41.10769]}},
+        {type:'Feature', properties:{label:'2', name:'Wick'},      geometry:{type:'Point', coordinates:[-80.64426,41.10749]}},
+        {type:'Feature', properties:{label:'3', name:'Courtyard'}, geometry:{type:'Point', coordinates:[-80.64570,41.10755]}},
+        {type:'Feature', properties:{label:'4', name:'Dining'},    geometry:{type:'Point', coordinates:[-80.64675,41.11035]}},
+        {type:'Feature', properties:{label:'5', name:'Christman'}, geometry:{type:'Point', coordinates:[-80.64640,41.11005]}},
+        {type:'Feature', properties:{label:'6', name:'Cafaro'},    geometry:{type:'Point', coordinates:[-80.64614,41.11101]}},
+        {type:'Feature', properties:{label:'7', name:'Lyden'},     geometry:{type:'Point', coordinates:[-80.64746,41.11114]}},
+        {type:'Feature', properties:{label:'8', name:'Kilcawley'}, geometry:{type:'Point', coordinates:[-80.64720,41.10674]}}
+      ]
+    };
 
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
@@ -130,7 +162,7 @@
       return [[minX,minY],[maxX,maxY]];
     }
 
-    /************ DRAW (editor) ************/
+    /************ DRAW ************/
     const Draw = new MapboxDraw({
       displayControlsDefault:false,
       controls:{ line_string:true, trash:true },
@@ -151,132 +183,111 @@
       ]
     });
     map.addControl(Draw, 'top-right');
-
-    function startDraw(){
-      map.doubleClickZoom.disable();
-      Draw.changeMode('draw_line_string');
-      map.getCanvas().style.cursor = 'crosshair';
-    }
-    map.on('draw.modechange', (e)=>{
-      if (e.mode !== 'draw_line_string'){
-        map.doubleClickZoom.enable();
-        map.getCanvas().style.cursor = '';
-      }
-    });
-
-    /************ Densify line → ground-locked dots ************/
-    function haversineMeters(a,b){
-      const R=6371000, toRad=d=>d*Math.PI/180;
-      const [lon1,lat1]=a,[lon2,lat2]=b;
-      const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
-      const s=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-      return 2*R*Math.asin(Math.sqrt(s));
-    }
-    function interp(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t]; }
-    function pointsAlongLine(line, spacing=2.8){
-      const coords=line.geometry.coordinates;
-      const pts=[]; let carry=0, idx=0;
-      for(let i=0;i<coords.length-1;i++){
-        const A=coords[i], B=coords[i+1];
-        const seg=haversineMeters(A,B);
-        let d=carry;
-        while(d<=seg){
-          const t=d/seg; pts.push({type:'Feature',properties:{i:idx++},geometry:{type:'Point',coordinates:interp(A,B,t)}});
-          d += spacing;
-        }
-        carry = d - seg;
-      }
-      return { type:'FeatureCollection', features: pts };
-    }
-
-    function syncRouteFromDraw(){
-      const fc = Draw.getAll();
-      const line = fc.features.find(f => f.geometry?.type==='LineString');
-      const out = { type:'FeatureCollection', features: line ? [line] : [] };
-      const srcLine = map.getSource('route-line-src');
-      if (srcLine) srcLine.setData(out);
-
-      const srcPts = map.getSource('route-points-src');
-      if (srcPts){
-        const pts = line ? pointsAlongLine(line, 2.8) : { type:'FeatureCollection', features:[] };
-        srcPts.setData(pts);
-      }
-      localStorage.setItem('race_route_draft', JSON.stringify(out));
-    }
-
+    function startDraw(){ map.doubleClickZoom.disable(); Draw.changeMode('draw_line_string'); map.getCanvas().style.cursor='crosshair'; }
+    map.on('draw.modechange', e => { if (e.mode!=='draw_line_string'){ map.doubleClickZoom.enable(); map.getCanvas().style.cursor=''; } });
     document.getElementById('btnDraw').onclick  = startDraw;
-    document.getElementById('btnClear').onclick = ()=>{ Draw.deleteAll(); syncRouteFromDraw(); startDraw(); };
+    document.getElementById('btnClear').onclick = ()=>{ Draw.deleteAll(); syncFromDraw(); startDraw(); };
     document.getElementById('btnSave').onclick  = ()=>{
-      const fc = Draw.getAll();
-      const line = fc.features.find(f => f.geometry?.type==='LineString');
-      if (!line){ alert('Draw or tweak the route first (a single LineString).'); return; }
-      const out = { type:'FeatureCollection', features:[ line ] };
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], {type:'application/json'}));
-      a.download = 'route.geojson';
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const fc = Draw.getAll(); const line = fc.features.find(f=>f.geometry?.type==='LineString');
+      if(!line){ alert('Draw or tweak the route first.'); return; }
+      const out = { type:'FeatureCollection', features:[line] };
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+      a.download='route.geojson'; a.click(); URL.revokeObjectURL(a.href);
     };
 
-    /************ SEEDED “Campus Ribbon Y” route ************/
-    /* Notes:
-       - Tail rises behind Kilcawley then splits near the quad.
-       - Left arm sweeps past Christman → Cafaro → Lyden in a graceful curve.
-       - Right arm sweeps toward Weller → Wick, and dips toward Courtyard Apartments.
-       - A small loop kisses a Dining area near Christman before the final run to Kilcawley.
-       - All coords kept within campus bbox; fine-tune with the editor as needed.
-    */
-    const SEEDED_ROUTE = {
-      "type":"FeatureCollection",
-      "features":[
-        { "type":"Feature", "properties":{"leg":"tail+left"},
-          "geometry":{"type":"LineString","coordinates":[
-            /* tail from behind Kilcawley up to the Y head */
-            [-80.64770,41.10630],[-80.64755,41.10648],[-80.64738,41.10668],
-            [-80.64720,41.10693],[-80.64690,41.10732],[-80.64655,41.10778],
-            [-80.64625,41.10823],[-80.64600,41.10870],[-80.64582,41.10905],
-            /* gentle S into Christman / Dining loop */
-            [-80.64605,41.10940],[-80.64630,41.10975],[-80.64655,41.11005],
-            [-80.64675,41.11035],[-80.64690,41.11055],  /* Christman & Dining area */
-            /* left arm toward Cafaro → Lyden with long arcs */
-            [-80.64665,41.11082],[-80.64635,41.11095],[-80.64614,41.11101], /* Cafaro */
-            [-80.64638,41.11109],[-80.64675,41.11114],[-80.64710,41.11116],
-            [-80.64738,41.11115],[-80.64762,41.11112] /* Lyden */
-          ]}},
-        { "type":"Feature", "properties":{"leg":"right"},
-          "geometry":{"type":"LineString","coordinates":[
-            /* start at the Y junction and sweep to Weller → Wick with a wide curve */
-            [-80.64582,41.10905],[-80.64540,41.10865],[-80.64500,41.10820],
-            [-80.64470,41.10790],[-80.64458,41.10778],
-            [-80.64483,41.10769], /* Weller */
-            [-80.64462,41.10760],[-80.64440,41.10752],
-            [-80.64426,41.10749], /* Wick */
-            /* elegant dip toward Courtyard Apartments and back to the junction */
-            [-80.64505,41.10730],[-80.64570,41.10755],[-80.64610,41.10810],
-            [-80.64600,41.10860],[-80.64582,41.10905]
-          ]}},
-        { "type":"Feature", "properties":{"leg":"finale"},
-          "geometry":{"type":"LineString","coordinates":[
-            /* finishing flourish from Dining loop into Kilcawley */
-            [-80.64690,41.11055],[-80.64665,41.11015],[-80.64625,41.10965],
-            [-80.64600,41.10925],[-80.64578,41.10885],[-80.64560,41.10845],
-            [-80.64545,41.10810],[-80.64552,41.10780],[-80.64580,41.10745],
-            [-80.64615,41.10710],[-80.64655,41.10688],[-80.64695,41.10676],
-            [-80.64720,41.10674], /* Kilcawley zone (finish) */
-            [-80.64732,41.10674]
-          ]}}
+    /************ RENDER: band as circles (no drift), corridor buffer, building mask ************/
+    function densify(line, spacing=2.8){
+      const coords=line.geometry.coordinates;
+      const R=6371000, toRad=d=>d*Math.PI/180, H=(a,b)=>{
+        const [lon1,lat1]=a,[lon2,lat2]=b, dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+        const s=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+        return 2*R*Math.asin(Math.sqrt(s));
+      };
+      const lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+      const pts=[]; let carry=0, idx=0;
+      for(let i=0;i<coords.length-1;i++){
+        const A=coords[i], B=coords[i+1]; const seg=H(A,B); let d=carry;
+        while(d<=seg){ const t=d/seg; pts.push({type:'Feature',properties:{i:idx++},geometry:{type:'Point',coordinates:lerp(A,B,t)}}); d+=spacing; }
+        carry=d-seg;
+      }
+      return {type:'FeatureCollection',features:pts};
+    }
+
+    function makeCorridor(linesFC){
+      // merge all line features, buffer in meters, and return a single polygon
+      const merged = turf.lineMerge(turf.featureCollection(linesFC.features.filter(f=>f.geometry?.type==='LineString')));
+      // convert to single LineString if Multi
+      const asLines = merged.type==='Feature' ? [merged] : merged.features;
+      const multi = turf.multiLineString(asLines.map(f=>f.geometry.coordinates));
+      const buff = turf.buffer(multi, CORRIDOR_WIDTH_M, {units:'meters'});
+      return buff; // Feature<Polygon|MultiPolygon>
+    }
+
+    function syncFromDraw(){
+      const fc = Draw.getAll();
+      let lines = fc.features.filter(f=>f.geometry?.type==='LineString');
+
+      // if nothing drawn, try loaded line source
+      if (!lines.length){
+        const data = map.getSource('route-line-src')?.serialize().data;
+        if (data?.features) lines = data.features.filter(f=>f.geometry?.type==='LineString');
+      }
+
+      // set route points
+      const ptsAll = { type:'FeatureCollection', features:[] };
+      for(const ln of lines) ptsAll.features.push(...densify(ln, 2.8).features);
+      map.getSource('route-points-src')?.setData(ptsAll);
+
+      // set corridor + outline
+      if (lines.length){
+        const corridor = makeCorridor({type:'FeatureCollection',features:lines});
+        map.getSource('y-corridor-src')?.setData(corridor);
+
+        // mask buildings: show only NOT within corridor
+        const geom = corridor.geometry;
+        map.setFilter('race-buildings-masked', ['!', ['within', ['literal', geom]]]);
+      } else {
+        map.getSource('y-corridor-src')?.setData({type:'FeatureCollection',features:[]});
+        map.setFilter('race-buildings-masked', null); // show all if no corridor
+      }
+      localStorage.setItem('race_route_draft', JSON.stringify({type:'FeatureCollection',features:lines}));
+    }
+
+    /************ SEEDED Y (walkway-friendly arcs) ************/
+    const SEEDED_Y = {
+      type:'FeatureCollection', features:[
+        {type:'Feature', properties:{leg:'tail+left'}, geometry:{type:'LineString', coordinates:[
+          [-80.64765,41.10630],[-80.64738,41.10668],[-80.64700,41.10710],
+          [-80.64670,41.10755],[-80.64635,41.10805],[-80.64605,41.10855],
+          [-80.64582,41.10905],[-80.64605,41.10940],[-80.64640,41.10985],
+          [-80.64665,41.11015],[-80.64680,41.11045],[-80.64655,41.11078],
+          [-80.64630,41.11095],[-80.64614,41.11101],[-80.64655,41.11110],
+          [-80.64700,41.11116],[-80.64746,41.11114]
+        ]}},
+        {type:'Feature', properties:{leg:'right'}, geometry:{type:'LineString', coordinates:[
+          [-80.64582,41.10905],[-80.64540,41.10865],[-80.64505,41.10825],
+          [-80.64475,41.10795],[-80.64462,41.10780],[-80.64483,41.10769],
+          [-80.64445,41.10755],[-80.64426,41.10749],
+          // dip toward Courtyard then back
+          [-80.64505,41.10730],[-80.64570,41.10755],[-80.64605,41.10805],
+          [-80.64590,41.10860],[-80.64582,41.10905]
+        ]}}
       ]
     };
 
-    /************ BUILDINGS + ROUTE LAYERS ************/
+    /************ MAP LOAD ************/
     map.on('load', async () => {
       hideLabelsAndBaseBuildings();
 
-      // Buildings
+      // Buildings source (your exact footprints/colors)
       const bldg = await loadJSON(GEOJSON_URL);
       map.addSource('race-buildings-src', { type:'geojson', data:bldg, generateId:true });
+
+      // We’ll draw buildings through a masked layer (outside corridor only)
       map.addLayer({
-        id:'race-buildings', type:'fill-extrusion', source:'race-buildings-src',
+        id:'race-buildings-masked',
+        type:'fill-extrusion',
+        source:'race-buildings-src',
         paint:{
           'fill-extrusion-color':['coalesce',['get','fill'],'#d6001c'],
           'fill-extrusion-height':['coalesce',['get','height'],22],
@@ -284,12 +295,16 @@
         }
       });
 
-      // Route sources
-      map.addSource('route-line-src',   { type:'geojson', data:{type:'FeatureCollection', features:[]} });
-      map.addSource('route-points-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
+      // Sources for route + corridor + detours + checkpoints
+      map.addSource('route-line-src',   { type:'geojson', data:{type:'FeatureCollection',features:[]} });
+      map.addSource('route-points-src', { type:'geojson', data:{type:'FeatureCollection',features:[]} });
+      map.addSource('y-corridor-src',   { type:'geojson', data:{type:'FeatureCollection',features:[]} });
+      map.addSource('detours-src',      { type:'geojson', data:DETOURS });
+      map.addSource('checkpoints-src',  { type:'geojson', data:CHECKPOINTS });
 
-      // Render as ground-locked circles (no drift), BELOW buildings
-      const beforeId = 'race-buildings';
+      const beforeId = 'race-buildings-masked';
+
+      // MAIN BAND as circles (ground-locked, under buildings)
       map.addLayer({
         id:'route-band',
         type:'circle',
@@ -303,60 +318,98 @@
         }
       }, beforeId);
 
+      // Corridor outline (thick stroke for the “must-stay-in” boundary)
       map.addLayer({
-        id:'route-planks',
-        type:'circle',
-        source:'route-points-src',
-        layout:{ 'circle-pitch-alignment':'map', 'circle-sort-key': 1 },
+        id:'y-corridor-outline',
+        type:'line',
+        source:'y-corridor-src',
+        layout:{ 'line-join':'round', 'line-cap':'round', 'line-pitch-alignment':'map' },
         paint:{
-          'circle-color':'#9C1A13',
-          'circle-radius':['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.0],
-          'circle-opacity':0.9,
-          'circle-pitch-scale':'map'
-        },
-        filter:['==',['%', ['get','i'], 6], 0]
-      }, beforeId);
+          'line-color':'#7A0E0E',
+          'line-width':['interpolate',['linear'],['zoom'],14,4,16,6,18,8],
+          'line-opacity':0.9
+        }
+      }, 'route-band');
 
-      // Try to load saved route.geojson first
+      // (Optional) faint fill to hint the corridor area
+      map.addLayer({
+        id:'y-corridor-fill',
+        type:'fill',
+        source:'y-corridor-src',
+        paint:{
+          'fill-color':'#D62D20',
+          'fill-opacity':0.08
+        }
+      }, 'y-corridor-outline');
+
+      // Detours (thin dashed)
+      map.addLayer({
+        id:'detours',
+        type:'line',
+        source:'detours-src',
+        layout:{ 'line-cap':'round','line-join':'round','line-pitch-alignment':'map' },
+        paint:{
+          'line-color':'#0A84FF',
+          'line-width':['interpolate',['linear'],['zoom'],14,2.5,16,3.5,18,4.5],
+          'line-dasharray':[1,1.2]
+        }
+      }, 'y-corridor-fill');
+
+      // Checkpoints (numbered pins)
+      map.addLayer({
+        id:'checkpoints',
+        type:'symbol',
+        source:'checkpoints-src',
+        layout:{
+          'text-field':['get','label'],
+          'text-size':['interpolate',['linear'],['zoom'],14,12,18,16],
+          'text-font':['DIN Pro Bold','Arial Unicode MS Bold'],
+          'text-offset':[0, -1.2],
+          'icon-image':'marker-15',
+          'icon-size':1.2,
+          'icon-allow-overlap':true,
+          'text-allow-overlap':true
+        },
+        paint:{
+          'text-color':'#111',
+          'text-halo-color':'#fff',
+          'text-halo-width':1.2
+        }
+      }, 'detours');
+
+      // Try to load saved route.geojson; else seed Y
       let loaded = false;
       try {
         const r = await fetch(ROUTE_URL, {cache:'no-store'});
         if (r.ok) {
           const route = await r.json();
           map.getSource('route-line-src').setData(route);
-          const lines = route.features?.filter(f=>f.geometry?.type==='LineString') || [];
-          const ptsAll = { type:'FeatureCollection', features:[] };
-          for (const ln of lines) ptsAll.features.push(...pointsAlongLine(ln, 2.8).features);
-          map.getSource('route-points-src').setData(ptsAll);
-          if (lines[0]) Draw.add(lines[0]);
           loaded = true;
         }
       } catch(e){}
 
-      // If nothing saved, use the seeded, eye-pleasing campus ribbon Y
       if (!loaded) {
-        map.getSource('route-line-src').setData(SEEDED_ROUTE);
-        const lines = SEEDED_ROUTE.features;
-        const ptsAll = { type:'FeatureCollection', features:[] };
-        for (const ln of lines) ptsAll.features.push(...pointsAlongLine(ln, 2.8).features);
-        map.getSource('route-points-src').setData(ptsAll);
-        // add first branch for editing
-        Draw.add(lines[0]);
-        localStorage.setItem('race_route_draft', JSON.stringify(SEEDED_ROUTE));
+        map.getSource('route-line-src').setData(SEEDED_Y);
+        // add first branch so you can tweak
+        Draw.add(SEEDED_Y.features[0]);
+        localStorage.setItem('race_route_draft', JSON.stringify(SEEDED_Y));
       }
 
-      // Fit to buildings (good aerial read), then a slight zoom-in
-      const bounds = bboxFromFeatures(bldg);
+      // initial sync: points + corridor + mask
+      syncFromDraw();
+
+      // keep syncing when you edit
+      map.on('draw.create', syncFromDraw);
+      map.on('draw.update', syncFromDraw);
+      map.on('draw.delete', syncFromDraw);
+
+      // Fit & slight zoom for aerial read
+      const bounds = bboxFromFeatures(await loadJSON(GEOJSON_URL));
       map.fitBounds(bounds, {
         padding:{ top:80, right:160, bottom:120, left:320 },
         maxZoom:18, pitch:PITCH, bearing:BEARING, duration:500
       });
       map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:400}));
-
-      // Keep in sync if you edit
-      map.on('draw.create', syncRouteFromDraw);
-      map.on('draw.update', syncRouteFromDraw);
-      map.on('draw.delete', syncRouteFromDraw);
     });
 
     /************ FIRESTORE (Players Board) ************/
