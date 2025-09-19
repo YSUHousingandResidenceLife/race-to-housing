@@ -128,7 +128,7 @@
     }
     async function loadJSON(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(url); return r.json(); }
     function bboxFromFeatures(fc){
-      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=Infinity*-1;
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
       for(const f of fc.features||[]){ const g=f.geometry; if(!g) continue;
         const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
         for(const poly of polys) for(const ring of poly) for(const [x,y] of ring){
@@ -169,7 +169,7 @@
         }
       ]
     });
-    map.addControl(Draw, 'top-right');
+    map.addControl(Draw, 'top-right'); // shortcut icons
 
     function startDraw(){
       map.doubleClickZoom.disable();
@@ -228,53 +228,62 @@
       // Route source
       map.addSource('route-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
 
-      // Insert route BELOW the building extrusions so it hugs ground on refresh
+      // Put route layers BELOW buildings so they hug the ground
       const beforeId = 'race-buildings';
 
+      // Base red track (ground-locked)
       map.addLayer({
         id:'route-track',
         type:'line',
         source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
+        layout:{
+          'line-cap':'round',
+          'line-join':'round',
+          'line-sort-key': 0,
+          'line-pitch-alignment':'map'
+        },
         paint:{
           'line-color':'#D62D20',
           'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
-          'line-opacity': 0.96,
-          'line-translate':[0,0],
-          'line-translate-anchor':'map',
-          'line-emissive-strength': 0.15
+          'line-opacity': 0.96
         }
       }, beforeId);
 
+      // Plank tiles
       map.addLayer({
         id:'route-tiles',
         type:'line',
         source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
+        layout:{
+          'line-cap':'round',
+          'line-join':'round',
+          'line-sort-key': 1,
+          'line-pitch-alignment':'map'
+        },
         paint:{
           'line-color':'#9C1A13',
           'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
-          'line-dasharray':[0, 2, 1.2, 2],
-          'line-translate':[0,0],
-          'line-translate-anchor':'map',
-          'line-emissive-strength': 0.1
+          'line-dasharray':[0, 2, 1.2, 2]
         }
       }, beforeId);
 
+      // Animated lights
       const dashSeq = [[0,4,3,4],[1,4,2,4],[2,4,1,4],[3,4,0,4],[4,4,0,4],[3,4,1,4],[2,4,2,4],[1,4,3,4]];
       let dashIndex = 0;
       map.addLayer({
         id:'route-lights',
         type:'line',
         source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
+        layout:{
+          'line-cap':'round',
+          'line-join':'round',
+          'line-sort-key': 2,
+          'line-pitch-alignment':'map'
+        },
         paint:{
           'line-color':'#FFD54A',
           'line-width': ['interpolate',['linear'],['zoom'],14,5,16,7,18,9],
-          'line-dasharray': dashSeq[0],
-          'line-translate':[0,0],
-          'line-translate-anchor':'map',
-          'line-emissive-strength': 0.25
+          'line-dasharray': dashSeq[0]
         }
       }, beforeId);
 
@@ -292,7 +301,7 @@
           map.getSource('route-src').setData(route);
           if (route.features?.length) Draw.add(route.features[0]);
         }
-      } catch(e){ /* ignore if missing */ }
+      } catch(e){ /* ignore */ }
 
       // Or load in-browser draft
       if (!Draw.getAll().features.length) {
