@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Y Route Editor + Board</title>
+  <title>Race to Housing — Designed Route + Editor + Board</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
@@ -58,16 +58,16 @@
     <button id="btnDraw" class="primary">Start / Resume Route</button>
     <button id="btnSave" class="ghost">Finish & Save</button>
     <button id="btnClear" class="ghost">Clear</button>
-    <div class="hint">Draw the “Y”: click to add points • drag to refine • double-click to end</div>
+    <div class="hint">Draw or tweak • double-click to end • drag to refine</div>
   </div>
 
   <section class="panel instructions" id="instructionsPanel">
     <header><h3>Race to Housing — How to Play</h3></header>
     <div class="content">
       <div class="steps">
-        <div class="step"><div class="num">1</div><div>Use the toolbar to draw the red “Y” route on the ground. Double-click to finish; drag vertices to refine.</div></div>
-        <div class="step"><div class="num">2</div><div>Click <b>Finish & Save</b> to download <code>route.geojson</code>. Put it next to this page to auto-load next time.</div></div>
-        <div class="step"><div class="num">3</div><div>The board is live; later each penguin will move along this exact Y path by points.</div></div>
+        <div class="step"><div class="num">1</div><div>Use the toolbar to adjust the red route (ground-locked). It’s designed to look great from the landing angle.</div></div>
+        <div class="step"><div class="num">2</div><div>Click <b>Finish & Save</b> to download <code>route.geojson</code>. Put it next to this page to load on refresh.</div></div>
+        <div class="step"><div class="num">3</div><div>Penguins will move along this exact route by points.</div></div>
       </div>
     </div>
   </section>
@@ -87,9 +87,9 @@
     /************ MAP ************/
     const STYLE_ID   = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
     const GEOJSON_URL= encodeURI('ysu_race_buildings_exact final.geojson');
-    const ROUTE_URL  = 'route.geojson'; // auto-load if present
+    const ROUTE_URL  = 'route.geojson';
     const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
-    const PITCH = 60, BEARING = -133.6;  // landing angle that showcases the Y
+    const PITCH = 60, BEARING = -133.6;  // showcases the route from the air
 
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
@@ -136,30 +136,18 @@
       controls:{ line_string:true, trash:true },
       defaultMode:'simple_select',
       styles:[
-        {
-          id:'gl-draw-polygon-and-line-vertex-halo-active',
-          type:'circle',
+        { id:'gl-draw-polygon-and-line-vertex-halo-active', type:'circle',
           filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':7,'circle-color':'#fff'}
-        },
-        {
-          id:'gl-draw-polygon-and-line-vertex-active',
-          type:'circle',
+          paint:{'circle-radius':7,'circle-color':'#fff'}},
+        { id:'gl-draw-polygon-and-line-vertex-active', type:'circle',
           filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':5,'circle-color':'#d6001c'}
-        },
-        {
-          id:'gl-draw-line',
-          type:'line',
+          paint:{'circle-radius':5,'circle-color':'#d6001c'}},
+        { id:'gl-draw-line', type:'line',
           filter:['all',['==','$type','LineString'],['!=','mode','static']],
-          paint:{'line-color':'#d6001c','line-width':3}
-        },
-        {
-          id:'gl-draw-line-static',
-          type:'line',
+          paint:{'line-color':'#d6001c','line-width':3}},
+        { id:'gl-draw-line-static', type:'line',
           filter:['all',['==','$type','LineString'],['==','mode','static']],
-          paint:{'line-color':'#d6001c','line-width':3}
-        }
+          paint:{'line-color':'#d6001c','line-width':3}}
       ]
     });
     map.addControl(Draw, 'top-right');
@@ -176,36 +164,31 @@
       }
     });
 
-    // Densify the drawn line into ground-locked points (no drift)
+    /************ Densify line → ground-locked dots ************/
     function haversineMeters(a,b){
-      const R=6371000;
-      const toRad=d=>d*Math.PI/180;
+      const R=6371000, toRad=d=>d*Math.PI/180;
       const [lon1,lat1]=a,[lon2,lat2]=b;
       const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
       const s=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
       return 2*R*Math.asin(Math.sqrt(s));
     }
-    function interpolateLL(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t]; }
-    function pointsAlongLine(line, spacing=3){ // meters
+    function interp(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t]; }
+    function pointsAlongLine(line, spacing=2.8){
       const coords=line.geometry.coordinates;
-      const pts=[];
-      let carry=0, idx=0;
+      const pts=[]; let carry=0, idx=0;
       for(let i=0;i<coords.length-1;i++){
         const A=coords[i], B=coords[i+1];
-        const segLen=haversineMeters(A,B);
+        const seg=haversineMeters(A,B);
         let d=carry;
-        while(d<=segLen){
-          const t=d/segLen;
-          const ll=interpolateLL(A,B,t);
-          pts.push({ type:'Feature', properties:{ i:idx++ }, geometry:{ type:'Point', coordinates: ll }});
+        while(d<=seg){
+          const t=d/seg; pts.push({type:'Feature',properties:{i:idx++},geometry:{type:'Point',coordinates:interp(A,B,t)}});
           d += spacing;
         }
-        carry = d - segLen;
+        carry = d - seg;
       }
       return { type:'FeatureCollection', features: pts };
     }
 
-    // Keep sources in sync with draw line
     function syncRouteFromDraw(){
       const fc = Draw.getAll();
       const line = fc.features.find(f => f.geometry?.type==='LineString');
@@ -213,10 +196,9 @@
       const srcLine = map.getSource('route-line-src');
       if (srcLine) srcLine.setData(out);
 
-      // densify to points
       const srcPts = map.getSource('route-points-src');
       if (srcPts){
-        const pts = line ? pointsAlongLine(line, 2.5) : { type:'FeatureCollection', features:[] };
+        const pts = line ? pointsAlongLine(line, 2.8) : { type:'FeatureCollection', features:[] };
         srcPts.setData(pts);
       }
       localStorage.setItem('race_route_draft', JSON.stringify(out));
@@ -227,13 +209,63 @@
     document.getElementById('btnSave').onclick  = ()=>{
       const fc = Draw.getAll();
       const line = fc.features.find(f => f.geometry?.type==='LineString');
-      if (!line){ alert('Draw the Y route first (a single LineString).'); return; }
+      if (!line){ alert('Draw or tweak the route first (a single LineString).'); return; }
       const out = { type:'FeatureCollection', features:[ line ] };
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], {type:'application/json'}));
       a.download = 'route.geojson';
       a.click();
       URL.revokeObjectURL(a.href);
+    };
+
+    /************ SEEDED “Campus Ribbon Y” route ************/
+    /* Notes:
+       - Tail rises behind Kilcawley then splits near the quad.
+       - Left arm sweeps past Christman → Cafaro → Lyden in a graceful curve.
+       - Right arm sweeps toward Weller → Wick, and dips toward Courtyard Apartments.
+       - A small loop kisses a Dining area near Christman before the final run to Kilcawley.
+       - All coords kept within campus bbox; fine-tune with the editor as needed.
+    */
+    const SEEDED_ROUTE = {
+      "type":"FeatureCollection",
+      "features":[
+        { "type":"Feature", "properties":{"leg":"tail+left"},
+          "geometry":{"type":"LineString","coordinates":[
+            /* tail from behind Kilcawley up to the Y head */
+            [-80.64770,41.10630],[-80.64755,41.10648],[-80.64738,41.10668],
+            [-80.64720,41.10693],[-80.64690,41.10732],[-80.64655,41.10778],
+            [-80.64625,41.10823],[-80.64600,41.10870],[-80.64582,41.10905],
+            /* gentle S into Christman / Dining loop */
+            [-80.64605,41.10940],[-80.64630,41.10975],[-80.64655,41.11005],
+            [-80.64675,41.11035],[-80.64690,41.11055],  /* Christman & Dining area */
+            /* left arm toward Cafaro → Lyden with long arcs */
+            [-80.64665,41.11082],[-80.64635,41.11095],[-80.64614,41.11101], /* Cafaro */
+            [-80.64638,41.11109],[-80.64675,41.11114],[-80.64710,41.11116],
+            [-80.64738,41.11115],[-80.64762,41.11112] /* Lyden */
+          ]}},
+        { "type":"Feature", "properties":{"leg":"right"},
+          "geometry":{"type":"LineString","coordinates":[
+            /* start at the Y junction and sweep to Weller → Wick with a wide curve */
+            [-80.64582,41.10905],[-80.64540,41.10865],[-80.64500,41.10820],
+            [-80.64470,41.10790],[-80.64458,41.10778],
+            [-80.64483,41.10769], /* Weller */
+            [-80.64462,41.10760],[-80.64440,41.10752],
+            [-80.64426,41.10749], /* Wick */
+            /* elegant dip toward Courtyard Apartments and back to the junction */
+            [-80.64505,41.10730],[-80.64570,41.10755],[-80.64610,41.10810],
+            [-80.64600,41.10860],[-80.64582,41.10905]
+          ]}},
+        { "type":"Feature", "properties":{"leg":"finale"},
+          "geometry":{"type":"LineString","coordinates":[
+            /* finishing flourish from Dining loop into Kilcawley */
+            [-80.64690,41.11055],[-80.64665,41.11015],[-80.64625,41.10965],
+            [-80.64600,41.10925],[-80.64578,41.10885],[-80.64560,41.10845],
+            [-80.64545,41.10810],[-80.64552,41.10780],[-80.64580,41.10745],
+            [-80.64615,41.10710],[-80.64655,41.10688],[-80.64695,41.10676],
+            [-80.64720,41.10674], /* Kilcawley zone (finish) */
+            [-80.64732,41.10674]
+          ]}}
+      ]
     };
 
     /************ BUILDINGS + ROUTE LAYERS ************/
@@ -252,87 +284,79 @@
         }
       });
 
-      // Route sources: line (for editing/storage) + densified points (for rendering)
+      // Route sources
       map.addSource('route-line-src',   { type:'geojson', data:{type:'FeatureCollection', features:[]} });
       map.addSource('route-points-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
 
-      // Render route as ground-locked circles (no drift)
+      // Render as ground-locked circles (no drift), BELOW buildings
       const beforeId = 'race-buildings';
-      // Thick red band
       map.addLayer({
         id:'route-band',
         type:'circle',
         source:'route-points-src',
-        layout:{
-          'circle-pitch-alignment':'map',   // lock to ground
-          'circle-sort-key': 0
-        },
+        layout:{ 'circle-pitch-alignment':'map', 'circle-sort-key': 0 },
         paint:{
           'circle-color':'#D62D20',
-          'circle-radius': ['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.5],
-          'circle-opacity': 0.95,
-          'circle-pitch-scale': 'map'       // keep size consistent on ground
+          'circle-radius':['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.0],
+          'circle-opacity':0.95,
+          'circle-pitch-scale':'map'
         }
       }, beforeId);
 
-      // Darker “plank” dots on top (every Nth point)
       map.addLayer({
         id:'route-planks',
         type:'circle',
         source:'route-points-src',
-        layout:{
-          'circle-pitch-alignment':'map',
-          'circle-sort-key': 1
-        },
+        layout:{ 'circle-pitch-alignment':'map', 'circle-sort-key': 1 },
         paint:{
           'circle-color':'#9C1A13',
-          'circle-radius': ['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.5],
-          'circle-opacity': 0.9,
-          'circle-pitch-scale': 'map'
+          'circle-radius':['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.0],
+          'circle-opacity':0.9,
+          'circle-pitch-scale':'map'
         },
-        filter: ['==', ['%', ['get','i'], 6], 0]  // every 6th point ≈ plank spacing
+        filter:['==',['%', ['get','i'], 6], 0]
       }, beforeId);
 
-      // Try to load saved route.geojson from repo
+      // Try to load saved route.geojson first
+      let loaded = false;
       try {
         const r = await fetch(ROUTE_URL, {cache:'no-store'});
         if (r.ok) {
           const route = await r.json();
           map.getSource('route-line-src').setData(route);
-          const line = route.features?.find(f=>f.geometry?.type==='LineString');
-          const pts = line ? pointsAlongLine(line, 2.5) : {type:'FeatureCollection',features:[]};
-          map.getSource('route-points-src').setData(pts);
-          if (line) Draw.add(line);
+          const lines = route.features?.filter(f=>f.geometry?.type==='LineString') || [];
+          const ptsAll = { type:'FeatureCollection', features:[] };
+          for (const ln of lines) ptsAll.features.push(...pointsAlongLine(ln, 2.8).features);
+          map.getSource('route-points-src').setData(ptsAll);
+          if (lines[0]) Draw.add(lines[0]);
+          loaded = true;
         }
-      } catch(e){ /* ignore if missing */ }
+      } catch(e){}
 
-      // Or load in-browser draft
-      if (!Draw.getAll().features.length) {
-        const draft = localStorage.getItem('race_route_draft');
-        if (draft) {
-          try {
-            const fc = JSON.parse(draft);
-            map.getSource('route-line-src').setData(fc);
-            const line = fc.features?.find(f=>f.geometry?.type==='LineString');
-            const pts = line ? pointsAlongLine(line, 2.5) : {type:'FeatureCollection',features:[]};
-            map.getSource('route-points-src').setData(pts);
-            if (line) Draw.add(line);
-          } catch(e){}
-        }
+      // If nothing saved, use the seeded, eye-pleasing campus ribbon Y
+      if (!loaded) {
+        map.getSource('route-line-src').setData(SEEDED_ROUTE);
+        const lines = SEEDED_ROUTE.features;
+        const ptsAll = { type:'FeatureCollection', features:[] };
+        for (const ln of lines) ptsAll.features.push(...pointsAlongLine(ln, 2.8).features);
+        map.getSource('route-points-src').setData(ptsAll);
+        // add first branch for editing
+        Draw.add(lines[0]);
+        localStorage.setItem('race_route_draft', JSON.stringify(SEEDED_ROUTE));
       }
 
-      // Keep sources synced as you edit
-      map.on('draw.create', syncRouteFromDraw);
-      map.on('draw.update', syncRouteFromDraw);
-      map.on('draw.delete', syncRouteFromDraw);
-
-      // Fit to buildings so the Y reads nicely on load
+      // Fit to buildings (good aerial read), then a slight zoom-in
       const bounds = bboxFromFeatures(bldg);
       map.fitBounds(bounds, {
         padding:{ top:80, right:160, bottom:120, left:320 },
         maxZoom:18, pitch:PITCH, bearing:BEARING, duration:500
       });
       map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:400}));
+
+      // Keep in sync if you edit
+      map.on('draw.create', syncRouteFromDraw);
+      map.on('draw.update', syncRouteFromDraw);
+      map.on('draw.delete', syncRouteFromDraw);
     });
 
     /************ FIRESTORE (Players Board) ************/
