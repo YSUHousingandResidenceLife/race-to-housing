@@ -2,378 +2,130 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>YSU Housing — Auto-capture 7/7 Outlines (resilient)</title>
+  <title>YSU Housing — Manual Capture 7/7 Buildings</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
-    :root { --card:#fff; --border:#e5e7eb; --muted:#6b7280; --shadow:0 10px 24px rgba(0,0,0,.12) }
-    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    html,body{height:100%;margin:0;font-family:sans-serif}
     #map{position:absolute; inset:0}
-    .ui{
-      position:absolute; right:12px; top:12px; z-index:20; width:min(560px,96vw);
-      background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
-    }
-    .ui header{padding:10px 12px; border-bottom:1px solid var(--border); font-weight:700}
-    .ui .body{padding:10px 12px; display:grid; gap:10px}
-    .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
-    button{cursor:pointer; border:1px solid var(--border); background:#fff; padding:8px 10px; border-radius:8px; font-weight:600}
-    button.primary{background:#111827; color:#fff; border-color:#111827}
-    .muted{color:var(--muted); font-size:13px}
-    .hint{background:#f9fafb; border:1px dashed var(--border); padding:8px 10px; border-radius:8px; font-size:13px}
-    .checklist{display:grid; grid-template-columns:1fr auto; gap:6px; border-top:1px solid var(--border); padding-top:8px; max-height:180px; overflow:auto}
+    .ui{position:absolute; right:12px; top:12px; z-index:20; background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; width:320px}
+    .ui header{font-weight:700; margin-bottom:6px}
+    button{cursor:pointer; border:1px solid #444; border-radius:6px; padding:6px 10px; margin:2px 0}
+    .checklist{display:grid; grid-template-columns:1fr auto; gap:4px; font-size:14px; margin-top:6px}
     .ok{color:#059669; font-weight:700}
     .missing{color:#b91c1c; font-weight:700}
-    .metrics{font-size:12px; color:#374151}
-    .small{font-size:12px}
+    .metrics{font-size:12px; margin-top:6px}
+    .hint{background:#f9fafb; border:1px dashed #ccc; font-size:12px; padding:6px; margin-top:6px}
   </style>
 </head>
 <body>
-  <div id="map"></div>
+<div id="map"></div>
 
-  <section class="ui">
-    <header>Auto-capture 7/7 Building Outlines (outline only)</header>
-    <div class="body">
-      <div class="row">
-        <button id="btnCaptureAll" class="primary">Auto-capture All (0/7)</button>
-        <button id="btnDownload">Download merged GeoJSON</button>
-        <button id="btnReload">Reload existing file</button>
-      </div>
+<div class="ui">
+  <header>Manual Capture 7/7 Buildings</header>
+  <button id="btnDownload">Download merged GeoJSON</button>
+  <button id="btnReload">Reload existing file</button>
 
-      <div class="muted small">
-        Targets: Lyden, Cafaro, Christman, Weller, Wick, Kilcawley House, <b>University Courtyards</b>. No colors; we only capture shapes + metrics.
-      </div>
+  <div class="metrics" id="metrics">Click a building footprint to capture.</div>
 
-      <div class="metrics" id="metrics">Width: — m · Length: — m · Area: — m² · Perimeter: — m</div>
+  <div class="checklist" id="cklist"></div>
 
-      <div class="checklist" id="cklist"></div>
+  <div id="status" class="hint">
+    Targets: Lyden, Cafaro, Christman, Weller, Wick, Kilcawley House, University Courtyards.<br/>
+    Click each building outline on the map → it records ✔.
+  </div>
+</div>
 
-      <div id="status" class="hint">
-        Click <b>Auto-capture All</b>. If any target can’t be found, it’s skipped and the loop continues. When finished, click
-        <b>Download merged GeoJSON</b> and replace your repo file (<code>ysu_race_buildings_exact final.geojson</code>).
-      </div>
-    </div>
-  </section>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
+  center: [-80.6458, 41.1090],
+  zoom: 16.8,
+  pitch: 60,
+  bearing: -133.6
+});
 
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-  <script>
-    // ===== MAP =====
-    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-    const STYLE_ID    = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson');
+const TARGETS = [
+  {key:'lyden',name:'Lyden'},
+  {key:'cafaro',name:'Cafaro'},
+  {key:'christman',name:'Christman'},
+  {key:'weller',name:'Weller'},
+  {key:'wick',name:'Wick'},
+  {key:'kilcawley house',name:'Kilcawley House'},
+  {key:'university courtyards',name:'University Courtyards'}
+];
+const REQUIRED_KEYS = new Set(TARGETS.map(t=>t.key));
+let buildingsFC = {type:'FeatureCollection',features:[]};
+const captured={};
 
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: STYLE_ID,
-      antialias: true,
-      center: [-80.6458, 41.1090],
-      zoom: 16.8,
-      pitch: 60,
-      bearing: -133.6,
-      minZoom: 15,
-      maxZoom: 20,
-      maxBounds: [[-80.6570, 41.1026], [-80.6415, 41.1120]]
-    });
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+const ckbox=document.getElementById('cklist');
+function renderChecklist(){
+  ckbox.innerHTML='';
+  for(const t of TARGETS){
+    const rowL=document.createElement('div');
+    const rowR=document.createElement('div');
+    rowL.textContent=t.name;
+    rowR.textContent=captured[t.key]?'✔':'—';
+    rowR.className=captured[t.key]?'ok':'missing';
+    ckbox.appendChild(rowL); ckbox.appendChild(rowR);
+  }
+}
 
-    function hideLabels(){
-      const layers = map.getStyle().layers || [];
-      for (const lyr of layers){
-        if (lyr.type==='symbol' || /label/i.test(lyr.id)){
-          try { map.setLayoutProperty(lyr.id,'visibility','none'); } catch(e){}
-        }
-      }
-    }
-    map.on('styledata', hideLabels);
+function polygonMetrics(coords){
+  const lats=coords.map(c=>c[1]), lngs=coords.map(c=>c[0]);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+  const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+  const midLat=(minLat+maxLat)/2;
+  const width=(maxLng-minLng)*111320*Math.cos(midLat*Math.PI/180);
+  const length=(maxLat-minLat)*111320;
+  return {width_m:Math.round(width), length_m:Math.round(length)};
+}
+function showMetrics(m){
+  document.getElementById('metrics').textContent=`Width: ${m.width_m} m · Length: ${m.length_m} m`;
+}
 
-    // ===== TARGETS (7) =====
-    const TARGETS = [
-      { key:'lyden',           name:'Lyden',           center:[-80.647458,              41.111143] },
-      { key:'cafaro',          name:'Cafaro',          center:[-80.6461376731338,       41.11100745921387] },
-      { key:'christman',       name:'Christman',       center:[-80.64724052183561,      41.110525670257104] },
-      { key:'weller',          name:'Weller',          center:[-80.644833,              41.107694] },
-      { key:'wick',            name:'Wick',            center:[-80.64426251711262,      41.107489184836176] },
-      { key:'kilcawley house', name:'Kilcawley House', center:[-80.64731987291158,      41.10673909169142] },
-      { key:'university courtyards', name:'University Courtyards', center:[-80.64555, 41.10690] }
-    ];
-    const REQUIRED_KEYS = new Set(TARGETS.map(t=>t.key));
+map.on('click',(e)=>{
+  const fts=map.queryRenderedFeatures(e.point);
+  const poly=fts.find(f=>f.geometry.type==='Polygon'||f.geometry.type==='MultiPolygon');
+  if(!poly) return;
 
-    // ===== EXISTING DATA =====
-    let buildingsFC = { type:'FeatureCollection', features:[] };
+  // ask which building you just clicked
+  const name=prompt("Which building is this? (Lyden, Cafaro, Christman, Weller, Wick, Kilcawley House, University Courtyards)");
+  if(!name) return;
+  const key=name.toLowerCase();
+  if(!REQUIRED_KEYS.has(key)){alert("Not a recognized target name.");return;}
 
-    async function loadExisting(){
-      try{
-        const r = await fetch(GEOJSON_URL,{cache:'no-store'});
-        buildingsFC = r.ok ? await r.json() : { type:'FeatureCollection', features:[] };
-        setStatus(r.ok ? 'Existing buildings file loaded.' : 'No existing file found — starting fresh.');
-      }catch(e){
-        buildingsFC = { type:'FeatureCollection', features:[] };
-        setStatus('Couldn’t load existing file — starting fresh.');
-      }
-      renderExistingOutlines();
-    }
+  const ring=poly.geometry.type==='Polygon'?poly.geometry.coordinates[0]:poly.geometry.coordinates[0][0];
+  const m=polygonMetrics(ring); showMetrics(m);
 
-    function renderExistingOutlines(){
-      if (map.getSource('existing-src')) {
-        map.getSource('existing-src').setData(buildingsFC);
-      } else {
-        map.addSource('existing-src', { type:'geojson', data: buildingsFC });
-      }
-      if (map.getLayer('existing-line')) map.removeLayer('existing-line');
-      map.addLayer({
-        id:'existing-line', type:'line', source:'existing-src',
-        filter:['==', ['geometry-type'], 'Polygon'],
-        paint:{ 'line-color':'#6b7280', 'line-width':2 }
-      });
-    }
+  captured[key]={type:'Feature',geometry:poly.geometry,properties:{name, key, type:'building', width_m:m.width_m,length_m:m.length_m}};
+  renderChecklist();
+});
 
-    // ===== UI helpers =====
-    const statusEl = document.getElementById('status');
-    const setStatus = t => statusEl.textContent = t;
+document.getElementById('btnDownload').onclick=()=>{
+  const out={type:'FeatureCollection',features:[]};
+  for(const f of buildingsFC.features||[]){
+    const k=(f.properties?.key||'').toLowerCase();
+    if(!REQUIRED_KEYS.has(k)) out.features.push(f);
+  }
+  for(const k in captured) out.features.push(captured[k]);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+  a.download='ysu_race_buildings_exact final.geojson';
+  a.click();
+};
 
-    function metersPerLon(lat){ return 111320 * Math.cos(lat*Math.PI/180); }
-    function metersPerLat(){ return 111320; }
+async function loadExisting(){
+  try{const r=await fetch('ysu_race_buildings_exact final.geojson',{cache:'no-store'});
+      if(r.ok) buildingsFC=await r.json();
+  }catch(e){}
+}
+document.getElementById('btnReload').onclick=loadExisting;
 
-    function polygonMetrics(coords){
-      const lats = coords.map(c=>c[1]), lngs=coords.map(c=>c[0]);
-      const minLat=Math.min(...lats), maxLat=Math.max(...lats);
-      const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
-      const midLat=(minLat+maxLat)/2;
-      const width_m  = (maxLng-minLng) * metersPerLon(midLat);
-      const length_m = (maxLat-minLat) * metersPerLat();
-
-      const R=6371000, toRad=d=>d*Math.PI/180;
-      let perim=0;
-      for(let i=0;i<coords.length-1;i++){
-        const [lng1,lat1]=coords[i], [lng2,lat2]=coords[i+1];
-        const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
-        const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-        perim += 2*R*Math.asin(Math.sqrt(a));
-      }
-      // Planar area approx
-      const mcoords = coords.map(([lng,lat])=>[(lng-minLng)*metersPerLon(midLat),(lat-minLat)*metersPerLat()]);
-      let area=0; for(let i=0;i<mcoords.length-1;i++){ const [x1,y1]=mcoords[i], [x2,y2]=mcoords[i+1]; area += x1*y2 - x2*y1; }
-      area = Math.abs(area/2);
-      return { width_m:Math.round(width_m), length_m:Math.round(length_m), area_m2:Math.round(area), perimeter_m:Math.round(perim) };
-    }
-
-    function showMetrics(m){
-      document.getElementById('metrics').textContent =
-        `Width: ${m.width_m} m · Length: ${m.length_m} m · Area: ${m.area_m2} m² · Perimeter: ${m.perimeter_m} m`;
-    }
-
-    function approxArea(feature){
-      const geom = feature.geometry;
-      const rings = geom.type==='Polygon' ? [geom.coordinates[0]] :
-                    (geom.type==='MultiPolygon' ? geom.coordinates.map(p=>p[0]) : []);
-      if (!rings.length) return 0;
-      const coords = rings[0];
-      const lats = coords.map(c=>c[1]), lngs=coords.map(c=>c[0]);
-      const minLat=Math.min(...lats), maxLat=Math.max(...lats);
-      const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
-      const midLat=(minLat+maxLat)/2;
-      const mcoords = coords.map(([lng,lat])=>[(lng-minLng)*metersPerLon(midLat),(lat-minLat)*metersPerLat()]);
-      let area=0; for(let i=0;i<mcoords.length-1;i++){ const [x1,y1]=mcoords[i], [x2,y2]=mcoords[i+1]; area += x1*y2 - x2*y1; }
-      return Math.abs(area/2);
-    }
-
-    // Race wait helper (won’t hang)
-    function waitForSettle(ms=800){
-      return new Promise(resolve=>{
-        let resolved=false;
-        const done = ()=>{ if(!resolved){ resolved=true; resolve(); } };
-        const t = setTimeout(done, ms);
-        map.once('idle', ()=>{ clearTimeout(t); done(); });
-        map.once('moveend', ()=>{ clearTimeout(t); done(); });
-      });
-    }
-
-    // Degrees bbox from meters radius
-    function lngLatBbox(center, meters){
-      const [lng,lat]=center;
-      const dLon = meters / metersPerLon(lat);
-      const dLat = meters / metersPerLat();
-      return { minLng: lng - dLon, maxLng: lng + dLon, minLat: lat - dLat, maxLat: lat + dLat };
-    }
-    function coordsInBbox(coords, bb){
-      for (const [lng,lat] of coords){ if (lng<bb.minLng||lng>bb.maxLng||lat<bb.minLat||lat>bb.maxLat) return false; }
-      return true;
-    }
-
-    // Gather *all* composite source-layers so we can inspect any that carry buildings
-    function compositeSourceLayers(){
-      const layers = map.getStyle().layers || [];
-      const srcLayers = new Set();
-      for (const lyr of layers){
-        if (lyr.source === 'composite' && lyr['source-layer']) srcLayers.add(lyr['source-layer']);
-      }
-      return Array.from(srcLayers);
-    }
-
-    // Robust capture near a center (meters radius, expanding)
-    async function captureOne(target, radiusM=65, attempt=0){
-      try{
-        map.jumpTo({ center: target.center, zoom: 19.5, pitch: 0, bearing: 0 });
-        await waitForSettle(900);
-
-        const bb = lngLatBbox(target.center, radiusM);
-
-        // 1) Query source features across all composite source-layers
-        let feats=[];
-        for (const sl of compositeSourceLayers()){
-          try{
-            const fs = map.querySourceFeatures('composite', { sourceLayer: sl });
-            for (const f of fs){
-              if (!f.geometry) continue;
-              if (f.geometry.type!=='Polygon' && f.geometry.type!=='MultiPolygon') continue;
-
-              const lid = (f.layer && f.layer.id) ? f.layer.id : '';
-              const cls = (f.properties && (f.properties.class||f.properties.type||f.properties.kind)) || '';
-              const looksBuilding = /building/i.test(sl) || /building/i.test(lid) || /building/i.test(String(cls));
-              if (!looksBuilding) continue;
-
-              // quick bbox filter on exterior ring
-              const ring =
-                f.geometry.type==='Polygon' ? f.geometry.coordinates[0] :
-                (f.geometry.type==='MultiPolygon' ? f.geometry.coordinates[0][0] : null);
-              if (!ring) continue;
-              if (!coordsInBbox(ring, bb)) continue;
-
-              feats.push(f);
-            }
-          }catch(e){ /* ignore */ }
-        }
-
-        // 2) Fallback: rendered features near the center
-        if (!feats.length){
-          const p = map.project({lng:target.center[0], lat:target.center[1]});
-          const sw = { x:p.x-160, y:p.y+160 }, ne={ x:p.x+160, y:p.y-160 };
-          let rf = map.queryRenderedFeatures([sw, ne]);
-          rf = rf.filter(f=>{
-            const sl = f.sourceLayer || f['source-layer'] || '';
-            const lid = (f.layer && f.layer.id) ? f.layer.id : '';
-            const cls = (f.properties && (f.properties.class||f.properties.type||f.properties.kind)) || '';
-            return (f.geometry && (f.geometry.type==='Polygon'||f.geometry.type==='MultiPolygon')) &&
-                   (/building/i.test(sl) || /building/i.test(lid) || /building/i.test(String(cls)));
-          });
-          feats = rf;
-        }
-
-        if (!feats.length){
-          if (radiusM < 140) return captureOne(target, radiusM+20, attempt+1);
-          return { ok:false, reason:'No building polygon found nearby' };
-        }
-
-        feats.sort((a,b)=>approxArea(b)-approxArea(a));
-        const best = feats[0];
-
-        // close ring
-        if (best.geometry.type==='Polygon'){
-          const ring = best.geometry.coordinates[0];
-          const first = ring[0], last = ring[ring.length-1];
-          if (first[0]!==last[0] || first[1]!==last[1]) best.geometry.coordinates[0].push(first);
-        } else if (best.geometry.type==='MultiPolygon'){
-          const ring = best.geometry.coordinates[0][0];
-          const first = ring[0], last = ring[ring.length-1];
-          if (first[0]!==last[0] || first[1]!==last[1]) best.geometry.coordinates[0][0].push(first);
-        }
-
-        const ring = best.geometry.type==='Polygon' ? best.geometry.coordinates[0] : best.geometry.coordinates[0][0];
-        const m = polygonMetrics(ring);
-        showMetrics(m);
-
-        return {
-          ok:true,
-          feature:{
-            type:'Feature',
-            geometry: best.geometry,
-            properties:{
-              name: target.name,
-              key: target.key,
-              type:'building',
-              height: 22,
-              width_m: m.width_m, length_m: m.length_m,
-              area_m2: m.area_m2, perimeter_m: m.perimeter_m
-            }
-          }
-        };
-      }catch(e){
-        if (attempt<3) return captureOne(target, radiusM, attempt+1);
-        return { ok:false, reason:'Unexpected error' };
-      }
-    }
-
-    const captured = {}; // key -> feature
-
-    function renderChecklistInit(){
-      const box = document.getElementById('cklist');
-      box.innerHTML = '';
-      for (const t of TARGETS){
-        const rowL = document.createElement('div');
-        const rowR = document.createElement('div');
-        rowL.textContent = t.name;
-        rowR.textContent = '—';
-        rowR.className = 'missing';
-        box.appendChild(rowL); box.appendChild(rowR);
-      }
-    }
-    function renderChecklist(){
-      const box = document.getElementById('cklist');
-      box.innerHTML = '';
-      for (const t of TARGETS){
-        const done = !!captured[t.key];
-        const rowL = document.createElement('div');
-        const rowR = document.createElement('div');
-        rowL.textContent = t.name;
-        rowR.textContent = done ? '✔' : '—';
-        rowR.className = done ? 'ok' : 'missing';
-        box.appendChild(rowL); box.appendChild(rowR);
-      }
-      const have = Object.keys(captured).filter(k=>REQUIRED_KEYS.has(k)).length;
-      document.getElementById('btnCaptureAll').textContent = `Auto-capture All (${have}/7)`;
-    }
-
-    async function captureAll(){
-      setStatus('Capturing… (robust mode)');
-      for (const t of TARGETS){
-        const res = await captureOne(t);
-        if (res.ok){
-          captured[t.key] = res.feature;
-          setStatus(`Captured ${t.name}.`);
-        } else {
-          setStatus(`Skipped ${t.name}: ${res.reason}. (Continuing)`);
-        }
-        renderChecklist();
-        await new Promise(r=>setTimeout(r,120));
-      }
-      const have = Object.keys(captured).filter(k=>REQUIRED_KEYS.has(k)).length;
-      setStatus(`Captured ${have}/7 — download to merge.`);
-    }
-
-    function downloadMerged(){
-      const out = { type:'FeatureCollection', features:[] };
-      for (const f of buildingsFC.features || []){
-        const k = (f.properties?.key || f.properties?.name || '').toString().toLowerCase();
-        if (!REQUIRED_KEYS.has(k)) out.features.push(f);
-      }
-      for (const k in captured) out.features.push(captured[k]);
-
-      const a=document.createElement('a');
-      a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
-      a.download='ysu_race_buildings_exact final.geojson';
-      a.click(); URL.revokeObjectURL(a.href);
-      setStatus('Downloaded merged file. Replace it in GitHub, then refresh.');
-    }
-
-    document.getElementById('btnCaptureAll').onclick = captureAll;
-    document.getElementById('btnDownload').onclick   = downloadMerged;
-    document.getElementById('btnReload').onclick     = async ()=>{ await loadExisting(); setStatus('Existing file reloaded.'); };
-
-    map.on('load', async ()=>{
-      hideLabels();
-      renderChecklistInit();
-      await loadExisting();
-      setStatus('Ready — click “Auto-capture All (0/7)”.');
-    });
-  </script>
+map.on('load',()=>{renderChecklist();loadExisting();});
+</script>
 </body>
 </html>
