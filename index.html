@@ -2,302 +2,190 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Draw Your Y + Ground Gaps</title>
+  <title>Housing Logo Overlay (aesthetic only)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
-  <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
   <style>
-    :root{ --card-bg:rgba(255,255,255,.96); --card-border:#e5e5e5; --accent:#d6001c; --muted:#6b7280; }
-    *{box-sizing:border-box}
+    :root { --card:#fff; --border:#e5e7eb; --shadow:0 10px 24px rgba(0,0,0,.12); }
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    #map{position:absolute;inset:0}
-
-    .toolbar{
-      position:absolute; left:50%; top:12px; transform:translateX(-50%); z-index:25;
-      display:flex; gap:8px; background:var(--card-bg); border:1px solid var(--card-border);
-      border-radius:12px; padding:8px; box-shadow:0 10px 25px rgba(0,0,0,.1)
+    #map{position:absolute; inset:0}
+    .ui{
+      position:absolute; right:12px; top:12px; z-index:20; width:min(360px,92vw);
+      background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
     }
-    .toolbar button{
-      background:#fff; border:1px solid var(--card-border); border-radius:8px; padding:8px 10px;
-      cursor:pointer; font-weight:600;
-    }
-    .toolbar .primary{ background:#d6001c; color:#fff; border-color:#c01a1a }
-    .toolbar .ghost{ background:#fff }
-    .toolbar .hint{ align-self:center; color:#384151; font-size:13px; padding:0 6px }
-
-    .panel{position:absolute;top:12px;left:12px;z-index:20;width:360px;background:var(--card-bg);
-      border:1px solid var(--card-border);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.1);
-      overflow:hidden;display:flex;flex-direction:column}
-    .panel header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--card-border);background:#fff}
-    .panel header h3{margin:0;font-size:16px}
-    .panel .content{padding:12px 14px;max-height:48vh;overflow:auto}
-    .steps{display:grid;gap:10px}
-    .step{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:10px}
-    .step .num{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+    .ui header{padding:12px 14px; border-bottom:1px solid var(--border); font-weight:700}
+    .ui .body{padding:12px 14px; display:grid; gap:10px}
+    .row{display:flex; gap:8px; flex-wrap:wrap}
+    button{cursor:pointer; border:1px solid var(--border); background:#fff; padding:8px 10px; border-radius:8px; font-weight:600}
+    button.primary{background:#d6001c; color:#fff; border-color:#c21a1a}
+    .muted{color:#4b5563; font-size:13px}
+    .badge{display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%; background:#d6001c; color:#fff; font-size:12px; font-weight:700}
+    .steps{display:grid; gap:8px}
+    .step{display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:flex-start}
+    input[type="range"]{width:180px}
+    .hint{background:#f9fafb; border:1px dashed #e5e7eb; padding:8px 10px; border-radius:8px; font-size:13px}
   </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- Editor toolbar -->
-  <div class="toolbar" id="toolbar">
-    <button id="btnDraw" class="primary">Start / Resume Route</button>
-    <button id="btnSave" class="ghost">Save Line</button>
-    <button id="btnClearLine" class="ghost">Clear Line</button>
-    <button id="btnApplyGaps" class="ghost">Apply Gaps</button>
-    <button id="btnClearGaps" class="ghost">Clear Gaps</button>
-    <div class="hint">Click to add points • drag to refine • double-click to end</div>
-  </div>
-
-  <!-- Quick instructions -->
-  <section class="panel">
-    <header><h3>Draw Your Y + Ground Gaps</h3></header>
-    <div class="content">
+  <section class="ui">
+    <header>Place Housing Logo (overlay only)</header>
+    <div class="body">
       <div class="steps">
-        <div class="step"><div class="num">1</div><div>Click <b>Start / Resume Route</b>, draw your Y on the ground (paths/plazas), double-click to finish.</div></div>
-        <div class="step"><div class="num">2</div><div>Click <b>Apply Gaps</b> to hide buildings inside a buffered corridor around your Y.</div></div>
-        <div class="step"><div class="num">3</div><div>If needed, click <b>Clear Gaps</b> to restore buildings. Use <b>Save Line</b> to download <code>route.geojson</code>.</div></div>
+        <div class="step"><span class="badge">1</span><div>Click <b>Place / Re-place Logo</b>, then click <b>Top-Left</b>, <b>Top-Right</b>, <b>Bottom-Right</b> corners on the map.</div></div>
+        <div class="step"><span class="badge">2</span><div>Adjust <b>Opacity</b> or <b>Hide/Show</b>. Remove anytime.</div></div>
       </div>
+
+      <div class="row">
+        <button id="btnPlace" class="primary">Place / Re-place Logo</button>
+        <button id="btnHide">Hide</button>
+        <button id="btnShow">Show</button>
+        <button id="btnRemove">Remove</button>
+      </div>
+
+      <div class="row">
+        <label class="muted">Opacity:</label>
+        <input id="opacity" type="range" min="0" max="1" step="0.02" value="0.85" />
+        <span id="opval" class="muted">0.85</span>
+      </div>
+
+      <div id="status" class="hint">Ready. File expected: <code>housing-overlay.png</code> in this folder.</div>
     </div>
   </section>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
-  <!-- Turf for buffering -->
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-
-  <script type="module">
-    /************ CONFIG ************/
-    const STYLE_ID   = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL= encodeURI('ysu_race_buildings_exact final.geojson');
-    const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
-    const PITCH = 60, BEARING = -133.6;
-    const CORRIDOR_WIDTH_M = 18; // change 14–24 to adjust “gap” width
-
-    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+  <script>
+    // ====== MAP SETUP ======
+    mapboxgl.accessToken =
+      'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     const map = new mapboxgl.Map({
       container: 'map',
-      style: STYLE_ID,
+      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
       center: [-80.6458, 41.1090],
       zoom: 16.8,
-      pitch: PITCH,
-      bearing: BEARING,
+      pitch: 60,
+      bearing: -133.6,
       minZoom: 15,
       maxZoom: 19,
-      maxBounds: CAMPUS_BOUNDS
+      maxBounds: [[-80.6570, 41.1026], [-80.6415, 41.1120]]
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    function hideLabelsAndBaseBuildings() {
+    // Optional: hide map labels to make the overlay pop
+    function hideLabels() {
       const layers = map.getStyle().layers || [];
       for (const lyr of layers) {
         if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
           try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
         }
       }
-      for (const lyr of layers) {
-        if (/building/i.test(lyr.id) && (lyr.type === 'fill-extrusion' || lyr.type === 'fill')) {
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-        }
+    }
+    map.on('styledata', () => hideLabels());
+
+    // ====== OVERLAY LOGIC (image source with 4 corners) ======
+    const SOURCE_ID = 'housing-logo-src';
+    const LAYER_ID  = 'housing-logo-layer';
+    const IMG_URL   = 'housing-overlay.png'; // <- put your image here (same folder)
+
+    let placing = false;
+    let clicks = []; // TL, TR, BR
+
+    const statusEl = document.getElementById('status');
+    const opSlider = document.getElementById('opacity');
+    const opVal = document.getElementById('opval');
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    function ensureLayer() {
+      if (!map.getSource(SOURCE_ID)) {
+        map.addSource(SOURCE_ID, {
+          type: 'image',
+          url: IMG_URL,
+          // temp 1x1 until user clicks three corners
+          coordinates: [
+            [-80.6460, 41.1095], // TL
+            [-80.6458, 41.1095], // TR
+            [-80.6458, 41.1093], // BR
+            [-80.6460, 41.1093]  // BL
+          ]
+        });
+      }
+      if (!map.getLayer(LAYER_ID)) {
+        map.addLayer({
+          id: LAYER_ID,
+          type: 'raster',
+          source: SOURCE_ID,
+          paint: {
+            'raster-opacity': parseFloat(opSlider.value),
+            'raster-fade-duration': 0
+          }
+        });
       }
     }
 
-    async function loadJSON(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(url); return r.json(); }
-    function bboxFromFeatures(fc){
-      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-      for(const f of fc.features||[]){ const g=f.geometry; if(!g) continue;
-        const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
-        for(const poly of polys) for(const ring of poly) for(const [x,y] of ring){
-          if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;
-        }}
-      return [[minX,minY],[maxX,maxY]];
+    function updateOpacity() {
+      opVal.textContent = parseFloat(opSlider.value).toFixed(2);
+      if (map.getLayer(LAYER_ID)) {
+        map.setPaintProperty(LAYER_ID, 'raster-opacity', parseFloat(opSlider.value));
+      }
     }
+    opSlider.addEventListener('input', updateOpacity);
 
-    /************ DRAW (your line) ************/
-    const Draw = new MapboxDraw({
-      displayControlsDefault:false,
-      controls:{ line_string:true, trash:true },
-      defaultMode:'simple_select',
-      styles:[
-        { id:'gl-draw-polygon-and-line-vertex-halo-active', type:'circle',
-          filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':7,'circle-color':'#fff'}},
-        { id:'gl-draw-polygon-and-line-vertex-active', type:'circle',
-          filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':5,'circle-color':'#d6001c'}},
-        { id:'gl-draw-line', type:'line',
-          filter:['all',['==','$type','LineString'],['!=','mode','static']],
-          paint:{'line-color':'#d6001c','line-width':3}},
-        { id:'gl-draw-line-static', type:'line',
-          filter:['all',['==','$type','LineString'],['==','mode','static']],
-          paint:{'line-color':'#d6001c','line-width':3}}
-      ]
-    });
-    map.addControl(Draw, 'top-right');
-
-    function startDraw(){
-      map.doubleClickZoom.disable();
-      Draw.changeMode('draw_line_string');
+    function startPlacing() {
+      ensureLayer();
+      placing = true;
+      clicks = [];
+      setStatus('Placing… Click TOP-LEFT, then TOP-RIGHT, then BOTTOM-RIGHT of the logo area.');
       map.getCanvas().style.cursor = 'crosshair';
     }
-    map.on('draw.modechange', (e)=>{
-      if (e.mode !== 'draw_line_string'){
-        map.doubleClickZoom.enable();
-        map.getCanvas().style.cursor = '';
-      }
+
+    function finishPlacement() {
+      if (clicks.length < 3) return;
+      const [TL, TR, BR] = clicks;
+      // compute BL = TL + (BR - TR)
+      const BL = [ TL[0] + (BR[0] - TR[0]), TL[1] + (BR[1] - TR[1]) ];
+
+      const coords = [TL, TR, BR, BL];
+      map.getSource(SOURCE_ID).setCoordinates(coords);
+      placing = false;
+      clicks = [];
+      map.getCanvas().style.cursor = '';
+      setStatus('Logo placed. Use opacity slider or Place / Re-place to adjust.');
+    }
+
+    map.on('click', (e) => {
+      if (!placing) return;
+      const pt = [e.lngLat.lng, e.lngLat.lat];
+      clicks.push(pt);
+      if (clicks.length === 1) setStatus('TL saved. Now click TOP-RIGHT.');
+      if (clicks.length === 2) setStatus('TR saved. Now click BOTTOM-RIGHT.');
+      if (clicks.length === 3) finishPlacement();
     });
 
-    // Densify the line to ground-locked dots (no drift)
-    function densify(line, spacing=2.8){
-      const coords=line.geometry.coordinates;
-      const R=6371000, toRad=d=>d*Math.PI/180;
-      const H=(a,b)=>{const [x1,y1]=a,[x2,y2]=b,dl=toRad(y2-y1),dn=toRad(x2-x1);
-        const s=Math.sin(dl/2)**2 + Math.cos(toRad(y1))*Math.cos(toRad(y2))*Math.sin(dn/2)**2;
-        return 2*R*Math.asin(Math.sqrt(s));};
-      const L=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
-      const pts=[]; let carry=0, iIdx=0;
-      for(let i=0;i<coords.length-1;i++){
-        const A=coords[i],B=coords[i+1], seg=H(A,B); let d=carry;
-        while(d<=seg){ const t=d/seg; pts.push({type:'Feature',properties:{i:iIdx++},geometry:{type:'Point',coordinates:L(A,B,t)}}); d+=spacing; }
-        carry=d-seg;
-      }
-      return {type:'FeatureCollection',features:pts};
-    }
-
-    function currentLines(){
-      const fc = Draw.getAll();
-      return fc.features.filter(f=>f.geometry?.type==='LineString');
-    }
-
-    function buildCorridorFC(lines){
-      if (!lines.length) return {type:'FeatureCollection',features:[]};
-      const merged = turf.lineMerge(turf.featureCollection(lines));
-      const parts = merged.type==='Feature' ? [merged] : merged.features;
-      const multi = turf.multiLineString(parts.map(f=>f.geometry.coordinates));
-      const buff = turf.buffer(multi, CORRIDOR_WIDTH_M, {units:'meters'});
-      return buff;
-    }
-
-    function syncFromDraw(){
-      const lines = currentLines();
-
-      // dots for the band
-      const ptsAll = { type:'FeatureCollection', features:[] };
-      for(const ln of lines) ptsAll.features.push(...densify(ln, 2.8).features);
-      const ptsSrc = map.getSource('route-points-src');
-      if (ptsSrc) ptsSrc.setData(ptsAll);
-
-      // (don’t auto-build corridor here; only when you click Apply Gaps)
-    }
-
     // Buttons
-    document.getElementById('btnDraw').onclick = startDraw;
-
-    document.getElementById('btnClearLine').onclick = ()=>{
-      Draw.deleteAll();
-      syncFromDraw();
-      // also clear corridor & building mask
-      map.getSource('y-corridor-src')?.setData({type:'FeatureCollection',features:[]});
-      map.setFilter('race-buildings-masked', null);
-      startDraw();
+    document.getElementById('btnPlace').onclick = () => startPlacing();
+    document.getElementById('btnHide').onclick  = () => {
+      if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', 'none');
+    };
+    document.getElementById('btnShow').onclick  = () => {
+      ensureLayer();
+      map.setLayoutProperty(LAYER_ID, 'visibility', 'visible');
+      updateOpacity();
+    };
+    document.getElementById('btnRemove').onclick = () => {
+      if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+      if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+      placing = false; clicks = [];
+      setStatus('Overlay removed. Click “Place / Re-place Logo” to add it again.');
     };
 
-    document.getElementById('btnSave').onclick = ()=>{
-      const lines = currentLines();
-      if (!lines.length){ alert('Draw your Y line first.'); return; }
-      const out = { type:'FeatureCollection', features: lines };
-      const a=document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
-      a.download = 'route.geojson';
-      a.click(); URL.revokeObjectURL(a.href);
-    };
-
-    document.getElementById('btnApplyGaps').onclick = ()=>{
-      const lines = currentLines();
-      if (!lines.length){ alert('Draw your Y line first.'); return; }
-      const corridor = buildCorridorFC(lines);
-      map.getSource('y-corridor-src')?.setData(corridor);
-      // hide buildings that fall inside the corridor polygon
-      const geom = corridor.geometry;
-      map.setFilter('race-buildings-masked', ['!', ['within', ['literal', geom]]]);
-    };
-
-    document.getElementById('btnClearGaps').onclick = ()=>{
-      map.getSource('y-corridor-src')?.setData({type:'FeatureCollection',features:[]});
-      map.setFilter('race-buildings-masked', null);
-    };
-
-    /************ SOURCES & LAYERS ************/
-    map.on('load', async () => {
-      hideLabelsAndBaseBuildings();
-
-      // Buildings (we’ll show them through a mask layer we control)
-      const bldg = await loadJSON(GEOJSON_URL);
-      map.addSource('race-buildings-src', { type:'geojson', data:bldg, generateId:true });
-
-      // Masked buildings layer (we’ll filter it when gaps applied)
-      map.addLayer({
-        id:'race-buildings-masked',
-        type:'fill-extrusion',
-        source:'race-buildings-src',
-        paint:{
-          'fill-extrusion-color':['coalesce',['get','fill'],'#d6001c'],
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96
-        }
-      });
-
-      // Route points & corridor sources (start empty)
-      map.addSource('route-points-src', { type:'geojson', data:{type:'FeatureCollection',features:[]} });
-      map.addSource('y-corridor-src',   { type:'geojson', data:{type:'FeatureCollection',features:[]} });
-
-      // Ground-locked band as circles (never drifts), BELOW buildings
-      const beforeId = 'race-buildings-masked';
-      map.addLayer({
-        id:'route-band',
-        type:'circle',
-        source:'route-points-src',
-        layout:{ 'circle-pitch-alignment':'map', 'circle-sort-key': 0 },
-        paint:{
-          'circle-color':'#D62D20',
-          'circle-radius':['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.0],
-          'circle-opacity':0.95,
-          'circle-pitch-scale':'map'
-        }
-      }, beforeId);
-
-      // Corridor outline/fill (only visible after you click Apply Gaps)
-      map.addLayer({
-        id:'y-corridor-outline',
-        type:'line',
-        source:'y-corridor-src',
-        layout:{ 'line-join':'round', 'line-cap':'round', 'line-pitch-alignment':'map' },
-        paint:{
-          'line-color':'#7A0E0E',
-          'line-width':['interpolate',['linear'],['zoom'],14,4,16,6,18,8],
-          'line-opacity':0.9
-        }
-      }, 'route-band');
-      map.addLayer({
-        id:'y-corridor-fill',
-        type:'fill',
-        source:'y-corridor-src',
-        paint:{ 'fill-color':'#D62D20', 'fill-opacity':0.08 }
-      }, 'y-corridor-outline');
-
-      // Fit nicely on load
-      const bounds = bboxFromFeatures(bldg);
-      map.fitBounds(bounds, {
-        padding:{ top:80, right:160, bottom:120, left:320 },
-        maxZoom:18, pitch:PITCH, bearing:BEARING, duration:500
-      });
-      map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:400}));
-
-      // keep dots in sync while you draw/edit
-      map.on('draw.create', syncFromDraw);
-      map.on('draw.update', syncFromDraw);
-      map.on('draw.delete', syncFromDraw);
+    map.on('load', () => {
+      // keep labels off for a clean look
+      hideLabels();
+      setStatus('Ready. Click “Place / Re-place Logo” and set 3 corners.');
+      updateOpacity();
     });
   </script>
 </body>
