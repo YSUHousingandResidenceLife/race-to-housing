@@ -1,17 +1,16 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Housing Map — Colors + Logo Overlay</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>YSU Housing — Map + Draggable Logo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
     :root { --card:#fff; --border:#e5e7eb; --shadow:0 10px 24px rgba(0,0,0,.12) }
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     #map{position:absolute; inset:0}
-
     .ui{
-      position:absolute; right:12px; top:12px; z-index:20; width:min(380px,92vw);
+      position:absolute; right:12px; top:12px; z-index:20; width:min(420px,94vw);
       background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
     }
     .ui header{padding:10px 12px; border-bottom:1px solid var(--border); font-weight:700}
@@ -19,7 +18,7 @@
     .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
     button{cursor:pointer; border:1px solid var(--border); background:#fff; padding:8px 10px; border-radius:8px; font-weight:600}
     button.primary{background:#d6001c; color:#fff; border-color:#c21a1a}
-    input[type="range"]{width:160px}
+    input[type="range"]{width:170px}
     .muted{color:#4b5563; font-size:13px}
     .hint{background:#f9fafb; border:1px dashed #e5e7eb; padding:8px 10px; border-radius:8px; font-size:13px}
   </style>
@@ -28,31 +27,43 @@
   <div id="map"></div>
 
   <section class="ui">
-    <header>Housing Overlay & Layers</header>
+    <header>YSU Housing — Overlay Controls</header>
     <div class="body">
       <div class="row">
         <button id="btnShowLogo" class="primary">Show Logo</button>
         <button id="btnHideLogo">Hide Logo</button>
-        <button id="btnPlaceLogo">Re-place Logo</button>
+        <button id="btnPlaceLogo">Re-place (3 clicks)</button>
+      </div>
+      <div class="row">
+        <button id="logoUnlock">Unlock (drag)</button>
+        <button id="logoLock">Lock</button>
+        <button id="logoSave">Save position</button>
+        <button id="logoReset">Reset</button>
+      </div>
+      <div class="row">
         <label class="muted">Opacity</label>
-        <input id="opacity" type="range" min="0" max="1" step="0.02" value="0.85">
-        <span id="opval" class="muted">0.85</span>
+        <input id="opacity" type="range" min="0" max="1" step="0.02" value="0.88" />
+        <span id="opval" class="muted">0.88</span>
       </div>
       <div id="status" class="hint">
-        Looking for <code>ysu_race_buildings_exact final.geojson</code> and <code>housing-overlay.png</code> in this folder…
+        Place <code>ysu_race_buildings_exact final.geojson</code> and <code>housing-overlay.png</code> in this folder.
       </div>
     </div>
   </section>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
-    // ---------- Map base ----------
+    // ------- MAP SETUP -------
     mapboxgl.accessToken =
       'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
+    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+    const GEOJSON_PATH = encodeURI('ysu_race_buildings_exact final.geojson'); // handle space in filename
+    const IMAGE_URL   = './housing-overlay.png';
+
     const map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
+      style: STYLE_ID,
       center: [-80.6458, 41.1090],
       zoom: 16.8,
       pitch: 60,
@@ -64,154 +75,206 @@
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     const statusEl = document.getElementById('status');
-    const opSlider = document.getElementById('opacity');
-    const opVal = document.getElementById('opval');
-    const setStatus = (t)=>statusEl.textContent=t;
+    const setStatus = t => statusEl.textContent = t;
 
-    // ---------- Helpers ----------
-    async function safeJSON(url){
-      const r = await fetch(url, {cache:'no-store'});
-      if (!r.ok) throw new Error(`Not found: ${url}`);
-      return r.json();
-    }
+    // Optional: hide labels for cleaner look behind overlay
     function hideLabels(){
       const layers = map.getStyle().layers || [];
       for (const lyr of layers){
         if (lyr.type==='symbol' || /label/i.test(lyr.id)){
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
+          try { map.setLayoutProperty(lyr.id,'visibility','none'); } catch(e){}
         }
       }
     }
     map.on('styledata', hideLabels);
 
-    // ---------- Buildings (with colors) ----------
-    const GEOJSON_PATH = encodeURI('ysu_race_buildings_exact final.geojson'); // filename with space handled
-
-    function addBuildingsLayer(fc){
+    // ------- BUILDINGS LAYER (with color fallback) -------
+    async function safeJSON(url){
+      const r = await fetch(url,{cache:'no-store'});
+      if(!r.ok) throw new Error(`Missing: ${url}`);
+      return r.json();
+    }
+    function addBuildings(fc){
       if (map.getSource('housing-src')) map.removeSource('housing-src');
       map.addSource('housing-src', { type:'geojson', data: fc });
 
-      // If a feature misses 'fill', fall back by name (tweak as you like)
       const colorByName =
         ['case',
-          ['==', ['downcase', ['get','name']], 'lyden'], '#FFD23F',
-          ['==', ['downcase', ['get','name']], 'cafaro'], '#FF9F1C',
-          ['==', ['downcase', ['get','name']], 'christman'], '#748B58',
-          ['==', ['downcase', ['get','name']], 'weller'], '#00E0E8',
-          ['==', ['downcase', ['get','name']], 'wick'], '#FF6B35',
-          /* default */ '#D62D20'
+          ['==',['downcase',['get','name']],'lyden'],     '#FFD23F',
+          ['==',['downcase',['get','name']],'cafaro'],     '#FF9F1C',
+          ['==',['downcase',['get','name']],'christman'],  '#748B58',
+          ['==',['downcase',['get','name']],'weller'],     '#00E0E8',
+          ['==',['downcase',['get','name']],'wick'],       '#FF6B35',
+          /* default */                                     '#D62D20'
         ];
-
-      const colorExpr = ['coalesce', ['get','fill'], colorByName];
+      const colorExpr = ['coalesce',['get','fill'], colorByName];
 
       if (map.getLayer('housing-3d')) map.removeLayer('housing-3d');
       map.addLayer({
-        id: 'housing-3d',
-        type: 'fill-extrusion',
-        source: 'housing-src',
-        paint: {
+        id:'housing-3d',
+        type:'fill-extrusion',
+        source:'housing-src',
+        paint:{
           'fill-extrusion-color': colorExpr,
-          'fill-extrusion-height': ['coalesce', ['get','height'], 22],
+          'fill-extrusion-height': ['coalesce',['get','height'],22],
           'fill-extrusion-opacity': 0.96
         }
       });
     }
 
-    // ---------- Logo overlay (image source) ----------
-    const IMAGE_URL = './housing-overlay.png'; // must exist next to this file
-    const IMAGE_SRC = 'housing-logo-src';
+    // ------- LOGO OVERLAY (image source + layer) -------
+    const IMAGE_SRC   = 'housing-logo-src';
     const IMAGE_LAYER = 'housing-logo-layer';
+    const LS_KEY      = 'housingLogoCoords';
 
-    // Default placement over the housing cluster. Adjust if needed.
+    // A sensible default box over housing cluster. Refine as needed.
     const DEFAULT_CORNERS = [
       [-80.6469, 41.1116], // TL
-      [-80.6440, 41.1116], // TR
-      [-80.6440, 41.1076], // BR
+      [-80.6441, 41.1116], // TR
+      [-80.6441, 41.1076], // BR
       [-80.6469, 41.1076]  // BL
     ];
 
-    function ensureLogoSource(){
-      if (map.getSource(IMAGE_SRC)) return;
-      map.addSource(IMAGE_SRC, { type:'image', url: IMAGE_URL, coordinates: DEFAULT_CORNERS });
-    }
-    function ensureLogoLayer(){
-      if (map.getLayer(IMAGE_LAYER)) return;
-      map.addLayer({
-        id: IMAGE_LAYER,
-        type: 'raster',
-        source: IMAGE_SRC,
-        paint: { 'raster-opacity': parseFloat(opSlider.value), 'raster-fade-duration': 0 }
-      });
-    }
-    function showLogo(){
-      ensureLogoSource(); ensureLogoLayer();
-      map.setLayoutProperty(IMAGE_LAYER, 'visibility', 'visible');
-      map.setPaintProperty(IMAGE_LAYER, 'raster-opacity', parseFloat(opSlider.value));
-    }
-    function hideLogo(){
-      if (map.getLayer(IMAGE_LAYER)) map.setLayoutProperty(IMAGE_LAYER, 'visibility', 'none');
-    }
-    function updateOpacity(){
+    const opSlider = document.getElementById('opacity');
+    const opVal    = document.getElementById('opval');
+    const updateOpacity = ()=>{
       opVal.textContent = parseFloat(opSlider.value).toFixed(2);
-      if (map.getLayer(IMAGE_LAYER)){
-        map.setPaintProperty(IMAGE_LAYER, 'raster-opacity', parseFloat(opSlider.value));
-      }
-    }
+      if (map.getLayer(IMAGE_LAYER))
+        map.setPaintProperty(IMAGE_LAYER,'raster-opacity', parseFloat(opSlider.value));
+    };
     opSlider.addEventListener('input', updateOpacity);
 
-    // Re-place by clicking TL, TR, BR
-    let placing = false, clicks = [];
+    function ensureLogo(){
+      if (!map.getSource(IMAGE_SRC)){
+        map.addSource(IMAGE_SRC, { type:'image', url: IMAGE_URL, coordinates: DEFAULT_CORNERS });
+        window.__logoCoords = DEFAULT_CORNERS.slice();
+      }
+      if (!map.getLayer(IMAGE_LAYER)){
+        map.addLayer({
+          id: IMAGE_LAYER, type:'raster', source: IMAGE_SRC,
+          paint:{ 'raster-opacity': parseFloat(opSlider.value), 'raster-fade-duration': 0 }
+        });
+      }
+    }
+    function showLogo(){ ensureLogo(); map.setLayoutProperty(IMAGE_LAYER,'visibility','visible'); updateOpacity(); }
+    function hideLogo(){ if(map.getLayer(IMAGE_LAYER)) map.setLayoutProperty(IMAGE_LAYER,'visibility','none'); }
+
+    // persist coords (we track our own copy because ImageSource lacks a getter)
+    function getLogoCoords(){ return window.__logoCoords || null; }
+    function setLogoCoords(coords){ window.__logoCoords = coords; map.getSource(IMAGE_SRC).setCoordinates(coords); }
+    function saveLogoCoords(){
+      const c = getLogoCoords();
+      if (c) localStorage.setItem(LS_KEY, JSON.stringify(c));
+    }
+    function loadLogoCoordsIfAny(){
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return false;
+      try{
+        const c = JSON.parse(raw);
+        if (Array.isArray(c) && c.length===4){ showLogo(); setLogoCoords(c); return true; }
+      }catch{}
+      return false;
+    }
+
+    // Re-place via three clicks (TL, TR, BR)
+    let placing=false, clicks=[];
     function startPlace(){
-      placing = true; clicks = [];
       showLogo();
+      placing=true; clicks=[];
       setStatus('Click TOP-LEFT, then TOP-RIGHT, then BOTTOM-RIGHT for the logo.');
       map.getCanvas().style.cursor='crosshair';
     }
     function finishPlace(){
-      if (clicks.length < 3) return;
-      const [TL, TR, BR] = clicks;
-      const BL = [ TL[0] + (BR[0]-TR[0]), TL[1] + (BR[1]-TR[1]) ];
-      map.getSource(IMAGE_SRC).setCoordinates([TL, TR, BR, BL]);
-      placing = false; clicks = [];
+      if (clicks.length<3) return;
+      const [TL,TR,BR]=clicks;
+      const BL=[ TL[0]+(BR[0]-TR[0]), TL[1]+(BR[1]-TR[1]) ];
+      setLogoCoords([TL,TR,BR,BL]);
+      placing=false; clicks=[];
       map.getCanvas().style.cursor='';
-      setStatus('Logo placed. Adjust opacity or re-place if needed.');
+      setStatus('Logo placed. Drag/lock or save position.');
     }
-    map.on('click', (e)=>{
+    map.on('click', e=>{
       if (!placing) return;
       clicks.push([e.lngLat.lng, e.lngLat.lat]);
-      if (clicks.length === 1) setStatus('TL saved. Click TOP-RIGHT.');
-      if (clicks.length === 2) setStatus('TR saved. Click BOTTOM-RIGHT.');
-      if (clicks.length === 3) finishPlace();
+      if (clicks.length===1) setStatus('TL saved. Click TOP-RIGHT.');
+      if (clicks.length===2) setStatus('TR saved. Click BOTTOM-RIGHT.');
+      if (clicks.length===3) finishPlace();
     });
 
-    // ---------- UI wiring ----------
+    // Drag to move (when unlocked)
+    let dragEnabled=false, dragging=false, last=null;
+    function enableDrag(){
+      showLogo();
+      dragEnabled=true; map.dragPan.disable();
+      map.getCanvas().style.cursor='grab';
+      setStatus('Drag anywhere on the map to move the logo. Click “Lock” when done.');
+    }
+    function disableDrag(){
+      dragEnabled=false; dragging=false; last=null;
+      map.dragPan.enable(); map.getCanvas().style.cursor='';
+      setStatus('Logo locked.');
+    }
+    function translateLogo(dxLng, dyLat){
+      const coords = getLogoCoords() || DEFAULT_CORNERS;
+      const moved = coords.map(([lng,lat])=>[lng+dxLng, lat+dyLat]);
+      setLogoCoords(moved);
+    }
+    map.on('mousedown', e=>{
+      if (!dragEnabled || !map.getSource(IMAGE_SRC)) return;
+      dragging=true; last=e.lngLat; map.getCanvas().style.cursor='grabbing';
+    });
+    map.on('mousemove', e=>{
+      if (!dragEnabled || !dragging || !last) return;
+      const dx=e.lngLat.lng-last.lng, dy=e.lngLat.lat-last.lat;
+      translateLogo(dx,dy); last=e.lngLat;
+    });
+    function endDrag(){
+      if (!dragEnabled) return;
+      dragging=false; last=null; map.getCanvas().style.cursor='grab';
+    }
+    map.on('mouseup', endDrag);
+    map.on('mouseout', endDrag);
+
+    // Buttons
     document.getElementById('btnShowLogo').onclick  = showLogo;
     document.getElementById('btnHideLogo').onclick  = hideLogo;
     document.getElementById('btnPlaceLogo').onclick = startPlace;
+    document.getElementById('logoUnlock').onclick   = enableDrag;
+    document.getElementById('logoLock').onclick     = disableDrag;
+    document.getElementById('logoSave').onclick     = ()=>{ saveLogoCoords(); alert('Logo position saved.'); };
+    document.getElementById('logoReset').onclick    = ()=>{
+      localStorage.removeItem(LS_KEY);
+      showLogo(); setLogoCoords(DEFAULT_CORNERS);
+      alert('Logo position reset.');
+    };
 
-    // ---------- Boot ----------
-    map.on('load', async () => {
+    // ------- BOOT -------
+    map.on('load', async ()=>{
       hideLabels();
 
-      // Try to load buildings
+      // buildings
       try {
         const fc = await safeJSON(GEOJSON_PATH);
-        addBuildingsLayer(fc);
-        setStatus('Buildings loaded with colors. If some are grey, add a "fill" property in the GeoJSON or edit the fallback list.');
-      } catch (e) {
-        setStatus('Could not load buildings GeoJSON. Make sure the file is named exactly: “ysu_race_buildings_exact final.geojson” and is in this folder.');
+        addBuildings(fc);
+        setStatus('Buildings loaded. Overlay ready.');
+      } catch(e){
+        setStatus('Could not load buildings GeoJSON. Check file name/path.');
       }
 
-      // Try the logo image (show by default if it exists)
-      try {
-        const r = await fetch(IMAGE_URL, {cache:'no-store'});
+      // logo image exists?
+      try{
+        const r = await fetch(IMAGE_URL,{cache:'no-store'});
         if (!r.ok) throw 0;
-        showLogo(); // image found → display
-      } catch (e) {
-        setStatus('Logo not found. Put “housing-overlay.png” next to this HTML. Then click “Show Logo”.');
+        ensureLogo();
+        // if saved pos exists, use it; else default and save
+        if (!loadLogoCoordsIfAny()){
+          setLogoCoords(DEFAULT_CORNERS);
+          saveLogoCoords();
+        }
+        updateOpacity();
+      }catch(e){
+        setStatus('Logo not found. Add housing-overlay.png next to this file, then click “Show Logo”.');
       }
-
-      updateOpacity();
     });
   </script>
 </body>
