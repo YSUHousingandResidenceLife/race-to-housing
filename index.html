@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>YSU Housing — Map + Draggable Logo</title>
+  <title>YSU Housing — Map + Draggable Logo (Framed on Load)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
@@ -10,7 +10,7 @@
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     #map{position:absolute; inset:0}
     .ui{
-      position:absolute; right:12px; top:12px; z-index:20; width:min(420px,94vw);
+      position:absolute; right:12px; top:12px; z-index:20; width:min(440px,94vw);
       background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
     }
     .ui header{padding:10px 12px; border-bottom:1px solid var(--border); font-weight:700}
@@ -33,6 +33,7 @@
         <button id="btnShowLogo" class="primary">Show Logo</button>
         <button id="btnHideLogo">Hide Logo</button>
         <button id="btnPlaceLogo">Re-place (3 clicks)</button>
+        <button id="btnFocusLogo">Focus Logo</button>
       </div>
       <div class="row">
         <button id="logoUnlock">Unlock (drag)</button>
@@ -57,8 +58,8 @@
     mapboxgl.accessToken =
       'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_PATH = encodeURI('ysu_race_buildings_exact final.geojson'); // handle space in filename
+    const STYLE_ID    = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // handles space in filename
     const IMAGE_URL   = './housing-overlay.png';
 
     const map = new mapboxgl.Map({
@@ -77,7 +78,7 @@
     const statusEl = document.getElementById('status');
     const setStatus = t => statusEl.textContent = t;
 
-    // Optional: hide labels for cleaner look behind overlay
+    // Optional: hide labels for cleaner look
     function hideLabels(){
       const layers = map.getStyle().layers || [];
       for (const lyr of layers){
@@ -127,7 +128,7 @@
     const IMAGE_LAYER = 'housing-logo-layer';
     const LS_KEY      = 'housingLogoCoords';
 
-    // A sensible default box over housing cluster. Refine as needed.
+    // Default box over housing cluster
     const DEFAULT_CORNERS = [
       [-80.6469, 41.1116], // TL
       [-80.6441, 41.1116], // TR
@@ -159,7 +160,7 @@
     function showLogo(){ ensureLogo(); map.setLayoutProperty(IMAGE_LAYER,'visibility','visible'); updateOpacity(); }
     function hideLogo(){ if(map.getLayer(IMAGE_LAYER)) map.setLayoutProperty(IMAGE_LAYER,'visibility','none'); }
 
-    // persist coords (we track our own copy because ImageSource lacks a getter)
+    // Persist coords
     function getLogoCoords(){ return window.__logoCoords || null; }
     function setLogoCoords(coords){ window.__logoCoords = coords; map.getSource(IMAGE_SRC).setCoordinates(coords); }
     function saveLogoCoords(){
@@ -176,7 +177,7 @@
       return false;
     }
 
-    // Re-place via three clicks (TL, TR, BR)
+    // Re-place via 3 clicks (TL, TR, BR)
     let placing=false, clicks=[];
     function startPlace(){
       showLogo();
@@ -192,6 +193,7 @@
       placing=false; clicks=[];
       map.getCanvas().style.cursor='';
       setStatus('Logo placed. Drag/lock or save position.');
+      flyToLogo(false);
     }
     map.on('click', e=>{
       if (!placing) return;
@@ -235,16 +237,40 @@
     map.on('mouseup', endDrag);
     map.on('mouseout', endDrag);
 
+    // ---- Focus the camera on the logo with your preferred angle ----
+    function flyToLogo(initial = true) {
+      const coords = getLogoCoords() || DEFAULT_CORNERS;
+      const lons = coords.map(c => c[0]), lats = coords.map(c => c[1]);
+      const sw = [Math.min(...lons), Math.min(...lats)];
+      const ne = [Math.max(...lons), Math.max(...lats)];
+
+      map.fitBounds([sw, ne], {
+        padding: { top: 80, right: 80, bottom: 160, left: 120 },
+        duration: initial ? 0 : 900,
+        maxZoom: 18
+      });
+      map.easeTo({
+        pitch: 60,
+        bearing: -133.6,
+        duration: initial ? 0 : 900
+      });
+      map.once('moveend', () =>
+        map.easeTo({ zoom: Math.min(map.getZoom() + 0.4, 18), duration: initial ? 0 : 600 })
+      );
+    }
+
     // Buttons
     document.getElementById('btnShowLogo').onclick  = showLogo;
     document.getElementById('btnHideLogo').onclick  = hideLogo;
     document.getElementById('btnPlaceLogo').onclick = startPlace;
+    document.getElementById('btnFocusLogo').onclick = () => flyToLogo(false);
     document.getElementById('logoUnlock').onclick   = enableDrag;
     document.getElementById('logoLock').onclick     = disableDrag;
     document.getElementById('logoSave').onclick     = ()=>{ saveLogoCoords(); alert('Logo position saved.'); };
     document.getElementById('logoReset').onclick    = ()=>{
       localStorage.removeItem(LS_KEY);
       showLogo(); setLogoCoords(DEFAULT_CORNERS);
+      flyToLogo(false);
       alert('Logo position reset.');
     };
 
@@ -254,7 +280,7 @@
 
       // buildings
       try {
-        const fc = await safeJSON(GEOJSON_PATH);
+        const fc = await safeJSON(GEOJSON_URL);
         addBuildings(fc);
         setStatus('Buildings loaded. Overlay ready.');
       } catch(e){
@@ -272,6 +298,8 @@
           saveLogoCoords();
         }
         updateOpacity();
+        // >>> Frame the logo at your angle on first load
+        flyToLogo(true);
       }catch(e){
         setStatus('Logo not found. Add housing-overlay.png next to this file, then click “Show Logo”.');
       }
