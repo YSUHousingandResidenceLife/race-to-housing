@@ -8,180 +8,194 @@
   <style>
     html,body{height:100%;margin:0}
     #map{position:absolute;inset:0}
-    /* subtle UI for errors */
     .toast{
       position:absolute;left:12px;bottom:12px;z-index:10;
       background:#111827;color:#fff;border-radius:10px;padding:8px 12px;
-      font:13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      box-shadow:0 10px 24px rgba(0,0,0,.18);max-width:min(560px,92vw)
+      font:13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      box-shadow:0 10px 24px rgba(0,0,0,.18);max-width:min(560px,92vw);display:none
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="toast" class="toast" style="display:none;"></div>
+  <div id="toast" class="toast"></div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     // ========= CONFIG =========
-    mapboxgl.accessToken =
-      'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-    // Your saved exact footprints file (already in the repo)
-    const BUILDINGS_GEOJSON_URL = 'ysu_race_buildings_exact.geojson';
+    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+    const BUILDINGS_GEOJSON_URL = 'ysu_race_buildings_exact.geojson'; // ensure this exists in repo root
 
-    // Logo image in your repo (transparent PNG). Replace with your actual filename if different.
-    const LOGO_URL   = 'ysu_housing_logo.png';   // e.g. 'ysu_housing_logo.png'
-    const LOGO_SIZE  = 0.0009; // roughly controls icon size via "icon-size" (tweak if needed)
-    const LOGO_POINT = [-80.6459, 41.1096]; // where the logo sits on the map (tweak if needed)
+    // Opening view you liked
+    const VIEW = { center:[-80.644685,41.107524], zoom:17.2, pitch:60, bearing:-133.6, minZoom:15, maxZoom:20 };
 
-    // Default opening view (the oblique angle you liked)
-    const VIEW = {
-      center: [-80.644685, 41.107524],
-      zoom:   17.2,
-      pitch:  60,
-      bearing:-133.6,
-      minZoom:15,
-      maxZoom:20
+    // Map logo config (PNG with transparent background in your repo). If not found, we fall back to an HTML marker.
+    const LOGO_URL   = 'ysu_housing_logo.png'; // put your actual filename here
+    const LOGO_COORD = [-80.6459, 41.1096];
+    const LOGO_PX    = 160; // pixel width of HTML fallback
+
+    // Color mapping by building name (lowercased includes)
+    const COLOR_BY_NAME = {
+      lyden:           '#FFD94A',
+      cafaro:          '#FF8A00',
+      christman:       '#808000',
+      weller:          '#00FFFF',
+      'wick house':    '#B67BFF',
+      wick:            '#B67BFF',
+      kilcawley:       '#00A651',
+      courtyards:      '#FF3D71',
+      'university courtyards': '#FF3D71'
     };
 
-    // ========= MAP =========
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
-      center: VIEW.center,
-      zoom:   VIEW.zoom,
-      pitch:  VIEW.pitch,
-      bearing:VIEW.bearing,
-      minZoom: VIEW.minZoom,
-      maxZoom: VIEW.maxZoom
-    });
+    const map = new mapboxgl.Map({ container:'map', style:STYLE_ID, ...VIEW });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    function toast(txt){
-      const el = document.getElementById('toast');
-      el.textContent = txt;
-      el.style.display = 'block';
-      clearTimeout(toast._t);
-      toast._t = setTimeout(()=>{ el.style.display='none'; }, 4000);
-    }
+    function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>el.style.display='none', 4000); }
 
-    // Hide default text labels so only our building labels show
+    // Hide base labels so our own labels are clear
     function hideBaseLabels(){
       const layers = map.getStyle().layers || [];
       for (const l of layers){
         if (l.type === 'symbol' || /label/i.test(l.id)){
-          try{ map.setLayoutProperty(l.id, 'visibility', 'none'); }catch(e){}
+          try{ map.setLayoutProperty(l.id,'visibility','none'); }catch(e){}
         }
       }
     }
-
     map.on('styledata', hideBaseLabels);
+
+    // Build a Mapbox expression that maps names to colors, with fallback to feature's "fill" or a default
+    function colorExpression(){
+      const toLower = ['downcase', ['to-string', ['coalesce', ['get','name'], '']]];
+      const cases = ['case'];
+      const entries = Object.entries(COLOR_BY_NAME);
+      for (const [needle, hex] of entries){
+        cases.push(['in', needle, toLower], hex);
+      }
+      // default
+      cases.push(['coalesce', ['get','fill'], '#d32f2f']);
+      return cases;
+    }
+
+    // Try to add the PNG as a style image; if it fails, add an HTML marker
+    function addLogo(){
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try{
+          if (!map.hasImage('ysu-logo')) map.addImage('ysu-logo', img, { sdf:false });
+          map.addSource('ysu-logo-src', { type:'geojson',
+            data:{ type:'FeatureCollection', features:[{ type:'Feature', properties:{}, geometry:{ type:'Point', coordinates: LOGO_COORD } }] }
+          });
+          map.addLayer({
+            id:'ysu-logo-layer', type:'symbol', source:'ysu-logo-src',
+            layout:{ 'icon-image':'ysu-logo', 'icon-size': 1, 'icon-allow-overlap': true, 'icon-anchor':'center' }
+          });
+        }catch(e){ /* fallback to HTML marker */ addHtmlLogo(); }
+      };
+      img.onerror = addHtmlLogo;
+      img.src = LOGO_URL;
+    }
+    function addHtmlLogo(){
+      const el = document.createElement('img');
+      el.src = LOGO_URL;
+      el.style.width = LOGO_PX+'px';
+      el.style.userSelect = 'none';
+      el.style.pointerEvents = 'none';
+      new mapboxgl.Marker({ element: el, anchor:'center' }).setLngLat(LOGO_COORD).addTo(map);
+    }
 
     map.on('load', async () => {
       hideBaseLabels();
 
-      // ---- 1) Load saved footprints ----
+      // 1) Load the saved polygons
       let data;
       try{
         const r = await fetch(BUILDINGS_GEOJSON_URL, { cache:'no-store' });
-        if(!r.ok) throw new Error('not found');
+        if(!r.ok) throw 0;
         data = await r.json();
       }catch(e){
-        toast('Could not load "ysu_race_buildings_exact.geojson". Make sure it is in the repo root.');
+        toast('Could not load "ysu_race_buildings_exact.geojson" — check filename/path.');
         return;
       }
 
-      // Ensure minimal properties exist (height, fill)
+      // 2) Ensure properties present (height + name)
+      let count = 0;
       for (const f of (data.features||[])){
+        if (!f || !f.geometry) continue;
         if (!f.properties) f.properties = {};
-        if (f.properties.type !== 'building') f.properties.type = 'building';
+        if (!f.properties.name) {
+          // best-effort: preserve whatever label source you used
+          f.properties.name = f.properties.key || f.properties.label || 'Building';
+        }
         if (typeof f.properties.height !== 'number') f.properties.height = 22;
-        if (!f.properties.fill) f.properties.fill = '#d32f2f';
+        f.properties.type = 'building';
+        count++;
       }
+      if (!count){ toast('Footprints file loaded but contains 0 polygon features.'); }
 
-      // ---- 2) Source + layers for 3D buildings ----
+      // 3) Source
+      if (map.getSource('race-buildings')) map.removeSource('race-buildings');
       map.addSource('race-buildings', { type:'geojson', data });
 
-      // thin outline under the extrusion (helps edges read)
+      // 4) Fill (flat) underlay to guarantee color on ground and roofs
+      if (map.getLayer('race-buildings-fill')) map.removeLayer('race-buildings-fill');
       map.addLayer({
-        id:'race-buildings-outline',
-        type:'line',
+        id:'race-buildings-fill',
+        type:'fill',
         source:'race-buildings',
         filter:['==',['get','type'],'building'],
-        paint:{
-          'line-color':'#263238',
-          'line-width': 0.6,
-          'line-opacity': 0.35
-        }
+        paint:{ 'fill-color': colorExpression(), 'fill-opacity': 0.98 }
       });
 
+      // 5) 3D extrusion
+      if (map.getLayer('race-buildings-3d')) map.removeLayer('race-buildings-3d');
       map.addLayer({
         id:'race-buildings-3d',
         type:'fill-extrusion',
         source:'race-buildings',
         filter:['==',['get','type'],'building'],
         paint:{
-          'fill-extrusion-color': ['get','fill'],
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity': 0.96
+          'fill-extrusion-color': colorExpression(),
+          'fill-extrusion-height': ['coalesce',['get','height'],22],
+          'fill-extrusion-opacity': 0.96,
+          'fill-extrusion-vertical-gradient': false
         }
       });
 
-      // ---- 3) Labels for each building (uses feature centroid automatically) ----
+      // 6) Labels (drawn AFTER 3D so they appear on top)
+      if (map.getLayer('race-buildings-labels')) map.removeLayer('race-buildings-labels');
       map.addLayer({
         id:'race-buildings-labels',
         type:'symbol',
         source:'race-buildings',
         filter:['==',['get','type'],'building'],
         layout:{
-          'text-field': ['get','name'],
+          'text-field': ['coalesce',['get','label'], ['get','name']],
           'text-size': 13,
-          'text-allow-overlap': false,
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
           'text-anchor': 'center',
           'text-justify':'center',
           'text-font': ['Open Sans Semibold','Arial Unicode MS Bold'],
-          'symbol-sort-key': 1
+          'symbol-placement': 'point'
         },
         paint:{
           'text-color': '#111',
           'text-halo-color': '#ffffff',
-          'text-halo-width': 1.5,
-          'text-opacity': 0.95
+          'text-halo-width': 1.6,
+          'text-opacity': 0.98
         }
       });
 
-      // ---- 4) Add the YSU Housing logo as a symbol point ----
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          // register image and add a point for it
-          if (!map.hasImage('ysu-logo')) map.addImage('ysu-logo', img, { sdf:false });
-          map.addSource('ysu-logo-src', {
-            type:'geojson',
-            data: {
-              type:'FeatureCollection',
-              features:[{ type:'Feature', properties:{}, geometry:{ type:'Point', coordinates: LOGO_POINT } }]
-            }
-          });
-          map.addLayer({
-            id:'ysu-logo-layer',
-            type:'symbol',
-            source:'ysu-logo-src',
-            layout:{
-              'icon-image': 'ysu-logo',
-              'icon-size': LOGO_SIZE,
-              'icon-allow-overlap': true,
-              'icon-anchor': 'center'
-            }
-          });
-        };
-        img.onerror = () => { /* optional fallback */ console.warn('Logo image not found at', LOGO_URL); };
-        img.src = LOGO_URL; // must exist in the repo (same folder as index.html)
-      } catch(err){ console.warn(err); }
+      // 7) Logo
+      addLogo();
 
-      toast('Loaded buildings & labels. (Logo appears if the image file exists.)');
+      // 8) Return to your favored oblique view (in case style load shifted camera)
+      map.easeTo({ ...VIEW, duration: 900 });
+
+      toast('Buildings colored, labels on, logo added. If logo missing, confirm image filename and path.');
     });
   </script>
 </body>
