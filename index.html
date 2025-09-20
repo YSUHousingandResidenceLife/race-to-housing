@@ -1,144 +1,194 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Race to Housing — Exact Building Shapes</title>
-  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+  <meta charset="utf-8" />
+  <title>Race to Housing — Auto-capture 7/7 Building Shapes</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
-    html, body { height:100%; margin:0; }
-    #map { position:absolute; inset:0; }
-    .toolbar{position:absolute;top:12px;left:12px;z-index:10;display:flex;gap:8px}
-    .btn{background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px 12px;font:14px system-ui;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+    html,body{height:100%;margin:0}
+    #map{position:absolute;inset:0}
+    .ui{
+      position:absolute;right:12px;top:12px;z-index:10;background:#fff;border:1px solid #e5e7eb;
+      border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.12);padding:10px;min-width:320px
+    }
+    .ui header{font:700 15px system-ui;margin-bottom:6px}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    button{cursor:pointer;background:#111827;color:#fff;border:1px solid #111827;border-radius:8px;padding:8px 12px;font:600 14px system-ui}
+    button.ghost{background:#fff;color:#111827}
+    .small{font:12px system-ui;color:#374151;margin-top:6px}
+    .list{display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:6px;font:13px system-ui}
+    .ok{color:#059669;font-weight:700}
+    .miss{color:#b91c1c;font-weight:700}
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="toolbar">
-    <button id="downloadBtn" class="btn">Download buildings (.geojson)</button>
+
+  <div class="ui">
+    <header>Auto-capture exact footprints (outline only)</header>
+    <div class="row">
+      <button id="startBtn">Start (0/7)</button>
+      <button id="downloadBtn" class="ghost">Download .geojson</button>
+    </div>
+    <div id="status" class="small">Press <b>Start</b> — camera will fly to each building and capture its outline.</div>
+    <div id="metrics" class="small"></div>
+    <div id="list" class="list"></div>
   </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
-    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+  mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-    const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const campusBounds = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
+  const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+  const niceView = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
+  const map = new mapboxgl.Map({ container:'map', style:STYLE, ...niceView, minZoom:15, maxZoom:19 });
 
-    // Buildings to capture (added University Courtyards)
-    const TARGETS = [
-      {name:'Lyden House',              color:'#FFD94A', coord:[-80.647458, 41.111143]},
-      {name:'Cafaro House',             color:'#FF8A00', coord:[-80.6461376731338, 41.11100745921387]},
-      {name:'Christman Dining',         color:'#808000', coord:[-80.64724052183561, 41.110525670257104]},
-      {name:'Weller House',             color:'#00FFFF', coord:[-80.64483333333334, 41.10769444444445]},
-      {name:'Wick House (Art)',         color:'#B67BFF', coord:[-80.64426251711262, 41.107489184836176]},
-      {name:'Kilcawley House',          color:'#00A651', coord:[-80.64731987291158, 41.10673909169142]},
-      {name:'University Courtyards',    color:'#FF3D71', coord:[-80.64555, 41.10690]} // NEW
-    ];
+  // 7 targets (includes University Courtyards)
+  const TARGETS = [
+    {key:'lyden', name:'Lyden House',            color:'#FFD94A', coord:[-80.647458, 41.111143]},
+    {key:'cafaro', name:'Cafaro House',          color:'#FF8A00', coord:[-80.6461376731338, 41.11100745921387]},
+    {key:'christman', name:'Christman Dining',   color:'#808000', coord:[-80.64724052183561, 41.110525670257104]},
+    {key:'weller', name:'Weller House',          color:'#00FFFF', coord:[-80.64483333333334, 41.10769444444445]},
+    {key:'wick', name:'Wick House (Art)',        color:'#B67BFF', coord:[-80.64426251711262, 41.107489184836176]},
+    {key:'kilcawley', name:'Kilcawley House',    color:'#00A651', coord:[-80.64731987291158, 41.10673909169142]},
+    {key:'courtyards', name:'University Courtyards', color:'#FF3D71', coord:[-80.64555, 41.10690]}
+  ];
 
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: STYLE,
-      center: [-80.644685, 41.107524],
-      zoom: 17.2,
-      pitch: 60,
-      bearing: -133.6,
-      maxBounds: campusBounds,
-      minZoom: 15,
-      maxZoom: 19
+  // UI wiring
+  const startBtn = document.getElementById('startBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const statusEl = document.getElementById('status');
+  const metricsEl = document.getElementById('metrics');
+  const listEl = document.getElementById('list');
+
+  const board = { type:'FeatureCollection', features:[] };
+  const captured = {}; // key -> true
+
+  function renderList(){
+    listEl.innerHTML='';
+    TARGETS.forEach(t=>{
+      const l=document.createElement('div'); l.textContent=t.name;
+      const r=document.createElement('div'); r.textContent=captured[t.key]?'✔':'—';
+      r.className=captured[t.key]?'ok':'miss';
+      listEl.appendChild(l); listEl.appendChild(r);
     });
+    const done = Object.keys(captured).length;
+    startBtn.textContent = `Start (${done}/7)`;
+  }
 
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+  function setStatus(msg){ statusEl.innerHTML = msg; }
+  function metersPerLon(lat){ return 111320 * Math.cos(lat*Math.PI/180); }
+  function metersPerLat(){ return 111320; }
+  function polygonMetrics(coords){
+    const lats=coords.map(c=>c[1]), lngs=coords.map(c=>c[0]);
+    const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+    const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+    const midLat=(minLat+maxLat)/2;
+    const width  = (maxLng-minLng)*metersPerLon(midLat);
+    const length = (maxLat-minLat)*metersPerLat();
+    return { width_m:Math.round(width), length_m:Math.round(length) };
+  }
+  function showMetrics(m){ metricsEl.textContent = `Width: ${m.width_m} m · Length: ${m.length_m} m`; }
 
-    // Utility: download JSON
-    function downloadJSON(obj, filename) {
-      const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-      URL.revokeObjectURL(url);
+  function waitSettle(ms=900){
+    return new Promise(res=>{
+      let done=false; const finish=()=>{ if(!done){done=true; res();} };
+      const t=setTimeout(finish, ms);
+      map.once('moveend', ()=>{ clearTimeout(t); finish(); });
+      map.once('idle', ()=>{ clearTimeout(t); finish(); });
+    });
+  }
+  async function flyTo(center){ map.easeTo({center, zoom:19.2, pitch:0, bearing:0, duration:900}); await waitSettle(); }
+
+  // robust footprint finder (tries multiple bbox paddings)
+  function getFootprintAt(pointPx){
+    const pads=[14,18,22,26,32];
+    for(const p of pads){
+      const bbox=[[pointPx.x-p,pointPx.y-p],[pointPx.x+p,pointPx.y+p]];
+      let feats=map.queryRenderedFeatures(bbox);
+      feats=feats.filter(f=>{
+        const sl=f.sourceLayer||f['source-layer']||'';
+        const lid=(f.layer&&f.layer.id)||'';
+        const cls=(f.properties&&(f.properties.class||f.properties.type||f.properties.kind))||'';
+        return (f.geometry && (f.geometry.type==='Polygon'||f.geometry.type==='MultiPolygon')) &&
+               (/building/i.test(sl)||/building/i.test(lid)||/building/i.test(String(cls)));
+      });
+      if(!feats.length) continue;
+      feats.sort((a,b)=>{ // crude area proxy by ring length
+        const al = (a.geometry.type==='Polygon'?a.geometry.coordinates[0].length:a.geometry.coordinates[0][0].length);
+        const bl = (b.geometry.type==='Polygon'?b.geometry.coordinates[0].length:b.geometry.coordinates[0][0].length);
+        return bl-al;
+      });
+      return feats[0].geometry;
     }
+    return null;
+  }
 
-    // Find a building polygon near a screen point (tries a few window sizes)
-    function getFootprintAt(pointPx){
-      const paddings = [14, 18, 22, 26];
-      for (const padding of paddings) {
-        const bbox = [
-          [pointPx.x - padding, pointPx.y - padding],
-          [pointPx.x + padding, pointPx.y + padding]
-        ];
-        const feats = map.queryRenderedFeatures(bbox);
-        // pick the largest polygon from any layer that looks like a building
-        let best = null, bestArea = 0;
-        for (const f of feats) {
-          const isBuilding =
-            (f.sourceLayer && /building/i.test(f.sourceLayer)) ||
-            (f.layer && /building/i.test(f.layer.id)) ||
-            (/building/i.test(String(f.properties?.class||f.properties?.type||f.properties?.kind)));
-          if (!isBuilding || !f.geometry) continue;
+  async function captureOne(t){
+    setStatus(`Flying to <b>${t.name}</b>…`);
+    await flyTo(t.coord);
+    const pt = map.project(t.coord);
+    const geom = getFootprintAt(pt);
+    if(!geom){ setStatus(`Couldn’t find a footprint for <b>${t.name}</b> (skipping).`); return false; }
 
-          const geom = f.geometry;
-          const rings = geom.type === 'Polygon'
-            ? [geom.coordinates[0]]
-            : geom.type === 'MultiPolygon'
-              ? geom.coordinates.map(p=>p[0])
-              : null;
-          if (!rings) continue;
-
-          // crude area proxy
-          let size = 0;
-          for (const ring of rings) size += ring.length;
-          if (size > bestArea) { bestArea = size; best = f; }
-        }
-        if (best) return best.geometry;
-      }
-      return null;
+    // ensure closed ring for metrics
+    const ring = geom.type==='Polygon' ? geom.coordinates[0] : geom.coordinates[0][0];
+    if(ring.length){
+      const a=ring[0], b=ring[ring.length-1];
+      if(a[0]!==b[0] || a[1]!==b[1]) ring.push(a);
     }
+    const m = polygonMetrics(ring); showMetrics(m);
 
-    map.on('load', async () => {
-      // Hide labels
-      for (const lyr of (map.getStyle().layers||[])) {
-        if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-        }
-      }
+    board.features.push({ type:'Feature', properties:{type:'building', name:t.name, fill:t.color, height:22}, geometry:geom });
+    captured[t.key]=true;
+    renderList();
 
-      // Prepare empty collection
-      const board = { type:'FeatureCollection', features: [] };
-
-      // Keep view fixed so pixel windows are consistent
-      map.jumpTo({zoom: 17.2, pitch: 60, bearing: -133.6});
-
-      // For each target, query the visible building footprint and store it
-      for (const t of TARGETS) {
-        const pt = map.project(t.coord);
-        const geom = getFootprintAt(pt);    // tries multiple paddings
-        if (!geom) { console.warn('No footprint found for', t.name); continue; }
-        board.features.push({
-          type:'Feature',
-          properties:{ type:'building', name:t.name, fill:t.color, height:22 },
-          geometry: geom
-        });
-      }
-
-      // Add source & layer for preview
-      map.addSource('race', { type:'geojson', data: board });
+    // live preview
+    if(!map.getSource('race')) map.addSource('race',{type:'geojson',data:board});
+    else map.getSource('race').setData(board);
+    if(!map.getLayer('race-extrude')){
       map.addLayer({
-        id:'race-buildings',
-        type:'fill-extrusion',
-        source:'race',
-        filter:['==', ['get','type'], 'building'],
+        id:'race-extrude', type:'fill-extrusion', source:'race',
+        filter:['==',['get','type'],'building'],
         paint:{
-          'fill-extrusion-color': ['get','fill'],
-          'fill-extrusion-height': ['coalesce', ['get','height'], 22],
-          'fill-extrusion-opacity': 0.96
+          'fill-extrusion-color':['get','fill'],
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96
         }
       });
+    }
+    setStatus(`Captured <b>${t.name}</b>.`);
+    return true;
+  }
 
-      // Download button
-      document.getElementById('downloadBtn').onclick = () => {
-        downloadJSON(board, 'ysu_race_buildings_exact.geojson');
-      };
+  async function runAll(){
+    startBtn.disabled=true;
+    for(const t of TARGETS){ await captureOne(t); }
+    // return to nice oblique view
+    map.easeTo({...niceView, duration:1000});
+    setStatus('Done. Click “Download .geojson” to save.');
+    startBtn.disabled=false;
+  }
+
+  function downloadJSON(obj, filename){
+    const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+  }
+
+  startBtn.onclick = runAll;
+  downloadBtn.onclick = ()=>downloadJSON(board,'ysu_race_buildings_exact.geojson');
+
+  map.on('load', ()=>{
+    // hide labels for clarity
+    (map.getStyle().layers||[]).forEach(lyr=>{
+      if(lyr.type==='symbol' || /label/i.test(lyr.id)){
+        try{ map.setLayoutProperty(lyr.id,'visibility','none'); }catch(e){}
+      }
     });
+    renderList();
+  });
   </script>
 </body>
 </html>
