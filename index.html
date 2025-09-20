@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>YSU Housing — Map + Logo + Route Editor</title>
+  <title>YSU Housing — Capture Courtyards (merge into GeoJSON with color)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Mapbox -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
@@ -20,7 +20,7 @@
     .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
     button{cursor:pointer; border:1px solid var(--border); background:#fff; padding:8px 10px; border-radius:8px; font-weight:600}
     button.primary{background:#d6001c; color:#fff; border-color:#c21a1a}
-    input[type="range"]{width:170px}
+    input[type="text"]{padding:8px 10px; border:1px solid var(--border); border-radius:8px; width:220px}
     .muted{color:#4b5563; font-size:13px}
     .hint{background:#f9fafb; border:1px dashed #e5e7eb; padding:8px 10px; border-radius:8px; font-size:13px}
   </style>
@@ -29,44 +29,30 @@
   <div id="map"></div>
 
   <section class="ui">
-    <header>YSU Housing — Overlay, Camera & Route</header>
+    <header>Capture University Courtyards → merge into buildings file</header>
     <div class="body">
       <div class="row">
-        <button id="btnShowLogo" class="primary">Show Logo</button>
-        <button id="btnHideLogo">Hide Logo</button>
-        <button id="btnPlaceLogo">Re-place (3 clicks)</button>
-        <button id="btnFocusLogo">Focus Logo</button>
+        <button id="btnStart" class="primary">Draw Courtyards Footprint</button>
+        <button id="btnFinish">Finish Drawing</button>
+        <button id="btnClear">Clear Draft</button>
       </div>
 
       <div class="row">
-        <button id="logoUnlock">Unlock Logo (drag)</button>
-        <button id="logoLock">Lock Logo</button>
-        <button id="logoSave">Save Logo Position</button>
-        <button id="logoReset">Reset Logo</button>
+        <label class="muted">Name</label>
+        <input id="nameInput" type="text" value="University Courtyards" />
+        <label class="muted">Color</label>
+        <input id="colorInput" type="text" value="#9B59B6" />
+        <label class="muted">Height (m)</label>
+        <input id="heightInput" type="text" value="22" style="width:90px" />
       </div>
 
       <div class="row">
-        <label class="muted">Logo Opacity</label>
-        <input id="opacity" type="range" min="0" max="1" step="0.02" value="0.88" />
-        <span id="opval" class="muted">0.88</span>
-      </div>
-
-      <div class="row">
-        <button id="camSave" class="primary">Save Current View</button>
-        <button id="camUseSaved">Use Saved View</button>
-        <button id="camLock">Lock Camera</button>
-        <button id="camUnlock">Unlock Camera</button>
-      </div>
-
-      <div class="row">
-        <button id="routeStart" class="primary">Start / Resume Route</button>
-        <button id="routeFinish">Finish & Download</button>
-        <button id="routeClear">Clear Route</button>
+        <button id="btnSaveMerged" class="primary">Save Updated GeoJSON</button>
+        <button id="btnReload">Reload Source</button>
       </div>
 
       <div id="status" class="hint">
-        Needs: <code>ysu_race_buildings_exact final.geojson</code> and <code>housing-overlay.png</code> in this folder.  
-        Tip: Right-drag (or compass) to rotate. Save the view when it looks perfect.
+        Make sure <code>ysu_race_buildings_exact final.geojson</code> is in this folder. Draw the Courtyards polygon (click around its footprint, double-click to close), then “Save Updated GeoJSON” to download a merged file. Replace the repo file with it.
       </div>
     </div>
   </section>
@@ -80,10 +66,6 @@
 
     const STYLE_ID    = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
     const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // handles space in filename
-    const IMAGE_URL   = './housing-overlay.png';
-
-    const LS_LOGO   = 'housingLogoCoords';
-    const LS_CAMERA = 'housingInitCamera';
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -98,13 +80,11 @@
       maxBounds: [[-80.6570, 41.1026], [-80.6415, 41.1120]]
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    map.dragPan.enable(); map.scrollZoom.enable(); map.dragRotate.enable();
-    map.touchZoomRotate.enable(); map.keyboard.enable();
 
     const statusEl = document.getElementById('status');
     const setStatus = t => statusEl.textContent = t;
 
-    // Hide labels
+    // Hide labels for clarity
     function hideLabels(){
       const layers = map.getStyle().layers || [];
       for (const lyr of layers){
@@ -115,67 +95,58 @@
     }
     map.on('styledata', hideLabels);
 
-    // -------- Buildings (EXTRUSION ONLY to avoid coloring grass) --------
-    async function safeJSON(url){
-      const r = await fetch(url,{cache:'no-store'});
-      if(!r.ok) throw new Error(`Missing: ${url}`);
-      return r.json();
+    // ---------- Load current buildings ----------
+    let buildingsFC = { type:'FeatureCollection', features:[] };
+
+    async function loadBuildings(){
+      try{
+        const r = await fetch(GEOJSON_URL, {cache:'no-store'});
+        if(!r.ok) throw 0;
+        buildingsFC = await r.json();
+        setStatus('Loaded existing buildings file. You can draw Courtyards now.');
+      } catch(e){
+        buildingsFC = { type:'FeatureCollection', features:[] };
+        setStatus('Could not load buildings file. You can still draw Courtyards and save a new file.');
+      }
+      renderBuildings();
     }
-    function addBuildings(fc){
-      if (map.getSource('housing-src')) map.removeSource('housing-src');
-      map.addSource('housing-src', { type:'geojson', data: fc });
 
-      // Lowercased name once
+    function renderBuildings(){
+      if (map.getSource('housing-src')) {
+        map.getSource('housing-src').setData(buildingsFC);
+      } else {
+        map.addSource('housing-src', { type:'geojson', data: buildingsFC });
+      }
+
+      // name lowercase helper
       const lname = ['downcase', ['to-string', ['get','name']]];
-
-      // Color map with fallback. Includes "University Courtyards" variants.
       const colorByName =
         ['case',
-          ['in', lname, ['literal', [
-            'lyden'
-          ]]], '#FFD23F',                  // yellow
-          ['in', lname, ['literal', [
-            'cafaro'
-          ]]], '#FF9F1C',                  // orange
-          ['in', lname, ['literal', [
-            'christman'
-          ]]], '#748B58',                  // olive
-          ['in', lname, ['literal', [
-            'weller'
-          ]]], '#00E0E8',                  // aqua
-          ['in', lname, ['literal', [
-            'wick','wick house','wick house (arts)'
-          ]]], '#FF6B35',                  // arts house
-          ['in', lname, ['literal', [
-            'university courtyards','university courtyard','courtyards','university courtyards 91 wick oval st'
-          ]]], '#9B59B6',                  // purple (unique)
-          /* default */                    '#D62D20'           // fallback red
+          ['in', lname, ['literal',['lyden']]],                 '#FFD23F',
+          ['in', lname, ['literal',['cafaro']]],                '#FF9F1C',
+          ['in', lname, ['literal',['christman']]],             '#748B58',
+          ['in', lname, ['literal',['weller']]],                '#00E0E8',
+          ['in', lname, ['literal',['wick','wick house','wick house (arts)']]], '#FF6B35',
+          ['in', lname, ['literal',['university courtyards','university courtyard','courtyards','university courtyards 91 wick oval st']]], '#9B59B6',
+          /* default */                                          '#D62D20'
         ];
+      const colorExpr = ['coalesce',['get','fill'], colorByName];
 
-      // FILTER: ONLY features that look like buildings.
-      // Many capture tools set properties like "height", "building", "extrude".
-      // We use a conservative filter to avoid lawns/landuse polygons.
-      const buildingFilter = ['any',
-        ['has','height'],
-        ['==', ['downcase', ['to-string', ['get','building']]], 'yes'],
-        ['==', ['downcase', ['to-string', ['get','type']]], 'building'],
-        ['==', ['downcase', ['to-string', ['get','kind']]], 'building'],
-        ['in', lname, ['literal', [
-          'lyden','cafaro','christman','weller','wick','wick house','university courtyards','university courtyard','courtyards','university courtyards 91 wick oval st'
-        ]]]
-      ];
-
-      // Remove any previous layer
-      if (map.getLayer('housing-3d')) map.removeLayer('housing-3d');
-
-      // Single EXTRUSION layer (colors sides+roof). No 2D ground-fill -> grass stays green.
+      // 2D ground fill (makes whole footprint colored) — but only for polygons
+      if (map.getLayer('housing-fill')) map.removeLayer('housing-fill');
       map.addLayer({
-        id:'housing-3d',
-        type:'fill-extrusion',
-        source:'housing-src',
-        filter: buildingFilter,
+        id:'housing-fill', type:'fill', source:'housing-src',
+        filter:['==', ['geometry-type'], 'Polygon'],
+        paint:{ 'fill-color': colorExpr, 'fill-opacity': 0.98 }
+      });
+
+      // 3D extrusion (roof+sides) for polygons
+      if (map.getLayer('housing-3d')) map.removeLayer('housing-3d');
+      map.addLayer({
+        id:'housing-3d', type:'fill-extrusion', source:'housing-src',
+        filter:['==', ['geometry-type'], 'Polygon'],
         paint:{
-          'fill-extrusion-color': ['coalesce',['get','fill'], colorByName],
+          'fill-extrusion-color': colorExpr,
           'fill-extrusion-height': ['coalesce',['get','height'],22],
           'fill-extrusion-base': 0,
           'fill-extrusion-vertical-gradient': false,
@@ -184,239 +155,87 @@
       });
     }
 
-    // -------- Logo Overlay (draggable + savable) --------
-    const IMAGE_SRC   = 'housing-logo-src';
-    const IMAGE_LAYER = 'housing-logo-layer';
-    const DEFAULT_CORNERS = [
-      [-80.6469, 41.1116], // TL
-      [-80.6441, 41.1116], // TR
-      [-80.6441, 41.1076], // BR
-      [-80.6469, 41.1076]  // BL
-    ];
-
-    const opSlider = document.getElementById('opacity');
-    const opVal    = document.getElementById('opval');
-    const updateOpacity = ()=>{
-      opVal.textContent = parseFloat(opSlider.value).toFixed(2);
-      if (map.getLayer(IMAGE_LAYER))
-        map.setPaintProperty(IMAGE_LAYER,'raster-opacity', parseFloat(opSlider.value));
-    };
-    opSlider.addEventListener('input', updateOpacity);
-
-    function ensureLogo(){
-      if (!map.getSource(IMAGE_SRC)){
-        map.addSource(IMAGE_SRC, { type:'image', url: IMAGE_URL, coordinates: DEFAULT_CORNERS });
-        window.__logoCoords = DEFAULT_CORNERS.slice();
-      }
-      if (!map.getLayer(IMAGE_LAYER)){
-        map.addLayer({
-          id: IMAGE_LAYER, type: 'raster', source: IMAGE_SRC,
-          paint:{ 'raster-opacity': parseFloat(opSlider.value), 'raster-fade-duration': 0 }
-        });
-      }
-    }
-    function showLogo(){ ensureLogo(); map.setLayoutProperty(IMAGE_LAYER,'visibility','visible'); updateOpacity(); }
-    function hideLogo(){ if(map.getLayer(IMAGE_LAYER)) map.setLayoutProperty(IMAGE_LAYER,'visibility','none'); }
-
-    function getLogoCoords(){ return window.__logoCoords || null; }
-    function setLogoCoords(coords){ window.__logoCoords = coords; map.getSource(IMAGE_SRC).setCoordinates(coords); }
-    function saveLogoCoords(){ const c=getLogoCoords(); if(c) localStorage.setItem(LS_LOGO, JSON.stringify(c)); }
-    function loadLogoCoordsIfAny(){
-      const raw = localStorage.getItem(LS_LOGO);
-      if (!raw) return false;
-      try{ const c = JSON.parse(raw); if(Array.isArray(c)&&c.length===4){ setLogoCoords(c); return true; } }catch{}
-      return false;
-    }
-
-    // Re-place via 3 clicks (TL, TR, BR)
-    let placing=false, clicks=[];
-    function startPlace(){
-      showLogo(); placing=true; clicks=[];
-      setStatus('Click TOP-LEFT, then TOP-RIGHT, then BOTTOM-RIGHT for the logo.');
-      map.getCanvas().style.cursor='crosshair';
-    }
-    function finishPlace(){
-      if (clicks.length<3) return;
-      const [TL,TR,BR]=clicks;
-      const BL=[ TL[0]+(BR[0]-TR[0]), TL[1]+(BR[1]-TR[1]) ];
-      setLogoCoords([TL,TR,BR,BL]);
-      placing=false; clicks=[];
-      map.getCanvas().style.cursor='';
-      setStatus('Logo placed. Drag/lock or save position.');
-      flyToLogo(false);
-    }
-    map.on('click', e=>{
-      if (!placing) return;
-      clicks.push([e.lngLat.lng, e.lngLat.lat]);
-      if (clicks.length===1) setStatus('TL saved. Click TOP-RIGHT.');
-      if (clicks.length===2) setStatus('TR saved. Click BOTTOM-RIGHT.');
-      if (clicks.length===3) finishPlace();
+    // ---------- Draw tools (Polygon capture) ----------
+    const Draw = new MapboxDraw({
+      displayControlsDefault:false,
+      controls:{ polygon:true, trash:true },
+      defaultMode:'simple_select',
+      styles:[
+        { id:'draw-fill', type:'fill',
+          filter:['all',['==','$type','Polygon'],['!=','mode','static']],
+          paint:{'fill-color':'#9B59B6','fill-opacity':0.25} },
+        { id:'draw-line', type:'line',
+          filter:['all',['==','$type','Polygon'],['!=','mode','static']],
+          paint:{'line-color':'#9B59B6','line-width':2} },
+        { id:'draw-vertex-halo', type:'circle',
+          filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
+          paint:{'circle-radius':6,'circle-color':'#fff'} },
+        { id:'draw-vertex', type:'circle',
+          filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
+          paint:{'circle-radius':4,'circle-color':'#9B59B6'} }
+      ]
     });
-
-    // Drag logo
-    let dragEnabled=false, dragging=false, last=null;
-    function enableDrag(){ showLogo(); dragEnabled=true; map.dragPan.disable(); map.getCanvas().style.cursor='grab'; setStatus('Drag to move the logo.'); }
-    function disableDrag(){ dragEnabled=false; dragging=false; last=null; map.dragPan.enable(); map.getCanvas().style.cursor=''; setStatus('Logo locked.'); }
-    map.on('mousedown', e=>{ if(!dragEnabled||!map.getSource(IMAGE_SRC)) return; dragging=true; last=e.lngLat; map.getCanvas().style.cursor='grabbing'; });
-    map.on('mousemove', e=>{
-      if (!dragEnabled || !dragging || !last) return;
-      const dx=e.lngLat.lng-last.lng, dy=e.lngLat.lat-last.lat;
-      setLogoCoords((getLogoCoords()||DEFAULT_CORNERS).map(([lng,lat])=>[lng+dx, lat+dy]));
-      last=e.lngLat;
-    });
-    map.on('mouseup', ()=>{ if(!dragEnabled) return; dragging=false; map.getCanvas().style.cursor='grab'; });
-
-    // Camera helpers
-    function flyToLogo(initial = true) {
-      const coords = getLogoCoords() || DEFAULT_CORNERS;
-      const lons = coords.map(c => c[0]), lats = coords.map(c => c[1]);
-      const sw = [Math.min(...lons), Math.min(...lats)];
-      const ne = [Math.max(...lons), Math.max(...lats)];
-
-      map.fitBounds([sw, ne], {
-        padding: { top: 80, right: 80, bottom: 160, left: 120 },
-        duration: initial ? 0 : 900,
-        maxZoom: 18
-      });
-      map.easeTo({ pitch: 60, bearing: -133.6, duration: initial ? 0 : 900 });
-      map.once('moveend', () => map.easeTo({ zoom: Math.min(map.getZoom()+0.4, 18), duration: initial ? 0 : 600 }));
-    }
-    function saveCurrentView(){
-      const cam={center:map.getCenter(),zoom:map.getZoom(),pitch:map.getPitch(),bearing:map.getBearing()};
-      localStorage.setItem(LS_CAMERA, JSON.stringify(cam));
-      alert('Saved current view.');
-    }
-    function useSavedView(){
-      const raw=localStorage.getItem(LS_CAMERA);
-      if(!raw){alert('No saved view yet.'); return;}
-      try{
-        const c=JSON.parse(raw);
-        map.jumpTo({center:[c.center.lng,c.center.lat],zoom:c.zoom,pitch:c.pitch,bearing:c.bearing});
-      }catch{ alert('Saved view unreadable. Save again.'); }
-    }
-    function lockCamera(){
-      map.dragPan.disable(); map.scrollZoom.disable(); map.dragRotate.disable(); map.touchZoomRotate.disable();
-      map.keyboard.disable(); map.boxZoom.disable(); map.doubleClickZoom.disable();
-      setStatus('Camera locked. Unlock to move again.');
-    }
-    function unlockCamera(){
-      map.dragPan.enable(); map.scrollZoom.enable(); map.dragRotate.enable(); map.touchZoomRotate.enable();
-      map.keyboard.enable(); map.boxZoom.enable(); map.doubleClickZoom.enable();
-      setStatus('Camera unlocked.');
-    }
-
-    // -------- Route Editor (ground-level red dots) --------
-    const Draw=new MapboxDraw({displayControlsDefault:false,controls:{line_string:true,trash:true}});
     map.addControl(Draw,'top-right');
 
-    function densify(line, spacingMeters=3){
-      const R=6371000,toRad=d=>d*Math.PI/180;
-      const gcDist=(A,B)=>{const [lng1,lat1]=A,[lng2,lat2]=B;
-        const dLat=toRad(lat2-lat1),dLng=toRad(lng2-lng1);
-        const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-        return 2*R*Math.asin(Math.sqrt(a));};
-      const lerp=(A,B,t)=>[A[0]+(B[0]-A[0])*t,A[1]+(B[1]-A[1])*t];
-      const pts=[],coords=line.geometry.coordinates;
-      for(let i=0;i<coords.length-1;i++){
-        const A=coords[i],B=coords[i+1],seg=gcDist(A,B),n=Math.max(1,Math.floor(seg/spacingMeters));
-        for(let k=0;k<=n;k++){ const t=k/n; pts.push({type:'Feature',geometry:{type:'Point',coordinates:lerp(A,B,t)}}); }
-      }
-      return {type:'FeatureCollection',features:pts};
-    }
-    function currentLines(){return Draw.getAll().features.filter(f=>f.geometry?.type==='LineString');}
-    function updateRoutePreview(){
-      const lines=currentLines(); const pts={type:'FeatureCollection',features:[]};
-      for(const ln of lines) pts.features.push(...densify(ln,3).features);
-      if(map.getSource('route-points-src')) map.getSource('route-points-src').setData(pts);
-    }
-
-    // UI Buttons
-    document.getElementById('btnShowLogo').onclick  = showLogo;
-    document.getElementById('btnHideLogo').onclick  = hideLogo;
-    document.getElementById('btnPlaceLogo').onclick = startPlace;
-    document.getElementById('btnFocusLogo').onclick = () => flyToLogo(false);
-
-    document.getElementById('logoUnlock').onclick   = enableDrag;
-    document.getElementById('logoLock').onclick     = disableDrag;
-    document.getElementById('logoSave').onclick     = () => { saveLogoCoords(); alert('Logo position saved.'); };
-    document.getElementById('logoReset').onclick    = () => {
-      localStorage.removeItem(LS_LOGO);
-      showLogo(); setLogoCoords(DEFAULT_CORNERS); flyToLogo(false);
-      alert('Logo position reset.');
-    };
-
-    document.getElementById('camSave').onclick      = saveCurrentView;
-    document.getElementById('camUseSaved').onclick  = useSavedView;
-    document.getElementById('camLock').onclick      = lockCamera;
-    document.getElementById('camUnlock').onclick    = unlockCamera;
-
-    document.getElementById('routeStart').onclick   = () => {
+    function startPolygon(){
       map.doubleClickZoom.disable();
-      Draw.changeMode('draw_line_string');
-      map.getCanvas().style.cursor='crosshair';
-      setStatus('Drawing route: click to add points; double-click to finish.');
-    };
-    document.getElementById('routeFinish').onclick  = () => {
-      map.doubleClickZoom.enable(); map.getCanvas().style.cursor='';
-      const lines=currentLines();
-      if(!lines.length){ alert('No route yet.'); return; }
-      const out={type:'FeatureCollection',features:lines};
+      Draw.deleteAll();
+      Draw.changeMode('draw_polygon');
+      setStatus('Drawing: click around Courtyards footprint; double-click to close.');
+    }
+    function finishPolygon(){
+      map.doubleClickZoom.enable();
+      Draw.changeMode('simple_select');
+      const fc = Draw.getAll();
+      const poly = fc.features.find(f => f.geometry?.type==='Polygon');
+      if (!poly){ alert('No polygon drawn yet.'); return; }
+
+      // Properties
+      const name   = document.getElementById('nameInput').value.trim() || 'University Courtyards';
+      const fill   = document.getElementById('colorInput').value.trim() || '#9B59B6';
+      const height = parseFloat(document.getElementById('heightInput').value) || 22;
+
+      poly.properties = Object.assign({}, poly.properties, {
+        name, fill, height
+      });
+
+      // Merge into buildingsFC (remove older Courtyards if present by name)
+      buildingsFC.features = buildingsFC.features.filter(f => {
+        const n = (f.properties?.name || '').toString().toLowerCase();
+        return !['university courtyards','university courtyard','courtyards','university courtyards 91 wick oval st'].includes(n);
+      });
+      buildingsFC.features.push(poly);
+
+      renderBuildings();
+      setStatus(`Captured "${name}" and merged into the dataset. Click “Save Updated GeoJSON” to download.`);
+    }
+    function clearDraft(){
+      Draw.deleteAll();
+      setStatus('Draft cleared. You can draw again.');
+    }
+
+    // ---------- Save merged file ----------
+    function saveMerged(){
       const a=document.createElement('a');
-      a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
-      a.download='route.geojson'; a.click();
-      setStatus('Route downloaded as route.geojson.');
-    };
-    document.getElementById('routeClear').onclick   = () => { Draw.deleteAll(); updateRoutePreview(); setStatus('Route cleared.'); };
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(buildingsFC,null,2)],{type:'application/json'}));
+      a.download = 'ysu_race_buildings_exact final.geojson';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setStatus('Downloaded merged file. Replace the file in GitHub with this one, then refresh.');
+    }
 
-    // Load assets & init sources/layers
+    // ---------- UI wiring ----------
+    document.getElementById('btnStart').onclick  = startPolygon;
+    document.getElementById('btnFinish').onclick = finishPolygon;
+    document.getElementById('btnClear').onclick  = clearDraft;
+    document.getElementById('btnSaveMerged').onclick = saveMerged;
+    document.getElementById('btnReload').onclick = () => { loadBuildings(); };
+
+    // ---------- Boot ----------
     map.on('load', async ()=>{
-      // Buildings (extrusion only, with Courtyards color + building-only filter)
-      try{ addBuildings(await safeJSON(GEOJSON_URL)); setStatus('Buildings loaded.'); }
-      catch(e){ setStatus('Could not load buildings GeoJSON. Check file name/path.'); }
-
-      // Route preview source/layer (below 3D buildings so it hugs ground)
-      if (!map.getSource('route-points-src')){
-        map.addSource('route-points-src',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-
-        // Put dots BELOW buildings? If you prefer below: place this before 'housing-3d' using that id in the 'before' param.
-        map.addLayer({
-          id:'route-dots', type:'circle', source:'route-points-src',
-          layout:{ 'circle-pitch-alignment':'map' },
-          paint:{
-            'circle-color':'#D62D20',
-            'circle-radius':['interpolate',['linear'],['zoom'],14,5.5,16,7.5,18,9.0],
-            'circle-opacity':0.95,
-            'circle-pitch-scale':'map'
-          }
-        }, 'housing-3d');
-      }
-
-      // Logo
-      try{
-        const r = await fetch(IMAGE_URL,{cache:'no-store'});
-        if(!r.ok) throw 0;
-        showLogo();
-        if (!loadLogoCoordsIfAny()){ setLogoCoords(DEFAULT_CORNERS); saveLogoCoords(); }
-        updateOpacity();
-      }catch(e){
-        setStatus('Logo not found. Add housing-overlay.png next to this file, then click “Show Logo”.');
-      }
-
-      // Use saved camera if any; else frame the logo
-      const rawCam = localStorage.getItem(LS_CAMERA);
-      if (rawCam){
-        try{
-          const c=JSON.parse(rawCam);
-          map.jumpTo({center:[c.center.lng,c.center.lat],zoom:c.zoom,pitch:c.pitch,bearing:c.bearing});
-        }catch{ flyToLogo(true); }
-      } else {
-        flyToLogo(true);
-      }
-
-      // keep route preview live
-      map.on('draw.create', updateRoutePreview);
-      map.on('draw.update', updateRoutePreview);
-      map.on('draw.delete', updateRoutePreview);
+      hideLabels();
+      await loadBuildings();
+      setStatus('Ready: click “Draw Courtyards Footprint”, trace the building, then “Finish Drawing” and “Save Updated GeoJSON”.');
     });
   </script>
 </body>
