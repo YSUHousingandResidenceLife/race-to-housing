@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>YSU Housing — Map + Draggable Logo (Framed on Load)</title>
+  <title>YSU Housing — Map + Draggable Logo + Savable View</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
@@ -10,7 +10,7 @@
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     #map{position:absolute; inset:0}
     .ui{
-      position:absolute; right:12px; top:12px; z-index:20; width:min(440px,94vw);
+      position:absolute; right:12px; top:12px; z-index:20; width:min(460px,94vw);
       background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
     }
     .ui header{padding:10px 12px; border-bottom:1px solid var(--border); font-weight:700}
@@ -27,7 +27,7 @@
   <div id="map"></div>
 
   <section class="ui">
-    <header>YSU Housing — Overlay Controls</header>
+    <header>YSU Housing — Overlay & Camera</header>
     <div class="body">
       <div class="row">
         <button id="btnShowLogo" class="primary">Show Logo</button>
@@ -35,19 +35,30 @@
         <button id="btnPlaceLogo">Re-place (3 clicks)</button>
         <button id="btnFocusLogo">Focus Logo</button>
       </div>
+
       <div class="row">
-        <button id="logoUnlock">Unlock (drag)</button>
-        <button id="logoLock">Lock</button>
-        <button id="logoSave">Save position</button>
-        <button id="logoReset">Reset</button>
+        <button id="logoUnlock">Unlock Logo (drag)</button>
+        <button id="logoLock">Lock Logo</button>
+        <button id="logoSave">Save Logo Position</button>
+        <button id="logoReset">Reset Logo</button>
       </div>
+
       <div class="row">
-        <label class="muted">Opacity</label>
+        <label class="muted">Logo Opacity</label>
         <input id="opacity" type="range" min="0" max="1" step="0.02" value="0.88" />
         <span id="opval" class="muted">0.88</span>
       </div>
+
+      <div class="row">
+        <button id="camSave" class="primary">Save Current View</button>
+        <button id="camUseSaved">Use Saved View</button>
+        <button id="camLock">Lock Camera</button>
+        <button id="camUnlock">Unlock Camera</button>
+      </div>
+
       <div id="status" class="hint">
-        Place <code>ysu_race_buildings_exact final.geojson</code> and <code>housing-overlay.png</code> in this folder.
+        Files needed: <code>ysu_race_buildings_exact final.geojson</code> and <code>housing-overlay.png</code> in this folder.  
+        Tip: Right-drag or use the compass to rotate the map. Save the view when you like it.
       </div>
     </div>
   </section>
@@ -59,7 +70,7 @@
       'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     const STYLE_ID    = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // handles space in filename
+    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // handles space
     const IMAGE_URL   = './housing-overlay.png';
 
     const map = new mapboxgl.Map({
@@ -75,6 +86,15 @@
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
+    // Make sure all interactions are enabled by default
+    map.dragPan.enable();
+    map.scrollZoom.enable();
+    map.dragRotate.enable();
+    map.touchZoomRotate.enable();
+    map.keyboard.enable();
+    map.boxZoom.enable();
+    map.doubleClickZoom.enable();
+
     const statusEl = document.getElementById('status');
     const setStatus = t => statusEl.textContent = t;
 
@@ -89,7 +109,7 @@
     }
     map.on('styledata', hideLabels);
 
-    // ------- BUILDINGS LAYER (with color fallback) -------
+    // ------- BUILDINGS LAYER -------
     async function safeJSON(url){
       const r = await fetch(url,{cache:'no-store'});
       if(!r.ok) throw new Error(`Missing: ${url}`);
@@ -123,10 +143,11 @@
       });
     }
 
-    // ------- LOGO OVERLAY (image source + layer) -------
+    // ------- LOGO OVERLAY -------
     const IMAGE_SRC   = 'housing-logo-src';
     const IMAGE_LAYER = 'housing-logo-layer';
-    const LS_KEY      = 'housingLogoCoords';
+    const LS_LOGO     = 'housingLogoCoords';
+    const LS_CAMERA   = 'housingInitCamera';
 
     // Default box over housing cluster
     const DEFAULT_CORNERS = [
@@ -165,10 +186,10 @@
     function setLogoCoords(coords){ window.__logoCoords = coords; map.getSource(IMAGE_SRC).setCoordinates(coords); }
     function saveLogoCoords(){
       const c = getLogoCoords();
-      if (c) localStorage.setItem(LS_KEY, JSON.stringify(c));
+      if (c) localStorage.setItem(LS_LOGO, JSON.stringify(c));
     }
     function loadLogoCoordsIfAny(){
-      const raw = localStorage.getItem(LS_KEY);
+      const raw = localStorage.getItem(LS_LOGO);
       if (!raw) return false;
       try{
         const c = JSON.parse(raw);
@@ -203,13 +224,13 @@
       if (clicks.length===3) finishPlace();
     });
 
-    // Drag to move (when unlocked)
+    // Drag logo (when unlocked)
     let dragEnabled=false, dragging=false, last=null;
     function enableDrag(){
       showLogo();
       dragEnabled=true; map.dragPan.disable();
       map.getCanvas().style.cursor='grab';
-      setStatus('Drag anywhere on the map to move the logo. Click “Lock” when done.');
+      setStatus('Drag anywhere on the map to move the logo. Click “Lock Logo” when done.');
     }
     function disableDrag(){
       dragEnabled=false; dragging=false; last=null;
@@ -237,7 +258,7 @@
     map.on('mouseup', endDrag);
     map.on('mouseout', endDrag);
 
-    // ---- Focus the camera on the logo with your preferred angle ----
+    // ---- Camera helpers ----
     function flyToLogo(initial = true) {
       const coords = getLogoCoords() || DEFAULT_CORNERS;
       const lons = coords.map(c => c[0]), lats = coords.map(c => c[1]);
@@ -259,20 +280,69 @@
       );
     }
 
+    function saveCurrentView(){
+      const cam = {
+        center: map.getCenter(),
+        zoom:   map.getZoom(),
+        pitch:  map.getPitch(),
+        bearing:map.getBearing()
+      };
+      localStorage.setItem(LS_CAMERA, JSON.stringify(cam));
+      alert('Saved current view. It will be used on next load.');
+    }
+    async function useSavedView() {
+      const raw = localStorage.getItem(LS_CAMERA);
+      if (!raw){ alert('No saved view yet. Move the map/angle and click “Save Current View”.'); return; }
+      try{
+        const cam = JSON.parse(raw);
+        map.jumpTo({
+          center: [cam.center.lng, cam.center.lat],
+          zoom: cam.zoom, pitch: cam.pitch, bearing: cam.bearing
+        });
+      }catch{ alert('Saved view could not be read. Try saving again.'); }
+    }
+
+    function lockCamera(){
+      map.dragPan.disable();
+      map.scrollZoom.disable();
+      map.dragRotate.disable();
+      map.touchZoomRotate.disable();
+      map.keyboard.disable();
+      map.boxZoom.disable();
+      map.doubleClickZoom.disable();
+      setStatus('Camera locked. Click “Unlock Camera” to move again.');
+    }
+    function unlockCamera(){
+      map.dragPan.enable();
+      map.scrollZoom.enable();
+      map.dragRotate.enable();
+      map.touchZoomRotate.enable();
+      map.keyboard.enable();
+      map.boxZoom.enable();
+      map.doubleClickZoom.enable();
+      setStatus('Camera unlocked. You can pan/zoom/rotate.');
+    }
+
     // Buttons
     document.getElementById('btnShowLogo').onclick  = showLogo;
     document.getElementById('btnHideLogo').onclick  = hideLogo;
     document.getElementById('btnPlaceLogo').onclick = startPlace;
     document.getElementById('btnFocusLogo').onclick = () => flyToLogo(false);
+
     document.getElementById('logoUnlock').onclick   = enableDrag;
     document.getElementById('logoLock').onclick     = disableDrag;
     document.getElementById('logoSave').onclick     = ()=>{ saveLogoCoords(); alert('Logo position saved.'); };
     document.getElementById('logoReset').onclick    = ()=>{
-      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LS_LOGO);
       showLogo(); setLogoCoords(DEFAULT_CORNERS);
       flyToLogo(false);
       alert('Logo position reset.');
     };
+
+    document.getElementById('camSave').onclick      = saveCurrentView;
+    document.getElementById('camUseSaved').onclick  = useSavedView;
+    document.getElementById('camLock').onclick      = lockCamera;
+    document.getElementById('camUnlock').onclick    = unlockCamera;
 
     // ------- BOOT -------
     map.on('load', async ()=>{
@@ -282,7 +352,7 @@
       try {
         const fc = await safeJSON(GEOJSON_URL);
         addBuildings(fc);
-        setStatus('Buildings loaded. Overlay ready.');
+        setStatus('Buildings loaded. Overlay ready. Rotate with right-drag; zoom with wheel.');
       } catch(e){
         setStatus('Could not load buildings GeoJSON. Check file name/path.');
       }
@@ -298,8 +368,20 @@
           saveLogoCoords();
         }
         updateOpacity();
-        // >>> Frame the logo at your angle on first load
-        flyToLogo(true);
+
+        // If you have a saved startup camera, use that; otherwise frame the logo
+        const rawCam = localStorage.getItem(LS_CAMERA);
+        if (rawCam){
+          try{
+            const cam = JSON.parse(rawCam);
+            map.jumpTo({
+              center: [cam.center.lng, cam.center.lat],
+              zoom: cam.zoom, pitch: cam.pitch, bearing: cam.bearing
+            });
+          }catch{ flyToLogo(true); }
+        } else {
+          flyToLogo(true);
+        }
       }catch(e){
         setStatus('Logo not found. Add housing-overlay.png next to this file, then click “Show Logo”.');
       }
