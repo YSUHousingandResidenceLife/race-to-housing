@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>YSU Housing — Auto-capture 6/6 Building Outlines (No Colors)</title>
+  <title>YSU Housing — Auto-capture 6/6 Outlines (resilient)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Mapbox -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
     :root { --card:#fff; --border:#e5e7eb; --muted:#6b7280; --shadow:0 10px 24px rgba(0,0,0,.12) }
@@ -40,7 +39,7 @@
       </div>
 
       <div class="muted">
-        Targets: Lyden, Cafaro, Christman, Weller, Wick, Kilcawley House. (Courtyards is excluded in this 6/6 run.)
+        Targets: Lyden, Cafaro, Christman, Weller, Wick, Kilcawley House. No colors; we only capture shapes + metrics.
       </div>
 
       <div class="metrics" id="metrics">Width: — m · Length: — m · Area: — m² · Perimeter: — m</div>
@@ -48,19 +47,18 @@
       <div class="checklist" id="cklist"></div>
 
       <div id="status" class="hint">
-        This reproduces the working 6/6 autocapture you liked. It grabs true polygon outlines (no colors), merges with your
-        existing file, then you press <b>Download merged GeoJSON</b> and replace the file in GitHub.
+        Click <b>Auto-capture All</b>. If a building is missed the loop continues. When done, click <b>Download merged GeoJSON</b>
+        and replace your repo file.
       </div>
     </div>
   </section>
 
-  <!-- JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
-    // ====== MAP ======
+    // ===== MAP =====
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
     const STYLE_ID    = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // keep filename w/ space
+    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson');
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -71,7 +69,7 @@
       pitch: 60,
       bearing: -133.6,
       minZoom: 15,
-      maxZoom: 19,
+      maxZoom: 20,
       maxBounds: [[-80.6570, 41.1026], [-80.6415, 41.1120]]
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -86,34 +84,32 @@
     }
     map.on('styledata', hideLabels);
 
-    // ====== TARGETS (the exact 6) ======
+    // ===== TARGETS (6/6) =====
     const TARGETS = [
-      { key:'lyden',             name:'Lyden',             center:[-80.647458,              41.111143] },
-      { key:'cafaro',            name:'Cafaro',            center:[-80.6461376731338,       41.11100745921387] },
-      { key:'christman',         name:'Christman',         center:[-80.64724052183561,      41.110525670257104] },
-      { key:'weller',            name:'Weller',            center:[-80.644833,              41.107694] },
-      { key:'wick',              name:'Wick',              center:[-80.64426251711262,      41.107489184836176] },
-      { key:'kilcawley house',   name:'Kilcawley House',   center:[-80.64731987291158,      41.10673909169142] }
+      { key:'lyden',           name:'Lyden',           center:[-80.647458,              41.111143] },
+      { key:'cafaro',          name:'Cafaro',          center:[-80.6461376731338,       41.11100745921387] },
+      { key:'christman',       name:'Christman',       center:[-80.64724052183561,      41.110525670257104] },
+      { key:'weller',          name:'Weller',          center:[-80.644833,              41.107694] },
+      { key:'wick',            name:'Wick',            center:[-80.64426251711262,      41.107489184836176] },
+      { key:'kilcawley house', name:'Kilcawley House', center:[-80.64731987291158,      41.10673909169142] }
     ];
     const REQUIRED_KEYS = new Set(TARGETS.map(t=>t.key));
 
-    // ====== EXISTING DATA (for merging on download) ======
+    // ===== EXISTING DATA =====
     let buildingsFC = { type:'FeatureCollection', features:[] };
 
     async function loadExisting(){
       try{
         const r = await fetch(GEOJSON_URL,{cache:'no-store'});
-        if(!r.ok) throw 0;
-        buildingsFC = await r.json();
-        setStatus('Existing buildings file loaded.');
+        buildingsFC = r.ok ? await r.json() : { type:'FeatureCollection', features:[] };
+        setStatus(r.ok ? 'Existing buildings file loaded.' : 'No existing file found — starting fresh.');
       }catch(e){
         buildingsFC = { type:'FeatureCollection', features:[] };
-        setStatus('No existing file found. You can still capture and save a new one.');
+        setStatus('Couldn’t load existing file (ok) — starting fresh.');
       }
       renderExistingOutlines();
     }
 
-    // ====== VISUAL CONTEXT: outline existing polygons only (no fill, no color) ======
     function renderExistingOutlines(){
       if (map.getSource('existing-src')) {
         map.getSource('existing-src').setData(buildingsFC);
@@ -128,7 +124,7 @@
       });
     }
 
-    // ====== UTILS ======
+    // ===== UI helpers =====
     const statusEl = document.getElementById('status');
     const setStatus = t => statusEl.textContent = t;
 
@@ -163,8 +159,7 @@
         `Width: ${m.width_m} m · Length: ${m.length_m} m · Area: ${m.area_m2} m² · Perimeter: ${m.perimeter_m} m`;
     }
 
-    function areaApprox(feature){
-      // rough area for ranking
+    function approxArea(feature){
       const geom = feature.geometry;
       const rings = geom.type==='Polygon' ? [geom.coordinates[0]] :
                     (geom.type==='MultiPolygon' ? geom.coordinates.map(p=>p[0]) : []);
@@ -179,86 +174,19 @@
       return Math.abs(area/2);
     }
 
-    function buildingLayerIds(){
-      const ids=[];
-      const style = map.getStyle();
-      if (!style || !style.layers) return ids;
-      for (const lyr of style.layers){
-        // Typical Mapbox vector tile building layers have source-layer 'building'
-        if (lyr['source-layer']==='building' && (lyr.type==='fill' || lyr.type==='fill-extrusion' || lyr.type==='line')){
-          ids.push(lyr.id);
-        }
+    function renderChecklistInit(){
+      const box = document.getElementById('cklist');
+      box.innerHTML = '';
+      for (const t of TARGETS){
+        const rowL = document.createElement('div');
+        const rowR = document.createElement('div');
+        rowL.textContent = t.name;
+        rowR.textContent = '—';
+        rowR.className = 'missing';
+        box.appendChild(rowL); box.appendChild(rowR);
       }
-      return ids.length ? ids : undefined; // if none detected, allow all
     }
-
-    function bboxAround(centerLngLat, pxRadius){
-      const p = map.project({lng:centerLngLat[0], lat:centerLngLat[1]});
-      const sw = { x: p.x - pxRadius, y: p.y + pxRadius };
-      const ne = { x: p.x + pxRadius, y: p.y - pxRadius };
-      return [sw, ne];
-    }
-
-    // ====== CAPTURE ONE ======
-    async function captureOne(target, pxRadius=160){
-      // top-down for accuracy
-      map.jumpTo({ center: target.center, zoom: 19, pitch: 0, bearing: 0 });
-      await new Promise(res => map.once('idle', res));
-
-      const layers = buildingLayerIds();
-      const box = bboxAround(target.center, pxRadius);
-      let feats = map.queryRenderedFeatures(box, layers ? { layers } : undefined);
-
-      // polygons only
-      feats = feats.filter(f => f.geometry && (f.geometry.type==='Polygon' || f.geometry.type==='MultiPolygon'));
-      if (!feats.length && pxRadius < 260){
-        return captureOne(target, pxRadius+40); // expand
-      }
-      if (!feats.length) return { ok:false, reason:'No polygon found' };
-
-      // rank by area
-      feats.sort((a,b)=>areaApprox(b)-areaApprox(a));
-      const best = feats[0];
-
-      // ensure first ring closed
-      if (best.geometry.type==='Polygon'){
-        const ring = best.geometry.coordinates[0];
-        if (ring.length && (ring[0][0]!==ring[ring.length-1][0] || ring[0][1]!==ring[ring.length-1][1])){
-          best.geometry.coordinates[0].push(ring[0]);
-        }
-      } else if (best.geometry.type==='MultiPolygon'){
-        const ring = best.geometry.coordinates[0][0];
-        if (ring.length && (ring[0][0]!==ring[ring.length-1][0] || ring[0][1]!==ring[ring.length-1][1])){
-          best.geometry.coordinates[0][0].push(ring[0]);
-        }
-      }
-
-      const ringForMetrics = best.geometry.type==='Polygon'
-        ? best.geometry.coordinates[0]
-        : best.geometry.coordinates[0][0];
-      const m = polygonMetrics(ringForMetrics);
-      showMetrics(m);
-
-      // construct clean feature (no fill color)
-      const out = {
-        type:'Feature',
-        geometry: best.geometry,
-        properties:{
-          name: target.name,
-          key: target.key,
-          type:'building',
-          height: 22, // neutral default; you can edit later if needed
-          width_m: m.width_m, length_m: m.length_m,
-          area_m2: m.area_m2, perimeter_m: m.perimeter_m
-        }
-      };
-      return { ok:true, feature: out };
-    }
-
-    // ====== CAPTURE ALL (6/6) ======
-    const captured = {}; // key -> feature
-
-    function renderChecklist(){
+    function renderChecklist(captured){
       const box = document.getElementById('cklist');
       box.innerHTML = '';
       for (const t of TARGETS){
@@ -274,34 +202,114 @@
       document.getElementById('btnCaptureAll').textContent = `Auto-capture All (${have}/6)`;
     }
 
+    // Wait helper: whichever fires first — idle, moveend, or a timeout
+    function waitForSettle(ms=800){
+      return new Promise(resolve=>{
+        let resolved=false;
+        const done = ()=>{ if(!resolved){ resolved=true; resolve(); } };
+        const t = setTimeout(done, ms);
+        map.once('idle', ()=>{ clearTimeout(t); done(); });
+        map.once('moveend', ()=>{ clearTimeout(t); done(); });
+      });
+    }
+
+    function bboxAround(centerLngLat, pxRadius){
+      const p = map.project({lng:centerLngLat[0], lat:centerLngLat[1]});
+      const sw = { x: p.x - pxRadius, y: p.y + pxRadius };
+      const ne = { x: p.x + pxRadius, y: p.y - pxRadius };
+      return [sw, ne];
+    }
+
+    async function captureOne(target, pxRadius=160, attempt=0){
+      try{
+        map.jumpTo({ center: target.center, zoom: 19.5, pitch: 0, bearing: 0 });
+        await waitForSettle(900);
+
+        // Query everything; then keep only building features
+        const box = bboxAround(target.center, pxRadius);
+        let feats = map.queryRenderedFeatures(box);
+
+        feats = feats.filter(f=>{
+          const sl = f.sourceLayer || f['source-layer'] || '';
+          const lid = (f.layer && f.layer.id) ? f.layer.id : '';
+          return (sl==='building') || /building/i.test(lid);
+        });
+
+        feats = feats.filter(f => f.geometry && (f.geometry.type==='Polygon' || f.geometry.type==='MultiPolygon'));
+
+        if (!feats.length){
+          if (pxRadius < 280) return captureOne(target, pxRadius+40, attempt+1);
+          return { ok:false, reason:'No building polygon in view' };
+        }
+
+        feats.sort((a,b)=>approxArea(b)-approxArea(a));
+        const best = feats[0];
+
+        if (best.geometry.type==='Polygon'){
+          const ring = best.geometry.coordinates[0];
+          const first = ring[0], last = ring[ring.length-1];
+          if (first[0]!==last[0] || first[1]!==last[1]) best.geometry.coordinates[0].push(first);
+        } else if (best.geometry.type==='MultiPolygon'){
+          const ring = best.geometry.coordinates[0][0];
+          const first = ring[0], last = ring[ring.length-1];
+          if (first[0]!==last[0] || first[1]!==last[1]) best.geometry.coordinates[0][0].push(first);
+        }
+
+        const ring = best.geometry.type==='Polygon'
+          ? best.geometry.coordinates[0]
+          : best.geometry.coordinates[0][0];
+
+        const m = polygonMetrics(ring);
+        showMetrics(m);
+
+        return {
+          ok:true,
+          feature:{
+            type:'Feature',
+            geometry: best.geometry,
+            properties:{
+              name: target.name,
+              key: target.key,
+              type:'building',
+              height: 22,
+              width_m: m.width_m, length_m: m.length_m,
+              area_m2: m.area_m2, perimeter_m: m.perimeter_m
+            }
+          }
+        };
+      }catch(err){
+        if (attempt<3) return captureOne(target, pxRadius, attempt+1);
+        return { ok:false, reason:'Unexpected error' };
+      }
+    }
+
+    const captured = {}; // key -> feature
+
     async function captureAll(){
-      setStatus('Capturing… (top-down for accuracy)');
+      setStatus('Capturing (top-down)…');
       for (const t of TARGETS){
         const res = await captureOne(t);
         if (res.ok){
           captured[t.key] = res.feature;
           setStatus(`Captured ${t.name}.`);
         } else {
-          setStatus(`Missed ${t.name}: ${res.reason || 'unknown'}.`);
+          setStatus(`Skipped ${t.name}: ${res.reason}. (Continuing)`);
         }
-        renderChecklist();
-        await new Promise(r=>setTimeout(r, 200)); // tiny pause
+        renderChecklist(captured);
+        await new Promise(r=>setTimeout(r,150));
       }
       const have = Object.keys(captured).filter(k=>REQUIRED_KEYS.has(k)).length;
-      setStatus(have===6 ? 'Done: 6/6 captured. Press “Download merged GeoJSON”.'
-                         : `Captured ${have}/6. You can still download; missing ones remain unchanged.`);
+      setStatus(have===6 ? 'Done: 6/6 captured — Download merged GeoJSON.'
+                         : `Captured ${have}/6 — Download will keep any missing ones unchanged.`);
     }
 
-    // ====== DOWNLOAD MERGED FILE ======
     function downloadMerged(){
       const out = { type:'FeatureCollection', features:[] };
-      // keep non-target features from existing file
       for (const f of buildingsFC.features || []){
         const k = (f.properties?.key || f.properties?.name || '').toString().toLowerCase();
         if (!REQUIRED_KEYS.has(k)) out.features.push(f);
       }
-      // add captured targets we have
-      for (const k in captured){ out.features.push(captured[k]); }
+      for (const k in captured) out.features.push(captured[k]);
 
       const a=document.createElement('a');
       a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
@@ -310,31 +318,15 @@
       setStatus('Downloaded merged file. Replace it in GitHub, then refresh.');
     }
 
-    // ====== UI WIRING ======
     document.getElementById('btnCaptureAll').onclick = captureAll;
     document.getElementById('btnDownload').onclick   = downloadMerged;
     document.getElementById('btnReload').onclick     = async ()=>{ await loadExisting(); setStatus('Existing file reloaded.'); };
-
-    // ====== BOOT ======
-    function renderChecklistInit(){
-      const box = document.getElementById('cklist');
-      box.innerHTML = '';
-      for (const t of TARGETS){
-        const rowL = document.createElement('div');
-        const rowR = document.createElement('div');
-        rowL.textContent = t.name;
-        rowR.textContent = '—';
-        rowR.className = 'missing';
-        box.appendChild(rowL); box.appendChild(rowR);
-      }
-    }
 
     map.on('load', async ()=>{
       hideLabels();
       renderChecklistInit();
       await loadExisting();
-      renderExistingOutlines();
-      setStatus('Ready: click “Auto-capture All (0/6)”. When it says 6/6, press “Download merged GeoJSON”.');
+      setStatus('Ready — click “Auto-capture All (0/6)”.');
     });
   </script>
 </body>
