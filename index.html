@@ -115,7 +115,7 @@
     }
     map.on('styledata', hideLabels);
 
-    // -------- Buildings (now fully covered: ground fill + extrusion) --------
+    // -------- Buildings (EXTRUSION ONLY to avoid coloring grass) --------
     async function safeJSON(url){
       const r = await fetch(url,{cache:'no-store'});
       if(!r.ok) throw new Error(`Missing: ${url}`);
@@ -125,45 +125,63 @@
       if (map.getSource('housing-src')) map.removeSource('housing-src');
       map.addSource('housing-src', { type:'geojson', data: fc });
 
-      // UNIQUE COLORS including University Courtyards
+      // Lowercased name once
+      const lname = ['downcase', ['to-string', ['get','name']]];
+
+      // Color map with fallback. Includes "University Courtyards" variants.
       const colorByName =
         ['case',
-          ['==',['downcase',['get','name']],'lyden'],                 '#FFD23F', // yellow
-          ['==',['downcase',['get','name']],'cafaro'],                '#FF9F1C', // orange
-          ['==',['downcase',['get','name']],'christman'],             '#748B58', // olive
-          ['==',['downcase',['get','name']],'weller'],                '#00E0E8', // aqua
-          ['==',['downcase',['get','name']],'wick'],                  '#FF6B35', // arts house (warm)
-          ['==',['downcase',['get','name']],'university courtyards'], '#9B59B6', // purple
-          /* default */                                               '#D62D20'  // fallback red
+          ['in', lname, ['literal', [
+            'lyden'
+          ]]], '#FFD23F',                  // yellow
+          ['in', lname, ['literal', [
+            'cafaro'
+          ]]], '#FF9F1C',                  // orange
+          ['in', lname, ['literal', [
+            'christman'
+          ]]], '#748B58',                  // olive
+          ['in', lname, ['literal', [
+            'weller'
+          ]]], '#00E0E8',                  // aqua
+          ['in', lname, ['literal', [
+            'wick','wick house','wick house (arts)'
+          ]]], '#FF6B35',                  // arts house
+          ['in', lname, ['literal', [
+            'university courtyards','university courtyard','courtyards','university courtyards 91 wick oval st'
+          ]]], '#9B59B6',                  // purple (unique)
+          /* default */                    '#D62D20'           // fallback red
         ];
-      const colorExpr = ['coalesce',['get','fill'], colorByName];
 
-      // 2D ground fill to color the entire footprint (so not just “tops”)
-      if (map.getLayer('housing-fill')) map.removeLayer('housing-fill');
-      map.addLayer({
-        id:'housing-fill',
-        type:'fill',
-        source:'housing-src',
-        paint:{
-          'fill-color': colorExpr,
-          'fill-opacity': 0.98
-        }
-      });
+      // FILTER: ONLY features that look like buildings.
+      // Many capture tools set properties like "height", "building", "extrude".
+      // We use a conservative filter to avoid lawns/landuse polygons.
+      const buildingFilter = ['any',
+        ['has','height'],
+        ['==', ['downcase', ['to-string', ['get','building']]], 'yes'],
+        ['==', ['downcase', ['to-string', ['get','type']]], 'building'],
+        ['==', ['downcase', ['to-string', ['get','kind']]], 'building'],
+        ['in', lname, ['literal', [
+          'lyden','cafaro','christman','weller','wick','wick house','university courtyards','university courtyard','courtyards','university courtyards 91 wick oval st'
+        ]]]
+      ];
 
-      // 3D extrusion (sides + roof) with uniform color (no vertical gradient)
+      // Remove any previous layer
       if (map.getLayer('housing-3d')) map.removeLayer('housing-3d');
+
+      // Single EXTRUSION layer (colors sides+roof). No 2D ground-fill -> grass stays green.
       map.addLayer({
         id:'housing-3d',
         type:'fill-extrusion',
         source:'housing-src',
+        filter: buildingFilter,
         paint:{
-          'fill-extrusion-color': colorExpr,
+          'fill-extrusion-color': ['coalesce',['get','fill'], colorByName],
           'fill-extrusion-height': ['coalesce',['get','height'],22],
           'fill-extrusion-base': 0,
           'fill-extrusion-vertical-gradient': false,
           'fill-extrusion-opacity': 1.0
         }
-      }, 'housing-fill'); // keep above the 2D fill
+      });
     }
 
     // -------- Logo Overlay (draggable + savable) --------
@@ -192,7 +210,7 @@
       }
       if (!map.getLayer(IMAGE_LAYER)){
         map.addLayer({
-          id: IMAGE_LAYER, type:'raster', source: IMAGE_SRC,
+          id: IMAGE_LAYER, type: 'raster', source: IMAGE_SRC,
           paint:{ 'raster-opacity': parseFloat(opSlider.value), 'raster-fade-duration': 0 }
         });
       }
@@ -352,13 +370,15 @@
 
     // Load assets & init sources/layers
     map.on('load', async ()=>{
-      // Buildings
-      try{ addBuildings(await safeJSON(GEOJSON_URL)); setStatus('Buildings loaded with full coverage.'); }
+      // Buildings (extrusion only, with Courtyards color + building-only filter)
+      try{ addBuildings(await safeJSON(GEOJSON_URL)); setStatus('Buildings loaded.'); }
       catch(e){ setStatus('Could not load buildings GeoJSON. Check file name/path.'); }
 
       // Route preview source/layer (below 3D buildings so it hugs ground)
       if (!map.getSource('route-points-src')){
         map.addSource('route-points-src',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+
+        // Put dots BELOW buildings? If you prefer below: place this before 'housing-3d' using that id in the 'before' param.
         map.addLayer({
           id:'route-dots', type:'circle', source:'route-points-src',
           layout:{ 'circle-pitch-alignment':'map' },
@@ -375,7 +395,7 @@
       try{
         const r = await fetch(IMAGE_URL,{cache:'no-store'});
         if(!r.ok) throw 0;
-        ensureLogo();
+        showLogo();
         if (!loadLogoCoordsIfAny()){ setLogoCoords(DEFAULT_CORNERS); saveLogoCoords(); }
         updateOpacity();
       }catch(e){
