@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>YSU Housing — Capture Courtyards (merge into GeoJSON with color)</title>
+  <title>YSU Housing — Capture Building Outlines (no colors)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Mapbox -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
@@ -12,47 +12,65 @@
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     #map{position:absolute; inset:0}
     .ui{
-      position:absolute; right:12px; top:12px; z-index:20; width:min(460px,94vw);
+      position:absolute; right:12px; top:12px; z-index:20; width:min(520px,96vw);
       background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
     }
     .ui header{padding:10px 12px; border-bottom:1px solid var(--border); font-weight:700}
     .ui .body{padding:10px 12px; display:grid; gap:10px}
     .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
     button{cursor:pointer; border:1px solid var(--border); background:#fff; padding:8px 10px; border-radius:8px; font-weight:600}
-    button.primary{background:#d6001c; color:#fff; border-color:#c21a1a}
-    input[type="text"]{padding:8px 10px; border:1px solid var(--border); border-radius:8px; width:220px}
+    button.primary{background:#111827; color:#fff; border-color:#111827}
+    input[type="number"],input[type="text"],select{
+      padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#fff;
+    }
     .muted{color:#4b5563; font-size:13px}
     .hint{background:#f9fafb; border:1px dashed #e5e7eb; padding:8px 10px; border-radius:8px; font-size:13px}
+    .checklist{display:grid; grid-template-columns:1fr auto; gap:6px; border-top:1px solid var(--border); padding-top:8px}
+    .ok{color:#059669; font-weight:700}
+    .missing{color:#b91c1c; font-weight:700}
+    .metrics{font-size:12px; color:#374151}
   </style>
 </head>
 <body>
   <div id="map"></div>
 
   <section class="ui">
-    <header>Capture University Courtyards → merge into buildings file</header>
+    <header>Capture Building Outlines (outline only, no colors)</header>
     <div class="body">
       <div class="row">
-        <button id="btnStart" class="primary">Draw Courtyards Footprint</button>
-        <button id="btnFinish">Finish Drawing</button>
-        <button id="btnClear">Clear Draft</button>
-      </div>
-
-      <div class="row">
-        <label class="muted">Name</label>
-        <input id="nameInput" type="text" value="University Courtyards" />
-        <label class="muted">Color</label>
-        <input id="colorInput" type="text" value="#9B59B6" />
+        <label class="muted">Select building</label>
+        <select id="bsel">
+          <option>Lyden</option>
+          <option>Cafaro</option>
+          <option>Christman</option>
+          <option>Weller</option>
+          <option>Wick</option>
+          <option>Kilcawley House</option>
+          <option>University Courtyards</option>
+        </select>
         <label class="muted">Height (m)</label>
-        <input id="heightInput" type="text" value="22" style="width:90px" />
+        <input id="height" type="number" value="22" step="1" style="width:90px" />
       </div>
 
       <div class="row">
-        <button id="btnSaveMerged" class="primary">Save Updated GeoJSON</button>
-        <button id="btnReload">Reload Source</button>
+        <button id="start" class="primary">Draw Footprint</button>
+        <button id="finish">Finish</button>
+        <button id="replace">Replace Outline</button>
+        <button id="clearDraft">Clear Draft</button>
       </div>
+
+      <div class="metrics" id="metrics">Width: — m · Length: — m · Area: — m² · Perimeter: — m</div>
+
+      <div class="row">
+        <button id="saveMerged" class="primary">Save Updated GeoJSON</button>
+        <button id="reload">Reload Existing File</button>
+      </div>
+
+      <div class="checklist" id="cklist"></div>
 
       <div id="status" class="hint">
-        Make sure <code>ysu_race_buildings_exact final.geojson</code> is in this folder. Draw the Courtyards polygon (click around its footprint, double-click to close), then “Save Updated GeoJSON” to download a merged file. Replace the repo file with it.
+        Load/trace each building footprint. This captures the true shape (width/length) and saves <b>height</b> as a property.  
+        File expected in this folder: <code>ysu_race_buildings_exact final.geojson</code> (will be merged/updated on save).
       </div>
     </div>
   </section>
@@ -61,11 +79,10 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
   <script>
-    mapboxgl.accessToken =
-      'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-
+    // ====== MAP ======
+    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
     const STYLE_ID    = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // handles space in filename
+    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // keep filename w/ space
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -81,10 +98,6 @@
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    const statusEl = document.getElementById('status');
-    const setStatus = t => statusEl.textContent = t;
-
-    // Hide labels for clarity
     function hideLabels(){
       const layers = map.getStyle().layers || [];
       for (const lyr of layers){
@@ -95,147 +108,261 @@
     }
     map.on('styledata', hideLabels);
 
-    // ---------- Load current buildings ----------
-    let buildingsFC = { type:'FeatureCollection', features:[] };
+    // ====== TARGET BUILDINGS ======
+    const TARGETS = [
+      { key:'lyden', name:'Lyden', defaultHeight:22 },
+      { key:'cafaro', name:'Cafaro', defaultHeight:22 },
+      { key:'christman', name:'Christman', defaultHeight:22 },
+      { key:'weller', name:'Weller', defaultHeight:22 },
+      { key:'wick', name:'Wick', defaultHeight:22 },
+      { key:'kilcawley house', name:'Kilcawley House', defaultHeight:18 },
+      { key:'university courtyards', name:'University Courtyards', defaultHeight:22 }
+    ];
+    const KEYSET = new Set(TARGETS.map(t=>t.key));
 
-    async function loadBuildings(){
-      try{
-        const r = await fetch(GEOJSON_URL, {cache:'no-store'});
-        if(!r.ok) throw 0;
-        buildingsFC = await r.json();
-        setStatus('Loaded existing buildings file. You can draw Courtyards now.');
-      } catch(e){
-        buildingsFC = { type:'FeatureCollection', features:[] };
-        setStatus('Could not load buildings file. You can still draw Courtyards and save a new file.');
-      }
-      renderBuildings();
-    }
+    // ====== STATE ======
+    let buildingsFC = { type:'FeatureCollection', features:[] }; // existing file (merged result)
+    const captured = {}; // key -> Feature (Polygon) with props {name,key,height,width_m,length_m,area_m2,perimeter_m}
 
-    function renderBuildings(){
-      if (map.getSource('housing-src')) {
-        map.getSource('housing-src').setData(buildingsFC);
-      } else {
-        map.addSource('housing-src', { type:'geojson', data: buildingsFC });
-      }
+    const statusEl = document.getElementById('status');
+    const setStatus = t => statusEl.textContent = t;
 
-      // name lowercase helper
-      const lname = ['downcase', ['to-string', ['get','name']]];
-      const colorByName =
-        ['case',
-          ['in', lname, ['literal',['lyden']]],                 '#FFD23F',
-          ['in', lname, ['literal',['cafaro']]],                '#FF9F1C',
-          ['in', lname, ['literal',['christman']]],             '#748B58',
-          ['in', lname, ['literal',['weller']]],                '#00E0E8',
-          ['in', lname, ['literal',['wick','wick house','wick house (arts)']]], '#FF6B35',
-          ['in', lname, ['literal',['university courtyards','university courtyard','courtyards','university courtyards 91 wick oval st']]], '#9B59B6',
-          /* default */                                          '#D62D20'
-        ];
-      const colorExpr = ['coalesce',['get','fill'], colorByName];
-
-      // 2D ground fill (makes whole footprint colored) — but only for polygons
-      if (map.getLayer('housing-fill')) map.removeLayer('housing-fill');
-      map.addLayer({
-        id:'housing-fill', type:'fill', source:'housing-src',
-        filter:['==', ['geometry-type'], 'Polygon'],
-        paint:{ 'fill-color': colorExpr, 'fill-opacity': 0.98 }
-      });
-
-      // 3D extrusion (roof+sides) for polygons
-      if (map.getLayer('housing-3d')) map.removeLayer('housing-3d');
-      map.addLayer({
-        id:'housing-3d', type:'fill-extrusion', source:'housing-src',
-        filter:['==', ['geometry-type'], 'Polygon'],
-        paint:{
-          'fill-extrusion-color': colorExpr,
-          'fill-extrusion-height': ['coalesce',['get','height'],22],
-          'fill-extrusion-base': 0,
-          'fill-extrusion-vertical-gradient': false,
-          'fill-extrusion-opacity': 1.0
-        }
-      });
-    }
-
-    // ---------- Draw tools (Polygon capture) ----------
+    // ====== DRAW ======
     const Draw = new MapboxDraw({
       displayControlsDefault:false,
       controls:{ polygon:true, trash:true },
       defaultMode:'simple_select',
       styles:[
+        // draft polygon (very light fill, neutral outline) – this is just the editor, not permanent color
         { id:'draw-fill', type:'fill',
           filter:['all',['==','$type','Polygon'],['!=','mode','static']],
-          paint:{'fill-color':'#9B59B6','fill-opacity':0.25} },
+          paint:{'fill-color':'#000000','fill-opacity':0.05} },
         { id:'draw-line', type:'line',
           filter:['all',['==','$type','Polygon'],['!=','mode','static']],
-          paint:{'line-color':'#9B59B6','line-width':2} },
+          paint:{'line-color':'#000000','line-width':2,'line-dasharray':[2,2]} },
         { id:'draw-vertex-halo', type:'circle',
           filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
           paint:{'circle-radius':6,'circle-color':'#fff'} },
         { id:'draw-vertex', type:'circle',
           filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':4,'circle-color':'#9B59B6'} }
+          paint:{'circle-radius':4,'circle-color':'#111827'} }
       ]
     });
     map.addControl(Draw,'top-right');
 
-    function startPolygon(){
+    // ====== LOAD EXISTING FILE (for context & merging) ======
+    async function loadExisting(){
+      try{
+        const r = await fetch(GEOJSON_URL,{cache:'no-store'});
+        if(!r.ok) throw 0;
+        buildingsFC = await r.json();
+        setStatus('Existing buildings file loaded.');
+      }catch(e){
+        buildingsFC = { type:'FeatureCollection', features:[] };
+        setStatus('No existing file found. You can still capture and save a new one.');
+      }
+      renderExistingOutlines();
+      preloadCapturedFromExisting();
+      renderChecklist();
+    }
+
+    // Show existing polygons as NEUTRAL outlines (no fill coloring)
+    function renderExistingOutlines(){
+      if (map.getSource('existing-src')) {
+        map.getSource('existing-src').setData(buildingsFC);
+      } else {
+        map.addSource('existing-src', { type:'geojson', data: buildingsFC });
+      }
+      if (map.getLayer('existing-line')) map.removeLayer('existing-line');
+      map.addLayer({
+        id:'existing-line', type:'line', source:'existing-src',
+        filter:['==', ['geometry-type'], 'Polygon'],
+        paint:{ 'line-color':'#6b7280', 'line-width':2 }
+      });
+    }
+
+    // If the existing file already has some target buildings, load them into "captured"
+    function preloadCapturedFromExisting(){
+      for (const f of buildingsFC.features || []){
+        if (f.geometry?.type!=='Polygon') continue;
+        const nm = (f.properties?.name||'').toString().toLowerCase();
+        if (KEYSET.has(nm)) {
+          captured[nm] = normalizeFeature(f, nm, f.properties?.height || defaultHeightFor(nm));
+        }
+      }
+    }
+
+    function defaultHeightFor(key){
+      const t = TARGETS.find(x=>x.key===key);
+      return t ? t.defaultHeight : 22;
+    }
+
+    // ====== METRICS (width/length/area/perimeter) ======
+    function degToMPerLon(lat){ return 111320 * Math.cos(lat*Math.PI/180); }
+    function degToMPerLat(){ return 111320; }
+
+    function polygonMetrics(coords){
+      // coords: [ [lng,lat], ... ] (first ring)
+      const lats = coords.map(c=>c[1]), lngs=coords.map(c=>c[0]);
+      const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+      const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+      const midLat=(minLat+maxLat)/2;
+
+      const width_m  = (maxLng-minLng) * degToMPerLon(midLat); // E-W
+      const length_m = (maxLat-minLat) * degToMPerLat();       // N-S
+
+      // Perimeter (meters) via haversine-lite
+      const R=6371000, toRad=d=>d*Math.PI/180;
+      let perim=0;
+      for(let i=0;i<coords.length-1;i++){
+        const [lng1,lat1]=coords[i], [lng2,lat2]=coords[i+1];
+        const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
+        const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+        perim += 2*R*Math.asin(Math.sqrt(a));
+      }
+
+      // Area by planar approx (good for small polygons)
+      // Convert to meters around midLat
+      const mcoords = coords.map(([lng,lat])=>[(lng-minLng)*degToMPerLon(midLat),(lat-minLat)*degToMPerLat()]);
+      let area=0;
+      for(let i=0;i<mcoords.length-1;i++){
+        const [x1,y1]=mcoords[i], [x2,y2]=mcoords[i+1];
+        area += x1*y2 - x2*y1;
+      }
+      area = Math.abs(area/2);
+
+      return {
+        width_m: Math.round(width_m),
+        length_m: Math.round(length_m),
+        perimeter_m: Math.round(perim),
+        area_m2: Math.round(area)
+      };
+    }
+
+    function showMetrics(m){
+      const el = document.getElementById('metrics');
+      el.textContent = `Width: ${m.width_m} m · Length: ${m.length_m} m · Area: ${m.area_m2} m² · Perimeter: ${m.perimeter_m} m`;
+    }
+
+    // Normalize/annotate a captured feature
+    function normalizeFeature(poly, key, height){
+      const name = TARGETS.find(t=>t.key===key)?.name || key;
+      const ring = poly.geometry.coordinates[0]; // first ring
+      // Ensure ring closed
+      if (ring.length && (ring[0][0] !== ring[ring.length-1][0] || ring[0][1] !== ring[ring.length-1][1])) {
+        poly.geometry.coordinates[0].push(ring[0]);
+      }
+      const m = polygonMetrics(poly.geometry.coordinates[0]);
+      poly.properties = Object.assign({}, poly.properties, {
+        name, key, type:'building',
+        height: Number(height) || defaultHeightFor(key),
+        width_m: m.width_m, length_m: m.length_m,
+        area_m2: m.area_m2, perimeter_m: m.perimeter_m
+      });
+      showMetrics(m);
+      return poly;
+    }
+
+    // ====== UI / FLOW ======
+    const bsel   = document.getElementById('bsel');
+    const height = document.getElementById('height');
+
+    function currentKey(){ return bsel.value.trim().toLowerCase(); }
+    function currentDefaultHeight(){ return defaultHeightFor(currentKey()); }
+
+    bsel.addEventListener('change', ()=>{ height.value = currentDefaultHeight(); updateDraftFromCaptured(); });
+
+    function updateDraftFromCaptured(){
+      Draw.deleteAll();
+      const key = currentKey();
+      const feat = captured[key];
+      if (feat) {
+        // Show the captured polygon in editable mode
+        Draw.add(feat);
+        setStatus(`Loaded existing outline for ${feat.properties.name}. You can edit and Finish again.`);
+        showMetrics({
+          width_m: feat.properties.width_m,
+          length_m: feat.properties.length_m,
+          area_m2: feat.properties.area_m2,
+          perimeter_m: feat.properties.perimeter_m
+        });
+      } else {
+        document.getElementById('metrics').textContent = 'Width: — m · Length: — m · Area: — m² · Perimeter: — m';
+      }
+      renderChecklist();
+    }
+
+    function renderChecklist(){
+      const box = document.getElementById('cklist');
+      box.innerHTML = '';
+      for (const t of TARGETS){
+        const done = !!captured[t.key];
+        const rowL = document.createElement('div');
+        const rowR = document.createElement('div');
+        rowL.textContent = t.name;
+        rowR.textContent = done ? '✔' : '—';
+        rowR.className = done ? 'ok' : 'missing';
+        box.appendChild(rowL); box.appendChild(rowR);
+      }
+    }
+
+    // Buttons
+    document.getElementById('start').onclick = ()=>{
       map.doubleClickZoom.disable();
       Draw.deleteAll();
       Draw.changeMode('draw_polygon');
-      setStatus('Drawing: click around Courtyards footprint; double-click to close.');
-    }
-    function finishPolygon(){
+      setStatus('Drawing: click around the footprint; double-click to close.');
+    };
+
+    document.getElementById('finish').onclick = ()=>{
       map.doubleClickZoom.enable();
-      Draw.changeMode('simple_select');
       const fc = Draw.getAll();
       const poly = fc.features.find(f => f.geometry?.type==='Polygon');
-      if (!poly){ alert('No polygon drawn yet.'); return; }
+      if (!poly) { alert('No polygon drawn.'); return; }
+      const key = currentKey();
+      const feat = normalizeFeature(poly, key, height.value || currentDefaultHeight());
+      captured[key] = feat;
+      setStatus(`Captured ${feat.properties.name}. Metrics saved with height ${feat.properties.height} m.`);
+      renderChecklist();
+    };
 
-      // Properties
-      const name   = document.getElementById('nameInput').value.trim() || 'University Courtyards';
-      const fill   = document.getElementById('colorInput').value.trim() || '#9B59B6';
-      const height = parseFloat(document.getElementById('heightInput').value) || 22;
-
-      poly.properties = Object.assign({}, poly.properties, {
-        name, fill, height
-      });
-
-      // Merge into buildingsFC (remove older Courtyards if present by name)
-      buildingsFC.features = buildingsFC.features.filter(f => {
-        const n = (f.properties?.name || '').toString().toLowerCase();
-        return !['university courtyards','university courtyard','courtyards','university courtyards 91 wick oval st'].includes(n);
-      });
-      buildingsFC.features.push(poly);
-
-      renderBuildings();
-      setStatus(`Captured "${name}" and merged into the dataset. Click “Save Updated GeoJSON” to download.`);
-    }
-    function clearDraft(){
+    document.getElementById('replace').onclick = ()=>{
       Draw.deleteAll();
-      setStatus('Draft cleared. You can draw again.');
-    }
+      Draw.changeMode('draw_polygon');
+      setStatus('Replacing outline: draw new polygon and click Finish.');
+    };
 
-    // ---------- Save merged file ----------
-    function saveMerged(){
+    document.getElementById('clearDraft').onclick = ()=>{
+      Draw.deleteAll();
+      setStatus('Draft cleared. Select a building and Draw again.');
+      document.getElementById('metrics').textContent = 'Width: — m · Length: — m · Area: — m² · Perimeter: — m';
+    };
+
+    // Save merged: remove old target features from file, add captured
+    document.getElementById('saveMerged').onclick = ()=>{
+      const out = { type:'FeatureCollection', features:[] };
+      // keep non-target features from existing file
+      for (const f of buildingsFC.features || []){
+        const k = (f.properties?.key || f.properties?.name || '').toString().toLowerCase();
+        if (!KEYSET.has(k)) out.features.push(f);
+      }
+      // add captured targets
+      for (const k in captured){ out.features.push(captured[k]); }
       const a=document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(buildingsFC,null,2)],{type:'application/json'}));
-      a.download = 'ysu_race_buildings_exact final.geojson';
-      a.click();
-      URL.revokeObjectURL(a.href);
-      setStatus('Downloaded merged file. Replace the file in GitHub with this one, then refresh.');
-    }
+      a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+      a.download='ysu_race_buildings_exact final.geojson';
+      a.click(); URL.revokeObjectURL(a.href);
+      setStatus('Downloaded merged file. Replace it in GitHub, then refresh.');
+    };
 
-    // ---------- UI wiring ----------
-    document.getElementById('btnStart').onclick  = startPolygon;
-    document.getElementById('btnFinish').onclick = finishPolygon;
-    document.getElementById('btnClear').onclick  = clearDraft;
-    document.getElementById('btnSaveMerged').onclick = saveMerged;
-    document.getElementById('btnReload').onclick = () => { loadBuildings(); };
+    document.getElementById('reload').onclick = ()=>{ loadExisting(); updateDraftFromCaptured(); };
 
-    // ---------- Boot ----------
+    // ====== BOOT ======
     map.on('load', async ()=>{
       hideLabels();
-      await loadBuildings();
-      setStatus('Ready: click “Draw Courtyards Footprint”, trace the building, then “Finish Drawing” and “Save Updated GeoJSON”.');
+      await loadExisting();
+      // default dropdown height to building’s default
+      height.value = currentDefaultHeight();
     });
   </script>
 </body>
