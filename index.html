@@ -2,27 +2,25 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Housing Logo Overlay (aesthetic only)</title>
+  <title>Housing Map — Colors + Logo Overlay</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
-    :root { --card:#fff; --border:#e5e7eb; --shadow:0 10px 24px rgba(0,0,0,.12); }
+    :root { --card:#fff; --border:#e5e7eb; --shadow:0 10px 24px rgba(0,0,0,.12) }
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     #map{position:absolute; inset:0}
+
     .ui{
-      position:absolute; right:12px; top:12px; z-index:20; width:min(360px,92vw);
+      position:absolute; right:12px; top:12px; z-index:20; width:min(380px,92vw);
       background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
     }
-    .ui header{padding:12px 14px; border-bottom:1px solid var(--border); font-weight:700}
-    .ui .body{padding:12px 14px; display:grid; gap:10px}
-    .row{display:flex; gap:8px; flex-wrap:wrap}
+    .ui header{padding:10px 12px; border-bottom:1px solid var(--border); font-weight:700}
+    .ui .body{padding:10px 12px; display:grid; gap:10px}
+    .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
     button{cursor:pointer; border:1px solid var(--border); background:#fff; padding:8px 10px; border-radius:8px; font-weight:600}
     button.primary{background:#d6001c; color:#fff; border-color:#c21a1a}
+    input[type="range"]{width:160px}
     .muted{color:#4b5563; font-size:13px}
-    .badge{display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%; background:#d6001c; color:#fff; font-size:12px; font-weight:700}
-    .steps{display:grid; gap:8px}
-    .step{display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:flex-start}
-    input[type="range"]{width:180px}
     .hint{background:#f9fafb; border:1px dashed #e5e7eb; padding:8px 10px; border-radius:8px; font-size:13px}
   </style>
 </head>
@@ -30,33 +28,25 @@
   <div id="map"></div>
 
   <section class="ui">
-    <header>Place Housing Logo (overlay only)</header>
+    <header>Housing Overlay & Layers</header>
     <div class="body">
-      <div class="steps">
-        <div class="step"><span class="badge">1</span><div>Click <b>Place / Re-place Logo</b>, then click <b>Top-Left</b>, <b>Top-Right</b>, <b>Bottom-Right</b> corners on the map.</div></div>
-        <div class="step"><span class="badge">2</span><div>Adjust <b>Opacity</b> or <b>Hide/Show</b>. Remove anytime.</div></div>
-      </div>
-
       <div class="row">
-        <button id="btnPlace" class="primary">Place / Re-place Logo</button>
-        <button id="btnHide">Hide</button>
-        <button id="btnShow">Show</button>
-        <button id="btnRemove">Remove</button>
-      </div>
-
-      <div class="row">
-        <label class="muted">Opacity:</label>
-        <input id="opacity" type="range" min="0" max="1" step="0.02" value="0.85" />
+        <button id="btnShowLogo" class="primary">Show Logo</button>
+        <button id="btnHideLogo">Hide Logo</button>
+        <button id="btnPlaceLogo">Re-place Logo</button>
+        <label class="muted">Opacity</label>
+        <input id="opacity" type="range" min="0" max="1" step="0.02" value="0.85">
         <span id="opval" class="muted">0.85</span>
       </div>
-
-      <div id="status" class="hint">Ready. File expected: <code>housing-overlay.png</code> in this folder.</div>
+      <div id="status" class="hint">
+        Looking for <code>ysu_race_buildings_exact final.geojson</code> and <code>housing-overlay.png</code> in this folder…
+      </div>
     </div>
   </section>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
-    // ====== MAP SETUP ======
+    // ---------- Map base ----------
     mapboxgl.accessToken =
       'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
@@ -73,118 +63,154 @@
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Optional: hide map labels to make the overlay pop
-    function hideLabels() {
+    const statusEl = document.getElementById('status');
+    const opSlider = document.getElementById('opacity');
+    const opVal = document.getElementById('opval');
+    const setStatus = (t)=>statusEl.textContent=t;
+
+    // ---------- Helpers ----------
+    async function safeJSON(url){
+      const r = await fetch(url, {cache:'no-store'});
+      if (!r.ok) throw new Error(`Not found: ${url}`);
+      return r.json();
+    }
+    function hideLabels(){
       const layers = map.getStyle().layers || [];
-      for (const lyr of layers) {
-        if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
+      for (const lyr of layers){
+        if (lyr.type==='symbol' || /label/i.test(lyr.id)){
           try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
         }
       }
     }
-    map.on('styledata', () => hideLabels());
+    map.on('styledata', hideLabels);
 
-    // ====== OVERLAY LOGIC (image source with 4 corners) ======
-    const SOURCE_ID = 'housing-logo-src';
-    const LAYER_ID  = 'housing-logo-layer';
-    const IMG_URL   = 'housing-overlay.png'; // <- put your image here (same folder)
+    // ---------- Buildings (with colors) ----------
+    const GEOJSON_PATH = encodeURI('ysu_race_buildings_exact final.geojson'); // filename with space handled
 
-    let placing = false;
-    let clicks = []; // TL, TR, BR
+    function addBuildingsLayer(fc){
+      if (map.getSource('housing-src')) map.removeSource('housing-src');
+      map.addSource('housing-src', { type:'geojson', data: fc });
 
-    const statusEl = document.getElementById('status');
-    const opSlider = document.getElementById('opacity');
-    const opVal = document.getElementById('opval');
+      // If a feature misses 'fill', fall back by name (tweak as you like)
+      const colorByName =
+        ['case',
+          ['==', ['downcase', ['get','name']], 'lyden'], '#FFD23F',
+          ['==', ['downcase', ['get','name']], 'cafaro'], '#FF9F1C',
+          ['==', ['downcase', ['get','name']], 'christman'], '#748B58',
+          ['==', ['downcase', ['get','name']], 'weller'], '#00E0E8',
+          ['==', ['downcase', ['get','name']], 'wick'], '#FF6B35',
+          /* default */ '#D62D20'
+        ];
 
-    function setStatus(msg) { statusEl.textContent = msg; }
+      const colorExpr = ['coalesce', ['get','fill'], colorByName];
 
-    function ensureLayer() {
-      if (!map.getSource(SOURCE_ID)) {
-        map.addSource(SOURCE_ID, {
-          type: 'image',
-          url: IMG_URL,
-          // temp 1x1 until user clicks three corners
-          coordinates: [
-            [-80.6460, 41.1095], // TL
-            [-80.6458, 41.1095], // TR
-            [-80.6458, 41.1093], // BR
-            [-80.6460, 41.1093]  // BL
-          ]
-        });
-      }
-      if (!map.getLayer(LAYER_ID)) {
-        map.addLayer({
-          id: LAYER_ID,
-          type: 'raster',
-          source: SOURCE_ID,
-          paint: {
-            'raster-opacity': parseFloat(opSlider.value),
-            'raster-fade-duration': 0
-          }
-        });
-      }
+      if (map.getLayer('housing-3d')) map.removeLayer('housing-3d');
+      map.addLayer({
+        id: 'housing-3d',
+        type: 'fill-extrusion',
+        source: 'housing-src',
+        paint: {
+          'fill-extrusion-color': colorExpr,
+          'fill-extrusion-height': ['coalesce', ['get','height'], 22],
+          'fill-extrusion-opacity': 0.96
+        }
+      });
     }
 
-    function updateOpacity() {
+    // ---------- Logo overlay (image source) ----------
+    const IMAGE_URL = './housing-overlay.png'; // must exist next to this file
+    const IMAGE_SRC = 'housing-logo-src';
+    const IMAGE_LAYER = 'housing-logo-layer';
+
+    // Default placement over the housing cluster. Adjust if needed.
+    const DEFAULT_CORNERS = [
+      [-80.6469, 41.1116], // TL
+      [-80.6440, 41.1116], // TR
+      [-80.6440, 41.1076], // BR
+      [-80.6469, 41.1076]  // BL
+    ];
+
+    function ensureLogoSource(){
+      if (map.getSource(IMAGE_SRC)) return;
+      map.addSource(IMAGE_SRC, { type:'image', url: IMAGE_URL, coordinates: DEFAULT_CORNERS });
+    }
+    function ensureLogoLayer(){
+      if (map.getLayer(IMAGE_LAYER)) return;
+      map.addLayer({
+        id: IMAGE_LAYER,
+        type: 'raster',
+        source: IMAGE_SRC,
+        paint: { 'raster-opacity': parseFloat(opSlider.value), 'raster-fade-duration': 0 }
+      });
+    }
+    function showLogo(){
+      ensureLogoSource(); ensureLogoLayer();
+      map.setLayoutProperty(IMAGE_LAYER, 'visibility', 'visible');
+      map.setPaintProperty(IMAGE_LAYER, 'raster-opacity', parseFloat(opSlider.value));
+    }
+    function hideLogo(){
+      if (map.getLayer(IMAGE_LAYER)) map.setLayoutProperty(IMAGE_LAYER, 'visibility', 'none');
+    }
+    function updateOpacity(){
       opVal.textContent = parseFloat(opSlider.value).toFixed(2);
-      if (map.getLayer(LAYER_ID)) {
-        map.setPaintProperty(LAYER_ID, 'raster-opacity', parseFloat(opSlider.value));
+      if (map.getLayer(IMAGE_LAYER)){
+        map.setPaintProperty(IMAGE_LAYER, 'raster-opacity', parseFloat(opSlider.value));
       }
     }
     opSlider.addEventListener('input', updateOpacity);
 
-    function startPlacing() {
-      ensureLayer();
-      placing = true;
-      clicks = [];
-      setStatus('Placing… Click TOP-LEFT, then TOP-RIGHT, then BOTTOM-RIGHT of the logo area.');
-      map.getCanvas().style.cursor = 'crosshair';
+    // Re-place by clicking TL, TR, BR
+    let placing = false, clicks = [];
+    function startPlace(){
+      placing = true; clicks = [];
+      showLogo();
+      setStatus('Click TOP-LEFT, then TOP-RIGHT, then BOTTOM-RIGHT for the logo.');
+      map.getCanvas().style.cursor='crosshair';
     }
-
-    function finishPlacement() {
+    function finishPlace(){
       if (clicks.length < 3) return;
       const [TL, TR, BR] = clicks;
-      // compute BL = TL + (BR - TR)
-      const BL = [ TL[0] + (BR[0] - TR[0]), TL[1] + (BR[1] - TR[1]) ];
-
-      const coords = [TL, TR, BR, BL];
-      map.getSource(SOURCE_ID).setCoordinates(coords);
-      placing = false;
-      clicks = [];
-      map.getCanvas().style.cursor = '';
-      setStatus('Logo placed. Use opacity slider or Place / Re-place to adjust.');
+      const BL = [ TL[0] + (BR[0]-TR[0]), TL[1] + (BR[1]-TR[1]) ];
+      map.getSource(IMAGE_SRC).setCoordinates([TL, TR, BR, BL]);
+      placing = false; clicks = [];
+      map.getCanvas().style.cursor='';
+      setStatus('Logo placed. Adjust opacity or re-place if needed.');
     }
-
-    map.on('click', (e) => {
+    map.on('click', (e)=>{
       if (!placing) return;
-      const pt = [e.lngLat.lng, e.lngLat.lat];
-      clicks.push(pt);
-      if (clicks.length === 1) setStatus('TL saved. Now click TOP-RIGHT.');
-      if (clicks.length === 2) setStatus('TR saved. Now click BOTTOM-RIGHT.');
-      if (clicks.length === 3) finishPlacement();
+      clicks.push([e.lngLat.lng, e.lngLat.lat]);
+      if (clicks.length === 1) setStatus('TL saved. Click TOP-RIGHT.');
+      if (clicks.length === 2) setStatus('TR saved. Click BOTTOM-RIGHT.');
+      if (clicks.length === 3) finishPlace();
     });
 
-    // Buttons
-    document.getElementById('btnPlace').onclick = () => startPlacing();
-    document.getElementById('btnHide').onclick  = () => {
-      if (map.getLayer(LAYER_ID)) map.setLayoutProperty(LAYER_ID, 'visibility', 'none');
-    };
-    document.getElementById('btnShow').onclick  = () => {
-      ensureLayer();
-      map.setLayoutProperty(LAYER_ID, 'visibility', 'visible');
-      updateOpacity();
-    };
-    document.getElementById('btnRemove').onclick = () => {
-      if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-      if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
-      placing = false; clicks = [];
-      setStatus('Overlay removed. Click “Place / Re-place Logo” to add it again.');
-    };
+    // ---------- UI wiring ----------
+    document.getElementById('btnShowLogo').onclick  = showLogo;
+    document.getElementById('btnHideLogo').onclick  = hideLogo;
+    document.getElementById('btnPlaceLogo').onclick = startPlace;
 
-    map.on('load', () => {
-      // keep labels off for a clean look
+    // ---------- Boot ----------
+    map.on('load', async () => {
       hideLabels();
-      setStatus('Ready. Click “Place / Re-place Logo” and set 3 corners.');
+
+      // Try to load buildings
+      try {
+        const fc = await safeJSON(GEOJSON_PATH);
+        addBuildingsLayer(fc);
+        setStatus('Buildings loaded with colors. If some are grey, add a "fill" property in the GeoJSON or edit the fallback list.');
+      } catch (e) {
+        setStatus('Could not load buildings GeoJSON. Make sure the file is named exactly: “ysu_race_buildings_exact final.geojson” and is in this folder.');
+      }
+
+      // Try the logo image (show by default if it exists)
+      try {
+        const r = await fetch(IMAGE_URL, {cache:'no-store'});
+        if (!r.ok) throw 0;
+        showLogo(); // image found → display
+      } catch (e) {
+        setStatus('Logo not found. Put “housing-overlay.png” next to this HTML. Then click “Show Logo”.');
+      }
+
       updateOpacity();
     });
   </script>
