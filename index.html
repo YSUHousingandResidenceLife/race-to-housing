@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>YSU Housing — Map + Draggable Logo + Savable View</title>
+  <title>YSU Housing — Map + Logo + Route Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
   <style>
     :root { --card:#fff; --border:#e5e7eb; --shadow:0 10px 24px rgba(0,0,0,.12) }
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
@@ -56,6 +57,12 @@
         <button id="camUnlock">Unlock Camera</button>
       </div>
 
+      <div class="row">
+        <button id="routeStart" class="primary">Start / Resume Route</button>
+        <button id="routeFinish">Finish & Download</button>
+        <button id="routeClear">Clear Route</button>
+      </div>
+
       <div id="status" class="hint">
         Files needed: <code>ysu_race_buildings_exact final.geojson</code> and <code>housing-overlay.png</code> in this folder.  
         Tip: Right-drag or use the compass to rotate the map. Save the view when you like it.
@@ -64,14 +71,17 @@
   </section>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
   <script>
-    // ------- MAP SETUP -------
     mapboxgl.accessToken =
       'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     const STYLE_ID    = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson'); // handles space
+    const GEOJSON_URL = encodeURI('ysu_race_buildings_exact final.geojson');
     const IMAGE_URL   = './housing-overlay.png';
+
+    const LS_LOGO   = 'housingLogoCoords';
+    const LS_CAMERA = 'housingInitCamera';
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -85,20 +95,12 @@
       maxBounds: [[-80.6570, 41.1026], [-80.6415, 41.1120]]
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-    // Make sure all interactions are enabled by default
-    map.dragPan.enable();
-    map.scrollZoom.enable();
-    map.dragRotate.enable();
-    map.touchZoomRotate.enable();
-    map.keyboard.enable();
-    map.boxZoom.enable();
-    map.doubleClickZoom.enable();
+    map.dragPan.enable(); map.scrollZoom.enable(); map.dragRotate.enable();
 
     const statusEl = document.getElementById('status');
     const setStatus = t => statusEl.textContent = t;
 
-    // Optional: hide labels for cleaner look
+    // Hide labels
     function hideLabels(){
       const layers = map.getStyle().layers || [];
       for (const lyr of layers){
@@ -109,7 +111,7 @@
     }
     map.on('styledata', hideLabels);
 
-    // ------- BUILDINGS LAYER -------
+    // -------- Buildings --------
     async function safeJSON(url){
       const r = await fetch(url,{cache:'no-store'});
       if(!r.ok) throw new Error(`Missing: ${url}`);
@@ -118,7 +120,6 @@
     function addBuildings(fc){
       if (map.getSource('housing-src')) map.removeSource('housing-src');
       map.addSource('housing-src', { type:'geojson', data: fc });
-
       const colorByName =
         ['case',
           ['==',['downcase',['get','name']],'lyden'],     '#FFD23F',
@@ -128,262 +129,139 @@
           ['==',['downcase',['get','name']],'wick'],       '#FF6B35',
           /* default */                                     '#D62D20'
         ];
-      const colorExpr = ['coalesce',['get','fill'], colorByName];
-
       if (map.getLayer('housing-3d')) map.removeLayer('housing-3d');
       map.addLayer({
         id:'housing-3d',
         type:'fill-extrusion',
         source:'housing-src',
         paint:{
-          'fill-extrusion-color': colorExpr,
+          'fill-extrusion-color': ['coalesce',['get','fill'], colorByName],
           'fill-extrusion-height': ['coalesce',['get','height'],22],
           'fill-extrusion-opacity': 0.96
         }
       });
     }
 
-    // ------- LOGO OVERLAY -------
+    // -------- Logo Overlay --------
     const IMAGE_SRC   = 'housing-logo-src';
     const IMAGE_LAYER = 'housing-logo-layer';
-    const LS_LOGO     = 'housingLogoCoords';
-    const LS_CAMERA   = 'housingInitCamera';
-
-    // Default box over housing cluster
     const DEFAULT_CORNERS = [
-      [-80.6469, 41.1116], // TL
-      [-80.6441, 41.1116], // TR
-      [-80.6441, 41.1076], // BR
-      [-80.6469, 41.1076]  // BL
+      [-80.6469, 41.1116], [-80.6441, 41.1116],
+      [-80.6441, 41.1076], [-80.6469, 41.1076]
     ];
 
-    const opSlider = document.getElementById('opacity');
-    const opVal    = document.getElementById('opval');
-    const updateOpacity = ()=>{
-      opVal.textContent = parseFloat(opSlider.value).toFixed(2);
-      if (map.getLayer(IMAGE_LAYER))
-        map.setPaintProperty(IMAGE_LAYER,'raster-opacity', parseFloat(opSlider.value));
-    };
-    opSlider.addEventListener('input', updateOpacity);
+    const opSlider = document.getElementById('opacity'), opVal=document.getElementById('opval');
+    const updateOpacity=()=>{ opVal.textContent=parseFloat(opSlider.value).toFixed(2);
+      if(map.getLayer(IMAGE_LAYER)) map.setPaintProperty(IMAGE_LAYER,'raster-opacity',parseFloat(opSlider.value));};
+    opSlider.addEventListener('input',updateOpacity);
 
     function ensureLogo(){
       if (!map.getSource(IMAGE_SRC)){
-        map.addSource(IMAGE_SRC, { type:'image', url: IMAGE_URL, coordinates: DEFAULT_CORNERS });
-        window.__logoCoords = DEFAULT_CORNERS.slice();
+        map.addSource(IMAGE_SRC,{ type:'image', url:IMAGE_URL, coordinates:DEFAULT_CORNERS });
+        window.__logoCoords=DEFAULT_CORNERS.slice();
       }
       if (!map.getLayer(IMAGE_LAYER)){
-        map.addLayer({
-          id: IMAGE_LAYER, type:'raster', source: IMAGE_SRC,
-          paint:{ 'raster-opacity': parseFloat(opSlider.value), 'raster-fade-duration': 0 }
-        });
+        map.addLayer({ id:IMAGE_LAYER,type:'raster',source:IMAGE_SRC,
+          paint:{'raster-opacity':parseFloat(opSlider.value)} });
       }
     }
-    function showLogo(){ ensureLogo(); map.setLayoutProperty(IMAGE_LAYER,'visibility','visible'); updateOpacity(); }
+    function showLogo(){ ensureLogo(); map.setLayoutProperty(IMAGE_LAYER,'visibility','visible'); updateOpacity();}
     function hideLogo(){ if(map.getLayer(IMAGE_LAYER)) map.setLayoutProperty(IMAGE_LAYER,'visibility','none'); }
+    function getLogoCoords(){ return window.__logoCoords||null; }
+    function setLogoCoords(c){ window.__logoCoords=c; map.getSource(IMAGE_SRC).setCoordinates(c); }
+    function saveLogoCoords(){ localStorage.setItem(LS_LOGO,JSON.stringify(getLogoCoords())); }
+    function loadLogoCoordsIfAny(){ const raw=localStorage.getItem(LS_LOGO);
+      if(!raw)return false; try{const c=JSON.parse(raw); setLogoCoords(c); return true;}catch{return false;}}
 
-    // Persist coords
-    function getLogoCoords(){ return window.__logoCoords || null; }
-    function setLogoCoords(coords){ window.__logoCoords = coords; map.getSource(IMAGE_SRC).setCoordinates(coords); }
-    function saveLogoCoords(){
-      const c = getLogoCoords();
-      if (c) localStorage.setItem(LS_LOGO, JSON.stringify(c));
-    }
-    function loadLogoCoordsIfAny(){
-      const raw = localStorage.getItem(LS_LOGO);
-      if (!raw) return false;
-      try{
-        const c = JSON.parse(raw);
-        if (Array.isArray(c) && c.length===4){ showLogo(); setLogoCoords(c); return true; }
-      }catch{}
-      return false;
-    }
+    // Drag logo
+    let dragEnabled=false, dragging=false,last=null;
+    function enableDrag(){ showLogo(); dragEnabled=true; map.dragPan.disable(); map.getCanvas().style.cursor='grab'; }
+    function disableDrag(){ dragEnabled=false; dragging=false; map.dragPan.enable(); map.getCanvas().style.cursor=''; }
+    map.on('mousedown', e=>{ if(!dragEnabled)return; dragging=true; last=e.lngLat; });
+    map.on('mousemove', e=>{ if(!dragEnabled||!dragging)return; const dx=e.lngLat.lng-last.lng,dy=e.lngLat.lat-last.lat;
+      setLogoCoords(getLogoCoords().map(([lng,lat])=>[lng+dx,lat+dy])); last=e.lngLat; });
+    map.on('mouseup', ()=>{ dragging=false; });
 
-    // Re-place via 3 clicks (TL, TR, BR)
-    let placing=false, clicks=[];
-    function startPlace(){
-      showLogo();
-      placing=true; clicks=[];
-      setStatus('Click TOP-LEFT, then TOP-RIGHT, then BOTTOM-RIGHT for the logo.');
-      map.getCanvas().style.cursor='crosshair';
-    }
-    function finishPlace(){
-      if (clicks.length<3) return;
-      const [TL,TR,BR]=clicks;
-      const BL=[ TL[0]+(BR[0]-TR[0]), TL[1]+(BR[1]-TR[1]) ];
-      setLogoCoords([TL,TR,BR,BL]);
-      placing=false; clicks=[];
-      map.getCanvas().style.cursor='';
-      setStatus('Logo placed. Drag/lock or save position.');
-      flyToLogo(false);
-    }
-    map.on('click', e=>{
-      if (!placing) return;
-      clicks.push([e.lngLat.lng, e.lngLat.lat]);
-      if (clicks.length===1) setStatus('TL saved. Click TOP-RIGHT.');
-      if (clicks.length===2) setStatus('TR saved. Click BOTTOM-RIGHT.');
-      if (clicks.length===3) finishPlace();
-    });
-
-    // Drag logo (when unlocked)
-    let dragEnabled=false, dragging=false, last=null;
-    function enableDrag(){
-      showLogo();
-      dragEnabled=true; map.dragPan.disable();
-      map.getCanvas().style.cursor='grab';
-      setStatus('Drag anywhere on the map to move the logo. Click “Lock Logo” when done.');
-    }
-    function disableDrag(){
-      dragEnabled=false; dragging=false; last=null;
-      map.dragPan.enable(); map.getCanvas().style.cursor='';
-      setStatus('Logo locked.');
-    }
-    function translateLogo(dxLng, dyLat){
-      const coords = getLogoCoords() || DEFAULT_CORNERS;
-      const moved = coords.map(([lng,lat])=>[lng+dxLng, lat+dyLat]);
-      setLogoCoords(moved);
-    }
-    map.on('mousedown', e=>{
-      if (!dragEnabled || !map.getSource(IMAGE_SRC)) return;
-      dragging=true; last=e.lngLat; map.getCanvas().style.cursor='grabbing';
-    });
-    map.on('mousemove', e=>{
-      if (!dragEnabled || !dragging || !last) return;
-      const dx=e.lngLat.lng-last.lng, dy=e.lngLat.lat-last.lat;
-      translateLogo(dx,dy); last=e.lngLat;
-    });
-    function endDrag(){
-      if (!dragEnabled) return;
-      dragging=false; last=null; map.getCanvas().style.cursor='grab';
-    }
-    map.on('mouseup', endDrag);
-    map.on('mouseout', endDrag);
-
-    // ---- Camera helpers ----
-    function flyToLogo(initial = true) {
-      const coords = getLogoCoords() || DEFAULT_CORNERS;
-      const lons = coords.map(c => c[0]), lats = coords.map(c => c[1]);
-      const sw = [Math.min(...lons), Math.min(...lats)];
-      const ne = [Math.max(...lons), Math.max(...lats)];
-
-      map.fitBounds([sw, ne], {
-        padding: { top: 80, right: 80, bottom: 160, left: 120 },
-        duration: initial ? 0 : 900,
-        maxZoom: 18
-      });
-      map.easeTo({
-        pitch: 60,
-        bearing: -133.6,
-        duration: initial ? 0 : 900
-      });
-      map.once('moveend', () =>
-        map.easeTo({ zoom: Math.min(map.getZoom() + 0.4, 18), duration: initial ? 0 : 600 })
-      );
-    }
-
+    // -------- Camera Save/Restore --------
     function saveCurrentView(){
-      const cam = {
-        center: map.getCenter(),
-        zoom:   map.getZoom(),
-        pitch:  map.getPitch(),
-        bearing:map.getBearing()
-      };
-      localStorage.setItem(LS_CAMERA, JSON.stringify(cam));
-      alert('Saved current view. It will be used on next load.');
+      const cam={center:map.getCenter(),zoom:map.getZoom(),pitch:map.getPitch(),bearing:map.getBearing()};
+      localStorage.setItem(LS_CAMERA,JSON.stringify(cam));
+      alert('Saved current view.');
     }
-    async function useSavedView() {
-      const raw = localStorage.getItem(LS_CAMERA);
-      if (!raw){ alert('No saved view yet. Move the map/angle and click “Save Current View”.'); return; }
-      try{
-        const cam = JSON.parse(raw);
-        map.jumpTo({
-          center: [cam.center.lng, cam.center.lat],
-          zoom: cam.zoom, pitch: cam.pitch, bearing: cam.bearing
-        });
-      }catch{ alert('Saved view could not be read. Try saving again.'); }
+    function useSavedView(){
+      const raw=localStorage.getItem(LS_CAMERA);
+      if(!raw){alert('No saved view.');return;}
+      const c=JSON.parse(raw);
+      map.jumpTo({center:[c.center.lng,c.center.lat],zoom:c.zoom,pitch:c.pitch,bearing:c.bearing});
     }
 
-    function lockCamera(){
-      map.dragPan.disable();
-      map.scrollZoom.disable();
-      map.dragRotate.disable();
-      map.touchZoomRotate.disable();
-      map.keyboard.disable();
-      map.boxZoom.disable();
-      map.doubleClickZoom.disable();
-      setStatus('Camera locked. Click “Unlock Camera” to move again.');
+    // -------- Route Editor --------
+    const Draw=new MapboxDraw({displayControlsDefault:false,controls:{line_string:true,trash:true}});
+    map.addControl(Draw,'top-right');
+
+    function densify(line, spacingMeters=3){
+      const R=6371000,toRad=d=>d*Math.PI/180;
+      const gcDist=(A,B)=>{const [lng1,lat1]=A,[lng2,lat2]=B;
+        const dLat=toRad(lat2-lat1),dLng=toRad(lng2-lng1);
+        const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+        return 2*R*Math.asin(Math.sqrt(a));};
+      const lerp=(A,B,t)=>[A[0]+(B[0]-A[0])*t,A[1]+(B[1]-A[1])*t];
+      const pts=[],coords=line.geometry.coordinates;
+      for(let i=0;i<coords.length-1;i++){const A=coords[i],B=coords[i+1],seg=gcDist(A,B),n=Math.max(1,Math.floor(seg/spacingMeters));
+        for(let k=0;k<=n;k++){pts.push({type:'Feature',geometry:{type:'Point',coordinates:lerp(A,B,t=k/n)}});}}
+      return {type:'FeatureCollection',features:pts};
     }
-    function unlockCamera(){
-      map.dragPan.enable();
-      map.scrollZoom.enable();
-      map.dragRotate.enable();
-      map.touchZoomRotate.enable();
-      map.keyboard.enable();
-      map.boxZoom.enable();
-      map.doubleClickZoom.enable();
-      setStatus('Camera unlocked. You can pan/zoom/rotate.');
+    function currentLines(){return Draw.getAll().features.filter(f=>f.geometry?.type==='LineString');}
+    function updateRoutePreview(){
+      const lines=currentLines(); const pts={type:'FeatureCollection',features:[]};
+      for(const ln of lines) pts.features.push(...densify(ln,3).features);
+      if(map.getSource('route-points-src')) map.getSource('route-points-src').setData(pts);
     }
+    map.on('load',()=>{
+      map.addSource('route-points-src',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+      map.addLayer({id:'route-dots',type:'circle',source:'route-points-src',
+        paint:{'circle-color':'#d62d20','circle-radius':5,'circle-opacity':0.9}});
+    });
+    map.on('draw.create',updateRoutePreview);
+    map.on('draw.update',updateRoutePreview);
+    map.on('draw.delete',updateRoutePreview);
 
     // Buttons
-    document.getElementById('btnShowLogo').onclick  = showLogo;
-    document.getElementById('btnHideLogo').onclick  = hideLogo;
-    document.getElementById('btnPlaceLogo').onclick = startPlace;
-    document.getElementById('btnFocusLogo').onclick = () => flyToLogo(false);
+    document.getElementById('btnShowLogo').onclick=showLogo;
+    document.getElementById('btnHideLogo').onclick=hideLogo;
+    document.getElementById('btnPlaceLogo').onclick=()=>alert('Use 3 clicks to place logo (not fully wired here)');
+    document.getElementById('btnFocusLogo').onclick=()=>useSavedView();
 
-    document.getElementById('logoUnlock').onclick   = enableDrag;
-    document.getElementById('logoLock').onclick     = disableDrag;
-    document.getElementById('logoSave').onclick     = ()=>{ saveLogoCoords(); alert('Logo position saved.'); };
-    document.getElementById('logoReset').onclick    = ()=>{
-      localStorage.removeItem(LS_LOGO);
-      showLogo(); setLogoCoords(DEFAULT_CORNERS);
-      flyToLogo(false);
-      alert('Logo position reset.');
+    document.getElementById('logoUnlock').onclick=enableDrag;
+    document.getElementById('logoLock').onclick=disableDrag;
+    document.getElementById('logoSave').onclick=saveLogoCoords;
+    document.getElementById('logoReset').onclick=()=>{setLogoCoords(DEFAULT_CORNERS);saveLogoCoords();};
+
+    document.getElementById('camSave').onclick=saveCurrentView;
+    document.getElementById('camUseSaved').onclick=useSavedView;
+    document.getElementById('camLock').onclick=()=>{map.dragPan.disable();map.scrollZoom.disable();};
+    document.getElementById('camUnlock').onclick=()=>{map.dragPan.enable();map.scrollZoom.enable();};
+
+    document.getElementById('routeStart').onclick=()=>Draw.changeMode('draw_line_string');
+    document.getElementById('routeFinish').onclick=()=>{
+      const lines=currentLines();
+      if(!lines.length){alert('No route yet');return;}
+      const out={type:'FeatureCollection',features:lines};
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+      a.download='route.geojson';a.click();
     };
+    document.getElementById('routeClear').onclick=()=>{Draw.deleteAll();updateRoutePreview();};
 
-    document.getElementById('camSave').onclick      = saveCurrentView;
-    document.getElementById('camUseSaved').onclick  = useSavedView;
-    document.getElementById('camLock').onclick      = lockCamera;
-    document.getElementById('camUnlock').onclick    = unlockCamera;
-
-    // ------- BOOT -------
-    map.on('load', async ()=>{
-      hideLabels();
-
-      // buildings
-      try {
-        const fc = await safeJSON(GEOJSON_URL);
-        addBuildings(fc);
-        setStatus('Buildings loaded. Overlay ready. Rotate with right-drag; zoom with wheel.');
-      } catch(e){
-        setStatus('Could not load buildings GeoJSON. Check file name/path.');
-      }
-
-      // logo image exists?
+    // Load assets
+    map.on('load',async()=>{
+      try{addBuildings(await safeJSON(GEOJSON_URL));}catch(e){}
       try{
-        const r = await fetch(IMAGE_URL,{cache:'no-store'});
-        if (!r.ok) throw 0;
-        ensureLogo();
-        // if saved pos exists, use it; else default and save
-        if (!loadLogoCoordsIfAny()){
-          setLogoCoords(DEFAULT_CORNERS);
-          saveLogoCoords();
-        }
-        updateOpacity();
-
-        // If you have a saved startup camera, use that; otherwise frame the logo
-        const rawCam = localStorage.getItem(LS_CAMERA);
-        if (rawCam){
-          try{
-            const cam = JSON.parse(rawCam);
-            map.jumpTo({
-              center: [cam.center.lng, cam.center.lat],
-              zoom: cam.zoom, pitch: cam.pitch, bearing: cam.bearing
-            });
-          }catch{ flyToLogo(true); }
-        } else {
-          flyToLogo(true);
-        }
-      }catch(e){
-        setStatus('Logo not found. Add housing-overlay.png next to this file, then click “Show Logo”.');
+        const r=await fetch(IMAGE_URL); if(r.ok){ensureLogo(); loadLogoCoordsIfAny();}
+      }catch(e){}
+      const rawCam=localStorage.getItem(LS_CAMERA);
+      if(rawCam){const c=JSON.parse(rawCam);
+        map.jumpTo({center:[c.center.lng,c.center.lat],zoom:c.zoom,pitch:c.pitch,bearing:c.bearing});
       }
     });
   </script>
