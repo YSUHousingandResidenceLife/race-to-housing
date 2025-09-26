@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Race to Housing — Manual Building Capture</title>
+  <title>Race to Housing — Manual Selection from GeoJSON</title>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
     html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
@@ -29,7 +29,7 @@
   <div>
     <header>
       <strong id="status">0 captured</strong>
-      <span style="margin-left:10px; font-size:12px; color:#6b7280">Hover to preview, click to capture</span>
+      <span style="margin-left:10px; font-size:12px; color:#6b7280">Click polygons to select buildings</span>
     </header>
     <div id="map"></div>
     <div id="toast" class="toast" style="display:none"></div>
@@ -60,20 +60,27 @@ function toast(msg, ms=2000){
 }
 
 map.on('load', ()=>{
-  // Highlight sources/layers
+  // Load your uploaded GeoJSON
+  map.addSource('all-buildings', { type:'geojson', data:'ysu_race_buildings_exact (2).geojson' });
+
+  // Show all polygons in light gray initially
+  map.addLayer({ id:'all-fill', type:'fill', source:'all-buildings', paint:{ 'fill-color':'#cccccc','fill-opacity':0.3 } });
+  map.addLayer({ id:'all-outline', type:'line', source:'all-buildings', paint:{ 'line-color':'#666666','line-width':1 } });
+
+  // Hover preview
   map.addSource('hover', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
   map.addLayer({ id:'hover-line', type:'line', source:'hover', paint:{ 'line-color':'#FFD700', 'line-width':3 } });
 
+  // Captured selection
   map.addSource('captured', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
   map.addLayer({ id:'captured-fill', type:'fill', source:'captured', paint:{ 'fill-color':'#ff0000','fill-opacity':0.4 } });
   map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width':2,'line-color':'#ff0000' } });
 });
 
-// Hover preview: query ALL fill/fill-extrusion layers
+// Hover preview
 map.on('mousemove', (e)=>{
-  const allLayers = (map.getStyle().layers || []).filter(l => l.type==='fill' || l.type==='fill-extrusion').map(l=>l.id);
-  const features = map.queryRenderedFeatures(e.point, { layers: allLayers });
-  const poly = features.find(f => f.geometry && (f.geometry.type==='Polygon' || f.geometry.type==='MultiPolygon'));
+  const features = map.queryRenderedFeatures(e.point, { layers:['all-fill'] });
+  const poly = features[0];
   if (poly){
     map.getSource('hover').setData(poly);
   } else {
@@ -81,11 +88,10 @@ map.on('mousemove', (e)=>{
   }
 });
 
-// Capture on click
+// Click to capture from GeoJSON
 map.on('click', (e)=>{
-  const allLayers = (map.getStyle().layers || []).filter(l => l.type==='fill' || l.type==='fill-extrusion').map(l=>l.id);
-  const features = map.queryRenderedFeatures(e.point, { layers: allLayers });
-  const poly = features.find(f => f.geometry && (f.geometry.type==='Polygon' || f.geometry.type==='MultiPolygon'));
+  const features = map.queryRenderedFeatures(e.point, { layers:['all-fill'] });
+  const poly = features[0];
   if (poly){
     if (!poly.properties) poly.properties = {};
     if (!poly.properties.name) poly.properties.name = `building_${captured.length+1}`;
@@ -99,8 +105,7 @@ map.on('click', (e)=>{
       toast(`Captured: ${poly.properties.name}`);
     }
   } else {
-    console.log('No polygon features here. Layers available:', (map.getStyle().layers||[]).map(l=>l.id));
-    toast('No building feature at this point');
+    toast('No polygon at this point');
   }
 });
 
