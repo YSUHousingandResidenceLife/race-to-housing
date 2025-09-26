@@ -1,154 +1,139 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>Campus Route — No Key (Leaflet + OSM)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<style>
-  html, body, #map { height: 100%; margin: 0; }
-  .legend { position: fixed; left: 10px; top: 10px; background: #0b0c10cc; color: #e5e7eb; padding: 8px 10px; border-radius: 8px; font: 14px system-ui; z-index: 999; }
-  .penguin-icon {
-    font-size: 28px; line-height: 28px;
-    transform: translate(-50%, -50%); /* center on point */
-  }
-</style>
+  <meta charset="utf-8" />
+  <title>YSU — Race to Housing Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet"/>
+  <style>
+    html, body, #map { height: 100%; margin: 0 }
+    .hud {
+      position: fixed; left: 12px; top: 12px; z-index: 10;
+      background: #0b0c10cc; color: #e5e7eb; padding: 8px 10px; border-radius: 10px;
+      font: 14px system-ui, sans-serif;
+    }
+    .penguin {
+      font-size: 28px; line-height: 28px;
+      transform: translate(-50%, -50%);
+    }
+  </style>
 </head>
 <body>
-<div id="map"></div>
-<div class="legend">Drag to pan · wheel to zoom · <b>]</b> forward · <b>[</b> back</div>
+  <div id="map"></div>
+  <div class="hud">drag to pan · wheel to zoom · <b>[</b>/<b>]</b> move penguin</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-(async function(){
-  // ===== CONFIG =====
-  // Put your GeoJSON file in the repo (recommend: data/route.geojson).
-  // If your current file is "route (3).geojson", rename it to "route.geojson" to avoid space issues.
-  const GEOJSON_URL = 'data/route.geojson'; // change if needed
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-  // Route style (black/red theme)
-  const routeStyle = {
-    color: '#ff3344',
-    weight: 5,
-    opacity: 0.95
-  };
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/light-v11', // you can swap in your custom YSU style ID later
+      center: [-80.6498, 41.1079], 
+      zoom: 15
+    });
 
-  // Polygon (building) style
-  const polygonStyle = {
-    color: '#111', weight: 2, opacity: 1,
-    fillColor: '#ff3344', fillOpacity: 0.30
-  };
+    const ROUTE_URL = 'data/route.geojson';
 
-  // ===== MAP (no API key) =====
-  const map = L.map('map', {
-    zoomControl: true, attributionControl: true
-  });
-
-  // Free tiles (no token)
-  const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 20,
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
-
-  // ===== LOAD YOUR GEOJSON =====
-  let gj;
-  try {
-    const res = await fetch(GEOJSON_URL);
-    if (!res.ok) throw new Error('fetch failed: ' + GEOJSON_URL);
-    gj = await res.json();
-  } catch (e) {
-    alert('Could not load GeoJSON: ' + e.message);
-    return;
-  }
-
-  // Normalize: accept Feature or FeatureCollection
-  const features = (gj.type === 'FeatureCollection') ? gj.features : [gj];
-
-  // Separate routes (LineString/MultiLineString) and polygons
-  const lines = [];
-  const polys = [];
-  for (const f of features) {
-    const t = f.geometry && f.geometry.type;
-    if (t === 'LineString' || t === 'MultiLineString') lines.push(f);
-    if (t === 'Polygon'    || t === 'MultiPolygon')    polys.push(f);
-  }
-
-  // Draw polygons (buildings) if present
-  let polyLayer = null, lineLayer = null;
-  if (polys.length) {
-    polyLayer = L.geoJSON({ type:'FeatureCollection', features: polys }, {
-      style: polygonStyle
-    }).addTo(map);
-  }
-
-  // Draw route(s)
-  if (lines.length) {
-    lineLayer = L.geoJSON({ type:'FeatureCollection', features: lines }, {
-      style: routeStyle
-    }).addTo(map);
-  }
-
-  // Fit bounds to whatever we have
-  const group = L.featureGroup([polyLayer, lineLayer].filter(Boolean));
-  if (group.getLayers().length) {
-    map.fitBounds(group.getBounds().pad(0.2));
-  } else {
-    // fallback: center on YSU-ish area
-    map.setView([41.103, -80.647], 15);
-  }
-
-  // ===== PENGUIN TOKEN ALONG ROUTE =====
-  // Extract a single array of route coordinates (lng,lat → lat,lng)
-  function collectRouteLatLngs() {
-    const latlngs = [];
-    for (const f of lines) {
-      const g = f.geometry;
-      if (g.type === 'LineString') {
-        g.coordinates.forEach(([lng,lat]) => latlngs.push([lat,lng]));
-      } else if (g.type === 'MultiLineString') {
-        g.coordinates.forEach(seg => seg.forEach(([lng,lat]) => latlngs.push([lat,lng])));
-      }
+    async function loadJSON(url) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(url + ' failed');
+      return r.json();
     }
-    return latlngs;
-  }
 
-  const pathLatLngs = collectRouteLatLngs();
-  if (!pathLatLngs.length) {
-    console.warn('No LineString found. If you only have polygons, the penguin will not move.');
-  }
+    function collectRouteLngLats(features) {
+      const out = [];
+      for (const f of features) {
+        const g = f.geometry || {};
+        if (g.type === 'LineString') {
+          out.push(...g.coordinates);
+        } else if (g.type === 'MultiLineString') {
+          g.coordinates.forEach(seg => out.push(...seg));
+        }
+      }
+      return out;
+    }
 
-  // Penguin as a DivIcon so we can use emoji without image files
-  const penguinIcon = L.divIcon({
-    className: 'penguin-icon',
-    html: '🐧'
-  });
+    map.on('load', async () => {
+      let gj;
+      try {
+        gj = await loadJSON(ROUTE_URL);
+      } catch (e) {
+        alert('Could not load GeoJSON: ' + e.message);
+        return;
+      }
 
-  let idx = 0;
-  const penguin = pathLatLngs.length
-    ? L.marker(pathLatLngs[0], { icon: penguinIcon }).addTo(map)
-    : null;
+      const features = (gj.type === 'FeatureCollection') ? gj.features : [gj];
 
-  function updatePenguin() {
-    if (!penguin || !pathLatLngs.length) return;
-    idx = Math.max(0, Math.min(idx, pathLatLngs.length - 1));
-    penguin.setLatLng(pathLatLngs[idx]);
-  }
-  updatePenguin();
+      const polys = features.filter(f => {
+        const t = f.geometry && f.geometry.type;
+        return t === 'Polygon' || t === 'MultiPolygon';
+      });
+      const lines = features.filter(f => {
+        const t = f.geometry && f.geometry.type;
+        return t === 'LineString' || t === 'MultiLineString';
+      });
 
-  // Keyboard controls to test progress (we’ll wire to Firestore later)
-  window.addEventListener('keydown', (e) => {
-    if (!pathLatLngs.length) return;
-    if (e.key === ']') { idx++; updatePenguin(); }
-    if (e.key === '[') { idx--; updatePenguin(); }
-  });
+      if (polys.length) {
+        map.addSource('polys', { type: 'geojson', data: { type:'FeatureCollection', features: polys } });
+        map.addLayer({
+          id: 'polys-fill',
+          type: 'fill',
+          source: 'polys',
+          paint: { 'fill-color': '#ff3344', 'fill-opacity': 0.3 }
+        });
+        map.addLayer({
+          id: 'polys-outline',
+          type: 'line',
+          source: 'polys',
+          paint: { 'line-color': '#111', 'line-width': 2 }
+        });
+      }
 
-  // ===== COMMON “no building polygon” CAUSES (and how this page avoids them) =====
-  // - If you have a building footprint: geometry.type MUST be "Polygon" (or MultiPolygon),
-  //   coordinates are arrays of [lng, lat], outer ring CLOSED (first==last), at least 4 points.
-  // - Routes should be LineString/MultiLineString; this page draws them as a red line automatically.
-  // - This page will happily show BOTH: polygons (as tinted fills) AND your red route.
+      if (lines.length) {
+        map.addSource('lines', { type: 'geojson', data: { type:'FeatureCollection', features: lines } });
+        map.addLayer({
+          id: 'route-line',
+          type: 'line',
+          source: 'lines',
+          paint: { 'line-color': '#ff3344', 'line-width': 5 }
+        });
+      }
 
-})();
-</script>
+      const bounds = new mapboxgl.LngLatBounds();
+      features.forEach(f => {
+        const g = f.geometry;
+        if (!g) return;
+        if (g.type === 'Polygon') g.coordinates.flat().forEach(c => bounds.extend(c));
+        if (g.type === 'MultiPolygon') g.coordinates.flat(2).forEach(c => bounds.extend(c));
+        if (g.type === 'LineString') g.coordinates.forEach(c => bounds.extend(c));
+        if (g.type === 'MultiLineString') g.coordinates.flat().forEach(c => bounds.extend(c));
+      });
+      if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 80, maxZoom: 18 });
+
+      const routeCoords = collectRouteLngLats(lines);
+      let idx = 0;
+
+      const penguinEl = document.createElement('div');
+      penguinEl.className = 'penguin';
+      penguinEl.textContent = '🐧';
+
+      const penguin = new mapboxgl.Marker({ element: penguinEl })
+        .setLngLat(routeCoords.length ? routeCoords[0] : map.getCenter().toArray())
+        .addTo(map);
+
+      function updatePenguin() {
+        if (!routeCoords.length) return;
+        idx = Math.max(0, Math.min(idx, routeCoords.length - 1));
+        penguin.setLngLat(routeCoords[idx]);
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (!routeCoords.length) return;
+        if (e.key === ']') { idx++; updatePenguin(); }
+        if (e.key === '[') { idx--; updatePenguin(); }
+      });
+    });
+  </script>
 </body>
 </html>
