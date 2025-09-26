@@ -1,119 +1,217 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Race to Housing — Auto Capture</title>
-  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Race to Housing — Auto-Capture (7/7) Buildings</title>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-    #controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: white;
-      padding: 8px;
-      z-index: 1;
-      font-family: sans-serif;
-      font-size: 13px;
-      box-shadow: 0 0 6px rgba(0,0,0,0.3);
-    }
-    button { margin-right: 6px; }
+    html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    #app { display:grid; grid-template-rows:auto 1fr; height:100%; }
+    header { display:flex; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid #e5e7eb; background:#fff; position:sticky; top:0; z-index:2; }
+    .badge { padding:4px 8px; border-radius:999px; background:#f3f4f6; font-weight:600; }
+    #status { font-variant-numeric: tabular-nums; }
+    .controls { margin-left:auto; display:flex; gap:8px; }
+    button { border:1px solid #d1d5db; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer; }
+    button[disabled] { opacity:.5; cursor:not-allowed; }
+    .note { font-size:12px; color:#6b7280; }
+    #map { position:relative; }
+    #map, #map canvas { width:100%; height:100%; display:block; }
+    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-size:12px; box-shadow:0 8px 20px rgba(0,0,0,.2); z-index:3; }
   </style>
 </head>
 <body>
-<div id="map"></div>
-<div id="controls">
-  <button id="downloadBtn" disabled>Download ysu_race_buildings_exact.geojson</button>
-  <div id="status">0/7 captured</div>
+<div id="app">
+  <header>
+    <span class="badge">YSU — Auto-Capture</span>
+    <strong id="status">0/7 captured</strong>
+    <span class="note">(Hard-coded token. Auto-captures all 7 buildings including University Courtyards.)</span>
+    <div class="controls">
+      <button id="startBtn">Start Auto-Capture</button>
+      <button id="downloadBtn" disabled>Download ysu_race_buildings_exact.geojson</button>
+    </div>
+  </header>
+  <div id="map"></div>
 </div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 <script>
-  // Hardcoded token (working)
-  mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZwcDZ3OGowMHFmM3VxaDhzZjFrZGVwIn0.tMA9qEFK3UjPqmaZz9llLg';
+// ===== CONFIG =====
+mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-  const buildings = [
-    { name: 'University Courtyards', coords: [-80.64268880113872, 41.10532694438848] },
-    { name: 'Lyden House', coords: [-80.65, 41.11] },
-    { name: 'Cafaro House', coords: [-80.65, 41.11] },
-    { name: 'Christman Dining Commons', coords: [-80.6468, 41.1068] },
-    { name: 'Weller House', coords: [-80.64, 41.11] },
-    { name: 'Wick House', coords: [-80.64, 41.11] },
-    { name: 'Kilcawley Center', coords: [-80.65, 41.11] }
-  ];
+const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
 
-  const captured = [];
+// Updated building centers (based on your provided GPS coordinates)
+const BUILDING_CENTERS = [
+  { key:'courtyards', name:'University Courtyards',       lng:-80.64268880113872, lat:41.10532694438848 },
+  { key:'lyden',      name:'Lyden House',                 lng:-80.65, lat:41.11 },
+  { key:'cafaro',     name:'Cafaro House',                lng:-80.65, lat:41.11 },
+  { key:'christman',  name:'Christman Dining Commons',    lng:-80.6468, lat:41.1068 },
+  { key:'weller',     name:'Weller House',                lng:-80.64, lat:41.11 },
+  { key:'wick',       name:'Wick House',                  lng:-80.64, lat:41.11 },
+  { key:'kilcawley',  name:'Kilcawley Center',            lng:-80.65, lat:41.11 }
+];
 
-  window.onload = function() {
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
-      center: [-80.644685, 41.107524],
-      zoom: 16.5,
-      pitch: 60,
-      bearing: -133.6
-    });
+let map = new mapboxgl.Map({ container:'map', style:STYLE, ...INITIAL_VIEW });
+map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
 
-    map.on('error', e => {
-      console.error('Mapbox error:', e.error);
-      document.getElementById('status').textContent = '⚠️ Map error — check console';
-    });
+let candidateLayers = [];
+let captured = [];
 
-    map.on('load', async () => {
-      console.log('Map loaded successfully');
-      await startCapture(map);
-    });
+const startBtn = document.getElementById('startBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const statusEl = document.getElementById('status');
+const toastEl = document.getElementById('toast');
+
+function toast(msg, ms=1800){
+  toastEl.textContent = msg; toastEl.style.display='block';
+  clearTimeout(toastEl._t); toastEl._t = setTimeout(()=> toastEl.style.display='none', ms);
+}
+
+const BUILDING_LAYER_PREDICATE = (layer) => {
+  if (!layer) return false;
+  const tid = String(layer.id || '').toLowerCase();
+  return (layer.type === 'fill' || layer.type === 'fill-extrusion') &&
+         (tid.includes('building') || tid.includes('bldg'));
+};
+
+function metersToPixelsAtLat(meters, lat, zoom){
+  const earthCircumference = 40075017; // meters
+  const latRad = lat * Math.PI / 180;
+  return meters / (earthCircumference * Math.cos(latRad) / Math.pow(2, zoom));
+}
+
+function bboxAround([lng,lat], meters, z){
+  const px = metersToPixelsAtLat(meters, lat, z);
+  const p1 = map.project([lng, lat]);
+  const min = [p1.x - px, p1.y + px];
+  const max = [p1.x + px, p1.y - px];
+  const sw = map.unproject(min), ne = map.unproject(max);
+  return [sw.lng, sw.lat, ne.lng, ne.lat];
+}
+
+function layerIds(){
+  return candidateLayers.length ? candidateLayers : (candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id));
+}
+
+function queryBuildingsInBox(box){
+  const layers = layerIds();
+  const features = map.queryRenderedFeatures(box, { layers });
+  return features.filter(f => (f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')));
+}
+
+function dissolve(features){
+  if (!features.length) return null;
+  let fc = turf.featureCollection(features.map(f => turf.clone(f)));
+  try {
+    let u = fc.features[0];
+    for (let i=1; i<fc.features.length; i++) u = turf.union(u, fc.features[i]);
+    return u;
+  } catch(e){
+    return turf.combine(fc);
   }
+}
 
-  async function captureBuilding(map, b) {
-    return new Promise(resolve => {
-      map.flyTo({ center: b.coords, zoom: 18, pitch: 60, bearing: -133.6, essential: true });
-      map.once('idle', () => {
-        const point = map.project(b.coords);
-        const features = map.queryRenderedFeatures([
-          [point.x - 50, point.y - 50],
-          [point.x + 50, point.y + 50]
-        ]);
-        const poly = features.find(f => f.geometry && f.geometry.type && f.geometry.type.includes('Polygon'));
-        if (poly) {
-          poly.properties = { name: b.name };
-          captured.push(poly);
-          document.getElementById('status').textContent = `${captured.length}/7 captured`;
-        } else {
-          console.warn(`No polygon found for ${b.name}`);
-        }
-        resolve();
-      });
-    });
-  }
+async function flyAndIdle(opts){
+  return new Promise(resolve => {
+    const done = ()=>{ map.off('idle', done); resolve(); };
+    map.once('idle', done);
+    map.flyTo({ ...opts, duration:700 });
+  });
+}
 
-  async function startCapture(map) {
-    captured.length = 0;
-    document.getElementById('status').textContent = `0/${buildings.length} captured`;
-    for (let b of buildings) {
-      await captureBuilding(map, b);
+async function captureOne(target, attempt=1){
+  const maxAttempts = 4;
+  const radii = [28, 42, 60, 85];
+  const radius = radii[Math.min(attempt-1, radii.length-1)];
+  await flyAndIdle({ center:[target.lng, target.lat], zoom: Math.max(INITIAL_VIEW.zoom, 17.2), pitch: INITIAL_VIEW.pitch, bearing: INITIAL_VIEW.bearing });
+  const box = bboxAround([target.lng, target.lat], radius, map.getZoom());
+  const feats = queryBuildingsInBox(box);
+
+  if (!feats.length){
+    if (attempt < maxAttempts){
+      toast(`No features at ${target.name} (try ${attempt+1}/${maxAttempts}) — widening search…`);
+      return captureOne(target, attempt+1);
     }
-    if (captured.length === buildings.length) {
-      document.getElementById('downloadBtn').disabled = false;
+    throw new Error(`No building polygons found for ${target.name}`);
+  }
+
+  const merged = dissolve(feats);
+  if (!merged) throw new Error(`Could not merge features for ${target.name}.`);
+
+  const fixed = turf.truncate(merged, { precision: 6, coordinates: 3 });
+  fixed.properties = { name: target.name, key: target.key };
+  return fixed;
+}
+
+function updateStatus(){
+  statusEl.textContent = `${captured.length}/7 captured`;
+  if (captured.length === BUILDING_CENTERS.length){
+    downloadBtn.disabled = false;
+    toast('All 7 captured — ready to download');
+  }
+}
+
+function downloadGeoJSON(){
+  const fc = { type:'FeatureCollection', features: captured };
+  const blob = new Blob([JSON.stringify(fc, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'ysu_race_buildings_exact.geojson';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+}
+
+downloadBtn.addEventListener('click', downloadGeoJSON);
+
+async function runAutoCapture(){
+  startBtn.disabled = true; downloadBtn.disabled = true; captured = []; updateStatus();
+  toast('Starting auto-capture…');
+
+  for (const target of BUILDING_CENTERS){
+    try {
+      const feat = await captureOne(target);
+      captured.push(feat);
+      updateStatus();
+    } catch(e){
+      console.error(e);
+      toast(e.message, 2400);
     }
   }
 
-  function downloadGeoJSON(){
-    const geojson = { type: 'FeatureCollection', features: captured };
-    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type:'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ysu_race_buildings_exact.geojson';
-    a.click();
-    URL.revokeObjectURL(url);
+  if (captured.length < BUILDING_CENTERS.length){
+    toast(`Captured ${captured.length}/7. Adjust centers if needed and run again.` , 2600);
+    startBtn.disabled = false;
+    return;
   }
 
-  document.getElementById('downloadBtn').onclick = downloadGeoJSON;
+  try {
+    const fc = { type:'FeatureCollection', features: captured };
+    if (!map.getSource('captured')){
+      map.addSource('captured', { type:'geojson', data: fc });
+      map.addLayer({ id:'captured-fill', type:'fill', source:'captured', paint:{ 'fill-opacity': 0.35 } });
+      map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width': 2 } });
+      map.addLayer({ id:'captured-labels', type:'symbol', source:'captured', layout:{ 'text-field':['get','name'], 'text-size': 12, 'text-offset':[0, 1.2] }, paint:{ 'text-halo-width':1, 'text-halo-color':'#ffffff' } });
+    } else {
+      map.getSource('captured').setData(fc);
+    }
+  } catch(e){ console.warn('Render overlay failed', e); }
+
+  updateStatus();
+}
+
+startBtn.addEventListener('click', runAutoCapture);
+
+map.on('load', ()=>{
+  candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id);
+  if (!candidateLayers.length){
+    toast('No obvious building layers found in style.');
+  }
+});
 </script>
 </body>
 </html>
