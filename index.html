@@ -52,7 +52,7 @@
     </header>
     <div class="content">
       <div class="steps">
-        <div class="step"><div class="num">1</div><div>Pick a team token. Everyone starts at <b>Lyden</b> (yellow).</div></div>
+        <div class="step"><div class="num">1</div><div>Pick a team token. Everyone starts at <b>Lyden</b> (pink).</div></div>
         <div class="step"><div class="num">2</div><div>On your turn, spin/roll and follow the campus route (coming next).</div></div>
         <div class="step"><div class="num">3</div><div>Landing on a building? Do the mini-challenge for bonus points.</div></div>
         <div class="step"><div class="num">4</div><div>Reach <b>Kilcawley</b> with required points to win the Race to Housing!</div></div>
@@ -111,7 +111,7 @@
     }
     async function loadJSON(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(`Failed to load ${url}`); return r.json(); }
     function bboxFromFeatures(fc){
-      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=Infinity;
       for(const f of fc.features||[]){ const g=f.geometry; if(!g) continue;
         const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[]; 
         for(const poly of polys) for(const ring of poly) for(const [x,y] of ring){
@@ -123,7 +123,7 @@
     map.on('load', async () => {
       hideLabelsAndBaseBuildings();
 
-      // Disable shading: solid-color extrusions
+      // Disable shading
       map.setLight({
         anchor: "map",
         color: "white",
@@ -133,14 +133,19 @@
       const data = await loadJSON(GEOJSON_URL);
       const courtyards = await loadJSON(COURTYARDS_URL);
 
-      // Main 6 buildings
+      // Main 6 buildings with specific colors
       map.addSource('race', { type:'geojson', data, generateId:true });
       map.addLayer({
         id:'race-buildings', type:'fill-extrusion', source:'race',
         paint:{
           'fill-extrusion-color': [
             'case',
-              ['==', ['get','name'], 'Kilcawley House'], '#800020', // burgundy
+              ['==', ['get','name'], 'Lyden House'], '#FF69B4',      // pink (1922TCX hot pink)
+              ['==', ['get','name'], 'Cafaro House'], '#0072CE',     // blue (Pantone 285)
+              ['==', ['get','name'], 'Wick House'], '#FFC72C',       // yellow (Pantone 128)
+              ['==', ['get','name'], 'Weller House'], '#582C83',     // purple (Pantone 268)
+              ['==', ['get','name'], 'Christman'], '#866D4B',        // gold (Pantone 872)
+              ['==', ['get','name'], 'Kilcawley House'], '#E4002B',  // red (Pantone 186)
               ['coalesce',['get','fill'],'#d6001c']
           ],
           'fill-extrusion-height':['coalesce',['get','height'],22],
@@ -149,14 +154,14 @@
         }
       });
 
-      // Courtyards — green
+      // Courtyards — green Pantone 367
       map.addSource('courtyards', { type:'geojson', data:courtyards, generateId:true });
       map.addLayer({
         id:'courtyards-fill',
         type:'fill-extrusion',
         source:'courtyards',
         paint:{
-          'fill-extrusion-color':'#228B22',
+          'fill-extrusion-color':'#78BE20',
           'fill-extrusion-height':['coalesce',['get','height'],22],
           'fill-extrusion-opacity':0.96,
           'fill-extrusion-vertical-gradient': false
