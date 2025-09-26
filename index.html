@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Paintbrush Mode</title>
+  <title>Race to Housing — Paint Mode</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
@@ -10,7 +10,7 @@
     #map { position:absolute; top:0; bottom:0; width:100%; }
     #drawCanvas {
       position:absolute; top:0; left:0; width:100%; height:100%;
-      pointer-events:none; /* turn on when painting */
+      pointer-events:none; /* off until painting */
       z-index:20;
     }
     #controls {
@@ -48,7 +48,35 @@ const map = new mapboxgl.Map({
   bearing: -133.6
 });
 
-// ----- PAINTBRUSH -----
+let combined;
+
+// Load GeoJSONs for buildings
+async function loadJSON(url){ const r=await fetch(url); return r.json(); }
+
+map.on("load", async () => {
+  const buildings = await loadJSON("ysu_race_buildings_exact_final.geojson");
+  const courtyards = await loadJSON("university_courtyards.geojson");
+  combined = { type:"FeatureCollection", features:[...buildings.features, ...courtyards.features] };
+
+  map.addSource("race", { type:"geojson", data: combined, generateId:true });
+  map.addLayer({
+    id:"race-buildings",
+    type:"fill-extrusion",
+    source:"race",
+    paint:{
+      "fill-extrusion-color": [
+        "case",
+          ["has","fill"], ["get","fill"],
+          "#d6001c"
+      ],
+      "fill-extrusion-height": ["coalesce", ["get","height"], 22],
+      "fill-extrusion-opacity": 0.96,
+      "fill-extrusion-vertical-gradient": false
+    }
+  });
+});
+
+// ----- PAINTBRUSH OVERLAY -----
 const canvas = document.getElementById("drawCanvas");
 const ctx = canvas.getContext("2d");
 resizeCanvas();
@@ -70,6 +98,7 @@ function startPaint(e){
 function endPaint(){
   painting = false;
   ctx.beginPath();
+  canvas.style.pointerEvents="none"; // let map move again
 }
 function draw(e){
   if(!painting) return;
@@ -83,18 +112,17 @@ function draw(e){
   ctx.moveTo(e.clientX, e.clientY);
 }
 
+// Mouse handlers
 canvas.addEventListener("mousedown", (e)=>{
   canvas.style.pointerEvents="auto"; // enable drawing
   startPaint(e);
 });
-canvas.addEventListener("mouseup", ()=>{
-  endPaint();
-  canvas.style.pointerEvents="none"; // disable so map is usable
-});
+canvas.addEventListener("mouseup", endPaint);
 canvas.addEventListener("mousemove", draw);
 
-document.getElementById("colorPicker").oninput = (e)=> brushColor = e.target.value;
-document.getElementById("brushSize").oninput = (e)=> brushSize = e.target.value;
+// Controls
+document.getElementById("colorPicker").oninput = e => brushColor = e.target.value;
+document.getElementById("brushSize").oninput = e => brushSize = e.target.value;
 
 // Download painting as image
 document.getElementById("downloadBtn").onclick = ()=>{
