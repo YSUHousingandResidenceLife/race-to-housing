@@ -1,118 +1,122 @@
-<script type="module">
-  /************ MAP ************/
-  const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-  const GEOJSON_URL = encodeURI('ysu_race_buildings_exact_final.geojson');
-  const COURTYARDS_URL = encodeURI('university_courtyards.geojson');
-  const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
-  const PITCH = 60, BEARING = -133.6;
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Race to Housing — Map Debug</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+  <style>
+    html,body { height:100%; margin:0; }
+    #map { position:absolute; inset:0; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
 
-  mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <script>
+    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+    const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
+    const COURTYARDS_URL = 'university_courtyards.geojson';
+    const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
 
-  const map = new mapboxgl.Map({
-    container: 'map',
-    style: STYLE_ID,
-    center: [-80.6458, 41.1090],
-    zoom: 16.8,
-    pitch: PITCH,
-    bearing: BEARING,
-    minZoom: 15,
-    maxZoom: 19,
-    maxBounds: CAMPUS_BOUNDS
-  });
-  map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-  function hideLabelsAndBaseBuildings() {
-    const layers = map.getStyle().layers || [];
-    for (const lyr of layers) {
-      if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
-        try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-      }
-      if (/building/i.test(lyr.id)) {
-        try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-      }
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: STYLE_ID,
+      center: [-80.6458, 41.1090],
+      zoom: 16.8,
+      pitch: 60,
+      bearing: -133.6,
+      maxBounds: CAMPUS_BOUNDS
+    });
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    async function loadJSON(url){
+      const r = await fetch(url,{cache:'no-store'});
+      return r.json();
     }
-  }
 
-  async function loadJSON(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(`Failed to load ${url}`); return r.json(); }
-  function bboxFromFeatures(fc){
-    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-    for(const f of fc.features||[]){ const g=f.geometry; if(!g) continue;
-      const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[]; 
-      for(const poly of polys) for(const ring of poly) for(const [x,y] of ring){
-        if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;
-      }}
-    return [[minX,minY],[maxX,maxY]];
-  }
-
-  map.on('load', async () => {
-    hideLabelsAndBaseBuildings();
-    map.setLight({ anchor: "map", color: "white", intensity: 0.0 });
-
-    const data = await loadJSON(GEOJSON_URL);
-    const courtyards = await loadJSON(COURTYARDS_URL);
-
-    map.addSource('race', { type:'geojson', data, generateId:true });
-    map.addSource('courtyards', { type:'geojson', data:courtyards, generateId:true });
-
-    // Debug popup
-    const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true });
-    map.on('click', 'race-buildings', (e) => {
-      const props = e.features[0].properties;
-      console.log("Clicked building:", props);
-      popup.setLngLat(e.lngLat)
-           .setHTML(`<b>${props.name || '(no name)'}</b>`)
-           .addTo(map);
-    });
-
-    const colorExpression = [
-      'case',
-        ['==', ['get','name'], 'Lyden House'], '#FF69B4',
-        ['==', ['get','name'], 'Cafaro House'], '#0072CE',
-        ['any',
-          ['==', ['get','name'], 'Wick House'],
-          ['==', ['get','name'], 'Wick Residence Hall'],
-          ['==', ['get','name'], 'Wick Hall']
-        ], '#FFFF00',
-        ['==', ['get','name'], 'Weller House'], '#582C83',
-        ['any',
-          ['==', ['get','name'], 'Christman'],
-          ['==', ['get','name'], 'Christman Hall'],
-          ['==', ['get','name'], 'Christman House']
-        ], '#FFD700',
-        ['==', ['get','name'], 'Kilcawley House'], '#E4002B',
-        ['coalesce',['get','fill'],'#d6001c']
-    ];
-
-    map.addLayer({
-      id:'race-buildings',
-      type:'fill-extrusion',
-      source:'race',
-      paint:{
-        'fill-extrusion-color': colorExpression,
-        'fill-extrusion-height':['coalesce',['get','height'],22],
-        'fill-extrusion-opacity':0.96,
-        'fill-extrusion-vertical-gradient': false
+    function bboxFromFeatures(fc){
+      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+      for(const f of fc.features||[]){ 
+        const g=f.geometry; if(!g) continue;
+        const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
+        for(const poly of polys) for(const ring of poly) for(const [x,y] of ring){
+          if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;
+        }
       }
-    });
+      return [[minX,minY],[maxX,maxY]];
+    }
 
-    map.addLayer({
-      id:'courtyards-fill3d',
-      type:'fill-extrusion',
-      source:'courtyards',
-      paint:{
-        'fill-extrusion-color':'#78BE20',
-        'fill-extrusion-height':['coalesce',['get','height'],22],
-        'fill-extrusion-opacity':0.96,
-        'fill-extrusion-vertical-gradient': false
-      }
-    });
+    map.on('load', async () => {
+      const data = await loadJSON(GEOJSON_URL);
+      const courtyards = await loadJSON(COURTYARDS_URL);
 
-    const combined = { type:"FeatureCollection", features:[...data.features, ...courtyards.features] };
-    const bounds = bboxFromFeatures(combined);
-    map.fitBounds(bounds, {
-      padding:{ top:80, right:160, bottom:120, left:320 },
-      maxZoom:18, pitch:PITCH, bearing:BEARING, duration:500
+      map.addSource('race', { type:'geojson', data });
+      map.addSource('courtyards', { type:'geojson', data:courtyards });
+
+      const colorExpression = [
+        'case',
+          ['==', ['get','name'], 'Lyden House'], '#FF69B4',   // Pink
+          ['==', ['get','name'], 'Cafaro House'], '#0072CE',  // Blue
+          ['any',
+            ['==', ['get','name'], 'Wick'],
+            ['==', ['get','name'], 'Wick House'],
+            ['==', ['get','name'], 'Wick Hall'],
+            ['==', ['get','name'], 'Wick Residence Hall']
+          ], '#FFFF00',                                       // Bright Yellow
+          ['==', ['get','name'], 'Weller House'], '#582C83',  // Purple
+          ['any',
+            ['==', ['get','name'], 'Christman'],
+            ['==', ['get','name'], 'Christman Hall'],
+            ['==', ['get','name'], 'Christman House']
+          ], '#FFD700',                                       // Bright Gold
+          ['==', ['get','name'], 'Kilcawley House'], '#E4002B', // Red
+          '#d6001c'
+      ];
+
+      map.addLayer({
+        id:'race-buildings',
+        type:'fill-extrusion',
+        source:'race',
+        paint:{
+          'fill-extrusion-color': colorExpression,
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
+        }
+      });
+
+      map.addLayer({
+        id:'courtyards-fill3d',
+        type:'fill-extrusion',
+        source:'courtyards',
+        paint:{
+          'fill-extrusion-color':'#78BE20',
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
+        }
+      });
+
+      // Debug popup
+      const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true });
+      map.on('click', 'race-buildings', (e) => {
+        const props = e.features[0].properties;
+        console.log("Clicked building properties:", props);
+        popup.setLngLat(e.lngLat)
+             .setHTML(`<b>${props.name || '(no name)'}</b>`)
+             .addTo(map);
+      });
+
+      const combined = { type:"FeatureCollection", features:[...data.features, ...courtyards.features] };
+      map.fitBounds(bboxFromFeatures(combined), {
+        padding:{ top:80, right:160, bottom:120, left:320 },
+        maxZoom:18, pitch:60, bearing:-133.6, duration:500
+      });
     });
-    map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:500}));
-  });
-</script>
+  </script>
+</body>
+</html>
