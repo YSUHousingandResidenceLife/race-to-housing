@@ -57,16 +57,15 @@
       map.addSource('race', { type:'geojson', data });
       map.addSource('courtyards', { type:'geojson', data:courtyards });
 
-      // ✅ Clean color mapping with "match"
       const colorExpression = [
         'match',
         ['get', 'name'],
-        'Lyden House', '#FF69B4',     // Pink
-        'Cafaro House', '#0072CE',    // Blue
-        'Wick House', '#FFFF00',      // Yellow
-        'Weller House', '#582C83',    // Purple
-        'Christman Hall', '#FFD700',  // Gold
-        'Kilcawley House', '#E4002B', // Red
+        'Lyden House', '#FF69B4',        // Pink
+        'Cafaro House', '#0072CE',       // Blue
+        'Wick House (Art)', '#FFFF00',   // Yellow
+        'Weller House', '#582C83',       // Purple
+        'Christman Dining', '#FFD700',   // Gold
+        'Kilcawley House', '#E4002B',    // Red
         /* fallback */ '#d6001c'
       ];
 
@@ -94,7 +93,7 @@
         }
       });
 
-      // 🔎 Debug popup
+      // Debug popup
       const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true });
       map.on('click', 'race-buildings', (e) => {
         const props = e.features[0].properties;
