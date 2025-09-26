@@ -122,6 +122,14 @@
 
     map.on('load', async () => {
       hideLabelsAndBaseBuildings();
+
+      // Disable shading: solid-color extrusions
+      map.setLight({
+        anchor: "map",
+        color: "white",
+        intensity: 0.0
+      });
+
       const data = await loadJSON(GEOJSON_URL);
       const courtyards = await loadJSON(COURTYARDS_URL);
 
@@ -132,7 +140,7 @@
         paint:{
           'fill-extrusion-color': [
             'case',
-              ['==', ['get','name'], 'Kilcawley House'], '#800020', // burgundy for Kilcawley
+              ['==', ['get','name'], 'Kilcawley House'], '#800020', // burgundy
               ['coalesce',['get','fill'],'#d6001c']
           ],
           'fill-extrusion-height':['coalesce',['get','height'],22],
@@ -148,14 +156,14 @@
         type:'fill-extrusion',
         source:'courtyards',
         paint:{
-          'fill-extrusion-color':'#228B22', // green
+          'fill-extrusion-color':'#228B22',
           'fill-extrusion-height':['coalesce',['get','height'],22],
           'fill-extrusion-opacity':0.96,
           'fill-extrusion-vertical-gradient': false
         }
       });
 
-      // Fit to all buildings (main + Courtyards)
+      // Fit to all buildings
       const combined = { type:"FeatureCollection", features:[...data.features, ...courtyards.features] };
       const bounds = bboxFromFeatures(combined);
       map.fitBounds(bounds, {
