@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Reliable 7/7 Capture</title>
+  <title>Race to Housing — Reliable 7/7 Capture (Fixed)</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
@@ -24,6 +24,12 @@
     .miss{color:#b91c1c;font-weight:700}
     .badge{margin-left:auto;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:2px 8px;font:700 12px system-ui}
     .note{background:#f9fafb;border:1px dashed #e5e7eb;border-radius:8px;padding:8px;margin-top:8px;font:12px system-ui}
+    /* Error overlay */
+    .err{
+      position:absolute;left:12px;bottom:12px;z-index:20;background:#111827;color:#fff;border-radius:10px;
+      padding:10px 12px;font:13px/1.35 system-ui;box-shadow:0 10px 24px rgba(0,0,0,.18);max-width:min(680px,92vw);display:none
+    }
+    .err b{color:#fca5a5}
   </style>
 </head>
 <body>
@@ -39,16 +45,28 @@
     <div id="metrics" class="small"></div>
     <div id="list" class="list"></div>
     <div class="note">
-      If auto-capture can’t find a footprint, you’ll be prompted to <b>click the building outline</b> to capture it manually.
+      If auto-capture can’t find a footprint, you’ll be prompted to <b>click the building outline</b> to capture.
     </div>
   </div>
 
+  <div id="err" class="err"></div>
+
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
+  // ===== ERROR OVERLAY =====
+  const errEl = document.getElementById('err');
+  function showErr(msg){
+    errEl.innerHTML = '<b>Script error:</b> ' + msg;
+    errEl.style.display = 'block';
+  }
+  window.addEventListener('error', e => showErr(e.message || String(e)));
+  window.addEventListener('unhandledrejection', e => showErr(e.reason && e.reason.message ? e.reason.message : String(e.reason)));
+
   // ===== CONFIG =====
   mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
   const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
   const niceView = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
+
   const TARGETS = [
     {key:'lyden',        name:'Lyden House',            color:'#FFD94A', coord:[-80.647458, 41.111143]},
     {key:'cafaro',       name:'Cafaro House',           color:'#FF8A00', coord:[-80.6461376731338, 41.11100745921387]},
@@ -122,7 +140,6 @@
   }
   async function flyTo(center){ map.easeTo({center, zoom:19.2, pitch:0, bearing:0, duration:900}); await waitSettle(); }
 
-  // Try to find a building polygon near a given screen point
   function footprintAtPoint(pointPx){
     const pads=[14,18,22,26,32];
     for(const p of pads){
@@ -146,17 +163,16 @@
     return null;
   }
 
-  // Manual fallback: wait for user click and capture polygon under cursor
   function manualCaptureFor(target){
     return new Promise(resolve=>{
-      setStatus(`Auto-capture missed <b>${target.name}</b>. Click directly on its building outline to capture.`);
+      setStatus(`Auto-capture missed <b>${target.name}</b>. Click directly on its roof outline.`);
       const once = (e)=>{
         map.getCanvas().style.cursor='crosshair';
         const geom = footprintAtPoint(e.point);
         map.getCanvas().style.cursor='';
         map.off('click', once);
         if(geom){ resolve(geom); }
-        else { setStatus(`No polygon found at click. Try again on the roof outline of <b>${target.name}</b>.`); resolve(null); }
+        else { setStatus(`No polygon at click. Try again on <b>${target.name}</b>.`); resolve(null); }
       };
       map.once('click', once);
     });
@@ -221,13 +237,12 @@
     const pt = map.project(t.coord);
     let geom = footprintAtPoint(pt);
 
-    // Fallback to manual click if not found
     if(!geom){
       geom = await manualCaptureFor(t);
       if(!geom) return false;
     }
 
-    // ensure closed ring for metrics
+    // ensure closed ring & metrics
     const ring = geom.type==='Polygon' ? geom.coordinates[0] : geom.coordinates[0][0];
     if(ring && ring.length){
       const a=ring[0], b=ring[ring.length-1];
@@ -243,19 +258,19 @@
     captured[t.key]=true;
     markDone(t.key);
     previewBoard();
-    setStatus(`Captured <b>${t.name</b>}.`);
+    // ✅ FIXED: the line below had a syntax error before
+    setStatus(`Captured <b>${t.name}</b>.`);
     return true;
   }
 
   async function runAll(){
     startBtn.disabled=true;
-    // reset if starting from scratch
     if(Object.keys(captured).length===0){
       board.features.length = 0;
       previewBoard();
     }
     for(const t of TARGETS){
-      if(captured[t.key]) continue; // already done
+      if(captured[t.key]) continue;
       await captureOne(t);
     }
     map.easeTo({...niceView, duration:900});
@@ -274,15 +289,7 @@
   startBtn.onclick = runAll;
   downloadBtn.onclick = ()=>{ if(board.features.length>0) downloadJSON(board,'ysu_race_buildings_exact.geojson'); };
 
-  map.on('load', ()=>{
-    // make sure labels from base are hidden
-    (map.getStyle().layers||[]).forEach(lyr=>{
-      if(lyr.type==='symbol'||/label/i.test(lyr.id)){
-        try{ map.setLayoutProperty(lyr.id,'visibility','none'); }catch(e){}
-      }
-    });
-    previewBoard(); // create empty source/layers so we can live-update
-  });
+  map.on('load', ()=>{ previewBoard(); });
   </script>
 </body>
 </html>
