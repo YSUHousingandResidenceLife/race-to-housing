@@ -2,35 +2,22 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Logo Editor (Move + Rotate)</title>
+  <title>Race to Housing — Map with Logo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
     html,body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
-    #controls {
-      position:absolute; top:10px; left:10px;
-      background:rgba(255,255,255,0.9);
-      padding:10px; border-radius:8px;
-      box-shadow:0 2px 6px rgba(0,0,0,.25);
-      font-family:sans-serif; font-size:13px;
-    }
-    #controls label { display:block; margin:4px 0; }
-    #coords { margin-top:6px; font:12px monospace; white-space:pre-wrap; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="controls">
-    <label>Rotation <input type="range" id="rotate" min="0" max="360" value="0"></label>
-    <label>Scale X <input type="range" id="scaleX" min="0.0005" max="0.005" step="0.0001" value="0.003"></label>
-    <label>Scale Y <input type="range" id="scaleY" min="0.0005" max="0.005" step="0.0001" value="0.002"></label>
-    <button id="saveBtn">Save Overlay</button>
-    <div id="coords">Coords will show here when saved.</div>
-  </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
+    const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
+    const COURTYARDS_URL = 'university_courtyards.geojson';
+
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     const map = new mapboxgl.Map({
@@ -42,68 +29,73 @@
       bearing: -133.6
     });
 
-    // Starting values
-    let center = [-80.6458, 41.1090];
-    let scaleX = 0.003;
-    let scaleY = 0.002;
-    let angleDeg = 0;
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Draggable marker for center
-    const marker = new mapboxgl.Marker({ draggable: true })
-      .setLngLat(center)
-      .addTo(map);
+    async function loadJSON(url){ const r=await fetch(url); return r.json(); }
 
-    marker.on('drag', () => {
-      center = marker.getLngLat().toArray();
-      updateOverlay();
-    });
+    map.on('load', async () => {
+      const data = await loadJSON(GEOJSON_URL);
+      const courtyards = await loadJSON(COURTYARDS_URL);
 
-    map.on('load', () => {
-      updateOverlay();
+      map.addSource('race', { type:'geojson', data });
+      map.addSource('courtyards', { type:'geojson', data:courtyards });
 
-      document.getElementById('rotate').oninput = e => { angleDeg = +e.target.value; updateOverlay(); };
-      document.getElementById('scaleX').oninput = e => { scaleX = +e.target.value; updateOverlay(); };
-      document.getElementById('scaleY').oninput = e => { scaleY = +e.target.value; updateOverlay(); };
-
-      document.getElementById('saveBtn').onclick = () => {
-        const coords = computeCoords(center, scaleX, scaleY, angleDeg);
-        document.getElementById('coords').textContent =
-          "Paste these 4 coords into GitHub:\n" + JSON.stringify(coords,null,2);
-      };
-    });
-
-    // Compute 4 corners given center + scale + rotation
-    function computeCoords([cx,cy], sx, sy, deg){
-      const rad = deg * Math.PI/180;
-      const cos = Math.cos(rad), sin = Math.sin(rad);
-
-      const pts = [
-        [-sx, sy],  // top-left
-        [ sx, sy],  // top-right
-        [ sx,-sy],  // bottom-right
-        [-sx,-sy]   // bottom-left
+      // Building colors
+      const colorExpression = [
+        'match',
+        ['get','name'],
+        'Lyden House', '#FF69B4',          // Pink
+        'Cafaro House', '#0072CE',         // Blue
+        'Wick House (Art)', '#FFFF00',     // Yellow
+        'Weller House', '#582C83',         // Purple
+        'Christman Dining', '#FFDF00',     // Bright Gold
+        'Kilcawley House', '#E4002B',      // Red
+        /* fallback */ '#d6001c'
       ];
 
-      return pts.map(([x,y])=>[
-        cx + x*cos - y*sin,
-        cy + x*sin + y*cos
-      ]);
-    }
+      map.addLayer({
+        id:'race-buildings',
+        type:'fill-extrusion',
+        source:'race',
+        paint:{
+          'fill-extrusion-color': colorExpression,
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
+        }
+      });
 
-    function updateOverlay(){
-      const coords = computeCoords(center, scaleX, scaleY, angleDeg);
+      map.addLayer({
+        id:'courtyards-fill3d',
+        type:'fill-extrusion',
+        source:'courtyards',
+        paint:{
+          'fill-extrusion-color':'#78BE20',
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
+        }
+      });
 
-      if(map.getSource('housing-overlay')){
-        map.getSource('housing-overlay').setCoordinates(coords);
-      } else {
-        map.addSource('housing-overlay', {
-          type:'image',
-          url:'housing-overlay.png',
-          coordinates: coords
-        });
-        map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay' });
-      }
-    }
+      // === Logo Overlay (locked to your coords) ===
+      map.addSource('housing-overlay', {
+        type:'image',
+        url:'housing-overlay.png',
+        coordinates: [
+          [-80.64825006745193, 41.102595011939734], // top-left
+          [-80.6538515500109,  41.104745219637],    // top-right
+          [-80.65205971026316, 41.109413121769485], // bottom-right
+          [-80.64645822770419, 41.107262914072216]  // bottom-left
+        ]
+      });
+
+      map.addLayer({
+        id:'housing-overlay-layer',
+        type:'raster',
+        source:'housing-overlay',
+        paint:{ 'raster-opacity': 1.0 }
+      });
+    });
   </script>
 </body>
 </html>
