@@ -2,81 +2,135 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Logo Editor</title>
+  <title>Race to Housing — Map with Logo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
   <style>
     html,body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
+    #controls {
+      position:absolute; top:10px; left:10px;
+      background:rgba(255,255,255,0.9);
+      padding:8px; border-radius:6px;
+      box-shadow:0 2px 6px rgba(0,0,0,.25);
+      font-family:sans-serif; font-size:14px;
+    }
     #coords {
-      position:absolute; bottom:10px; left:10px;
-      background:rgba(255,255,255,0.9); padding:8px;
-      font:12px monospace; border-radius:6px;
-      max-width:400px; white-space:pre-wrap;
+      margin-top:6px; font:12px monospace; white-space:pre-wrap;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <pre id="coords">Draw or edit the 4-corner box to place/rotate/resize the logo. Final coords will appear here.</pre>
+  <div id="controls">
+    <button id="toggleEdit">Enable Edit</button>
+    <div id="coords">Coords will show here when saved.</div>
+  </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
   <script>
+    const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
+    const COURTYARDS_URL = 'university_courtyards.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
       center: [-80.6458, 41.1090],
-      zoom: 16.5,
+      zoom: 16.8,
       pitch: 60,
       bearing: -133.6
     });
 
-    // Controls
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    const Draw = new MapboxDraw({ displayControlsDefault:true });
-    map.addControl(Draw);
+    const Draw = new MapboxDraw({ displayControlsDefault:false });
 
-    // Add placeholder overlay
-    const startCoords = [
-      [-80.6485, 41.1115], // top-left
-      [-80.6435, 41.1115], // top-right
-      [-80.6435, 41.1075], // bottom-right
-      [-80.6485, 41.1075]  // bottom-left
-    ];
-    map.on('load', () => {
-      map.addSource('housing-overlay', {
-        type:'image',
-        url:'housing-overlay.png',
-        coordinates:startCoords
+    async function loadJSON(url){ const r=await fetch(url); return r.json(); }
+
+    map.on('load', async () => {
+      const data = await loadJSON(GEOJSON_URL);
+      const courtyards = await loadJSON(COURTYARDS_URL);
+
+      map.addSource('race', { type:'geojson', data });
+      map.addSource('courtyards', { type:'geojson', data:courtyards });
+
+      const colorExpression = [
+        'match',
+        ['get','name'],
+        'Lyden House', '#FF69B4',
+        'Cafaro House', '#0072CE',
+        'Wick House (Art)', '#FFFF00',
+        'Weller House', '#582C83',
+        'Christman Dining', '#FFDF00',
+        'Kilcawley House', '#E4002B',
+        /* fallback */ '#d6001c'
+      ];
+
+      map.addLayer({
+        id:'race-buildings',
+        type:'fill-extrusion',
+        source:'race',
+        paint:{
+          'fill-extrusion-color': colorExpression,
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
+        }
       });
+
+      map.addLayer({
+        id:'courtyards-fill3d',
+        type:'fill-extrusion',
+        source:'courtyards',
+        paint:{
+          'fill-extrusion-color':'#78BE20',
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
+        }
+      });
+
+      // === Logo Overlay ===
+      let logoCoords = [
+        [-80.6485, 41.1115], // top-left
+        [-80.6435, 41.1115], // top-right
+        [-80.6435, 41.1075], // bottom-right
+        [-80.6485, 41.1075]  // bottom-left
+      ];
+      map.addSource('housing-overlay', { type:'image', url:'housing-overlay.png', coordinates:logoCoords });
       map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay' });
 
-      // Add editable polygon
-      Draw.add({
-        id:'overlay-shape',
-        type:'Feature',
-        properties:{overlay:true},
-        geometry:{ type:'Polygon', coordinates:[[...startCoords, startCoords[0]]] }
-      });
-
-      // Update overlay when polygon is changed
-      map.on('draw.update', syncOverlay);
-      map.on('draw.create', syncOverlay);
+      // === Edit Button ===
+      let editing = false;
+      document.getElementById('toggleEdit').onclick = () => {
+        if(!editing){
+          // Enable editing
+          map.addControl(Draw);
+          Draw.add({
+            id:'overlay-shape',
+            type:'Feature',
+            properties:{overlay:true},
+            geometry:{ type:'Polygon', coordinates:[[...logoCoords, logoCoords[0]]] }
+          });
+          document.getElementById('toggleEdit').textContent = "Save Overlay";
+          editing = true;
+        } else {
+          // Save + disable editing
+          const f = Draw.getAll().features.find(ft => ft.properties.overlay);
+          if(f){
+            logoCoords = f.geometry.coordinates[0].slice(0,4);
+            map.getSource('housing-overlay').setCoordinates(logoCoords);
+            document.getElementById('coords').textContent =
+              "Final coordinates:\n" + JSON.stringify(logoCoords,null,2);
+          }
+          map.removeControl(Draw);
+          document.getElementById('toggleEdit').textContent = "Enable Edit";
+          editing = false;
+        }
+      };
     });
-
-    function syncOverlay(){
-      const f = Draw.getAll().features.find(ft => ft.properties.overlay);
-      if(!f) return;
-      const coords = f.geometry.coordinates[0].slice(0,4);
-      map.getSource('housing-overlay').setCoordinates(coords);
-      document.getElementById('coords').textContent =
-        "Paste these 4 coords into your final script:\n" +
-        JSON.stringify(coords,null,2);
-    }
   </script>
 </body>
 </html>
