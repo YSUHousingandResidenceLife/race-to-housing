@@ -57,21 +57,17 @@
       map.addSource('race', { type:'geojson', data });
       map.addSource('courtyards', { type:'geojson', data:courtyards });
 
-      // ✅ Explicit case rules — no "any" fallbacks
+      // ✅ Clean color mapping with "match"
       const colorExpression = [
-        'case',
-          ['==', ['get','name'], 'Lyden House'], '#FF69B4',   // Pink
-          ['==', ['get','name'], 'Cafaro House'], '#0072CE',  // Blue
-          ['==', ['get','name'], 'Wick'], '#FFFF00',          // Yellow
-          ['==', ['get','name'], 'Wick House'], '#FFFF00',
-          ['==', ['get','name'], 'Wick Hall'], '#FFFF00',
-          ['==', ['get','name'], 'Wick Residence Hall'], '#FFFF00',
-          ['==', ['get','name'], 'Weller House'], '#582C83',  // Purple
-          ['==', ['get','name'], 'Christman'], '#FFD700',     // Gold
-          ['==', ['get','name'], 'Christman Hall'], '#FFD700',
-          ['==', ['get','name'], 'Christman House'], '#FFD700',
-          ['==', ['get','name'], 'Kilcawley House'], '#E4002B', // Red
-          '#d6001c' // fallback
+        'match',
+        ['get', 'name'],
+        'Lyden House', '#FF69B4',     // Pink
+        'Cafaro House', '#0072CE',    // Blue
+        'Wick House', '#FFFF00',      // Yellow
+        'Weller House', '#582C83',    // Purple
+        'Christman Hall', '#FFD700',  // Gold
+        'Kilcawley House', '#E4002B', // Red
+        /* fallback */ '#d6001c'
       ];
 
       map.addLayer({
@@ -102,10 +98,10 @@
       const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true });
       map.on('click', 'race-buildings', (e) => {
         const props = e.features[0].properties;
-        console.log("Clicked building properties:", props);
         popup.setLngLat(e.lngLat)
              .setHTML(`<b>${props.name || '(no name)'}</b>`)
              .addTo(map);
+        console.log("Clicked building:", props);
       });
 
       const combined = { type:"FeatureCollection", features:[...data.features, ...courtyards.features] };
