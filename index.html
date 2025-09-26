@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Map Debug</title>
+  <title>Race to Housing — Overlay + Labels Debug</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
@@ -64,7 +64,7 @@
         'Cafaro House', '#0072CE',         // Blue
         'Wick House (Art)', '#FFFF00',     // Yellow
         'Weller House', '#582C83',         // Purple
-        'Christman Dining', '#FFDF00',     // Brighter Gold
+        'Christman Dining', '#FFDF00',     // Bright Gold
         'Kilcawley House', '#E4002B',      // Red
         /* fallback */ '#d6001c'
       ];
@@ -93,14 +93,41 @@
         }
       });
 
-      // Debug popup
-      const popup = new mapboxgl.Popup({ closeButton: true, closeOnClick: true });
-      map.on('click', 'race-buildings', (e) => {
-        const props = e.features[0].properties;
-        popup.setLngLat(e.lngLat)
-             .setHTML(`<b>${props.name || '(no name)'}</b>`)
-             .addTo(map);
-        console.log("Clicked building:", props);
+      // 🏠 Floating building labels
+      map.addLayer({
+        id:'building-labels',
+        type:'symbol',
+        source:'race',
+        layout:{
+          'text-field':['get','name'],
+          'text-font':['Open Sans Bold','Arial Unicode MS Bold'],
+          'text-size':14,
+          'text-offset':[0,2],
+          'text-anchor':'bottom'
+        },
+        paint:{
+          'text-color':'#000000',
+          'text-halo-color':'#ffffff',
+          'text-halo-width':2
+        }
+      });
+
+      // 🖼️ Housing overlay (edit coordinates to place)
+      map.addSource('housing-overlay', {
+        type:'image',
+        url:'housing-overlay.png',
+        coordinates: [
+          [-80.6490, 41.1115], // top-left
+          [-80.6425, 41.1115], // top-right
+          [-80.6425, 41.1075], // bottom-right
+          [-80.6490, 41.1075]  // bottom-left
+        ]
+      });
+      map.addLayer({
+        id:'housing-overlay-layer',
+        source:'housing-overlay',
+        type:'raster',
+        paint:{ 'raster-opacity':1.0 }
       });
 
       const combined = { type:"FeatureCollection", features:[...data.features, ...courtyards.features] };
