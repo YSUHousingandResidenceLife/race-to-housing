@@ -3,20 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Race to Housing — Manual Selection (Default Mapbox)</title>
+  <title>YSU Building Capture — Manual One by One</title>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
-    html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    html, body { height:100%; margin:0; font-family: system-ui, sans-serif; }
     #app { display:grid; grid-template-columns:250px 1fr; height:100%; }
-    aside { background:#f9fafb; border-right:1px solid #e5e7eb; padding:10px; overflow-y:auto; }
+    aside { background:#f9fafb; border-right:1px solid #ddd; padding:10px; overflow-y:auto; }
     aside h2 { font-size:16px; margin:0 0 10px 0; }
     #capturedList { font-size:14px; line-height:1.4; }
     #capturedList li { margin-bottom:4px; }
-    header { padding:10px; border-bottom:1px solid #e5e7eb; background:#fff; font-size:14px; }
-    #map { position:relative; width:100%; height:100%; }
-    button { border:1px solid #d1d5db; background:#111827; color:#fff; padding:6px 10px; border-radius:6px; font-weight:600; cursor:pointer; margin-top:10px; }
+    header { padding:10px; border-bottom:1px solid #ddd; background:#fff; font-size:14px; }
+    #map { width:100%; height:100%; }
+    button { border:1px solid #d1d5db; background:#111827; color:#fff;
+             padding:6px 10px; border-radius:6px; font-weight:600; cursor:pointer; margin-top:10px; }
     button[disabled] { opacity:.5; cursor:not-allowed; }
-    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff; padding:6px 10px; border-radius:6px; font-size:12px; box-shadow:0 4px 10px rgba(0,0,0,.2); }
+    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff;
+             padding:6px 10px; border-radius:6px; font-size:12px; box-shadow:0 4px 10px rgba(0,0,0,.2); }
   </style>
 </head>
 <body>
@@ -25,11 +27,14 @@
     <h2>Captured Buildings</h2>
     <ul id="capturedList"></ul>
     <button id="downloadBtn" disabled>Download GeoJSON</button>
+    <button id="resetBtn" disabled>Reset</button>
   </aside>
   <div>
     <header>
       <strong id="status">0 captured</strong>
-      <span style="margin-left:10px; font-size:12px; color:#6b7280">Click polygons to select buildings</span>
+      <span style="margin-left:10px; font-size:12px; color:#6b7280">
+        Hover to preview, click to capture
+      </span>
     </header>
     <div id="map"></div>
     <div id="toast" class="toast" style="display:none"></div>
@@ -38,12 +43,10 @@
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 <script>
-// Use Mapbox public demo token
 mapboxgl.accessToken = 'pk.eyJ1IjoiZGVtb3VzZXIiLCJhIjoiY2p2eWJtNHRiMDJmczQ0bzE0bXBpdW9rciJ9.SQBB0BlZ6AQ63w7k86rwvw';
 
-// Use standard free style
 const STYLE = 'mapbox://styles/mapbox/streets-v12';
-const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 16.5, pitch: 0, bearing: 0 };
+const INITIAL_VIEW = { center: [-80.6447, 41.1075], zoom: 16.5 };
 
 let map = new mapboxgl.Map({ container:'map', style:STYLE, ...INITIAL_VIEW });
 map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
@@ -52,6 +55,7 @@ let captured = [];
 const statusEl = document.getElementById('status');
 const listEl = document.getElementById('capturedList');
 const downloadBtn = document.getElementById('downloadBtn');
+const resetBtn = document.getElementById('resetBtn');
 const toastEl = document.getElementById('toast');
 
 function toast(msg, ms=2000){
@@ -61,53 +65,50 @@ function toast(msg, ms=2000){
   toastEl._t = setTimeout(()=> toastEl.style.display='none', ms);
 }
 
-map.on('load', ()=>{
-  // Load your GeoJSON from repo (rename to remove spaces if needed)
-  map.addSource('all-buildings', { type:'geojson', data:'ysu_race_buildings_exact.geojson' });
-
-  // Show all polygons in light gray
-  map.addLayer({ id:'all-fill', type:'fill', source:'all-buildings', paint:{ 'fill-color':'#cccccc','fill-opacity':0.3 } });
-  map.addLayer({ id:'all-outline', type:'line', source:'all-buildings', paint:{ 'line-color':'#666666','line-width':1 } });
-
+map.on('load', ()=> {
   // Hover preview
   map.addSource('hover', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
-  map.addLayer({ id:'hover-line', type:'line', source:'hover', paint:{ 'line-color':'#FFD700', 'line-width':3 } });
+  map.addLayer({ id:'hover-line', type:'line', source:'hover',
+                 paint:{ 'line-color':'#FFD700', 'line-width':3 } });
 
   // Captured selection
   map.addSource('captured', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
-  map.addLayer({ id:'captured-fill', type:'fill', source:'captured', paint:{ 'fill-color':'#ff0000','fill-opacity':0.4 } });
-  map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width':2,'line-color':'#ff0000' } });
+  map.addLayer({ id:'captured-fill', type:'fill', source:'captured',
+                 paint:{ 'fill-color':'#ff0000','fill-opacity':0.4 } });
+  map.addLayer({ id:'captured-outline', type:'line', source:'captured',
+                 paint:{ 'line-width':2,'line-color':'#ff0000' } });
 });
 
-// Hover preview from GeoJSON
-map.on('mousemove', (e)=>{
-  const features = map.queryRenderedFeatures(e.point, { layers:['all-fill'] });
+// Hover preview from Mapbox building layer
+map.on('mousemove', (e)=> {
+  const features = map.queryRenderedFeatures(e.point, { layers:['building'] });
   const poly = features[0];
-  if (poly){
+  if (poly) {
     map.getSource('hover').setData(poly);
   } else {
     map.getSource('hover').setData({ type:'FeatureCollection', features:[] });
   }
 });
 
-// Click to capture from GeoJSON
-map.on('click', (e)=>{
-  const features = map.queryRenderedFeatures(e.point, { layers:['all-fill'] });
+// Click to capture
+map.on('click', (e)=> {
+  const features = map.queryRenderedFeatures(e.point, { layers:['building'] });
   const poly = features[0];
-  if (poly){
+  if (poly) {
     if (!poly.properties) poly.properties = {};
     if (!poly.properties.name) poly.properties.name = `building_${captured.length+1}`;
 
-    if (!captured.find(f => f.properties.name === poly.properties.name)){
+    if (!captured.find(f => f.properties.name === poly.properties.name)) {
       captured.push(poly);
       statusEl.textContent = `${captured.length} captured`;
       listEl.innerHTML = captured.map(f => `<li>${f.properties.name}</li>`).join('');
       downloadBtn.disabled = false;
+      resetBtn.disabled = false;
       map.getSource('captured').setData({ type:'FeatureCollection', features: captured });
       toast(`Captured: ${poly.properties.name}`);
     }
   } else {
-    toast('No polygon at this point');
+    toast('No building polygon here');
   }
 });
 
@@ -121,7 +122,18 @@ function downloadGeoJSON(){
   setTimeout(()=> URL.revokeObjectURL(url), 2000);
 }
 
+function resetCaptures(){
+  captured = [];
+  statusEl.textContent = '0 captured';
+  listEl.innerHTML = '';
+  downloadBtn.disabled = true;
+  resetBtn.disabled = true;
+  map.getSource('captured').setData({ type:'FeatureCollection', features: [] });
+  toast('Selections cleared');
+}
+
 downloadBtn.addEventListener('click', downloadGeoJSON);
+resetBtn.addEventListener('click', resetCaptures);
 </script>
 </body>
 </html>
