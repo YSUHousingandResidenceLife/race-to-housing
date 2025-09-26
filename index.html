@@ -3,23 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="mapbox-token" content=""> <!-- Optional: set token here -->
   <title>Race to Housing — Auto‑Capture (7/7) Buildings</title>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
-    html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
-    #app { display:grid; grid-template-rows:auto 1fr; height:100%; }
-    header { display:flex; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid #e5e7eb; background:#fff; position:sticky; top:0; z-index:2; }
-    .badge { padding:4px 8px; border-radius:999px; background:#f3f4f6; font-weight:600; }
+    :root{ --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --chip:#f3f4f6; }
+    html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color:var(--ink); }
+    #app { display:grid; grid-template-rows:auto auto 1fr; height:100%; }
+    header { display:flex; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--line); background:#fff; position:sticky; top:0; z-index:3; }
+    .badge { padding:4px 8px; border-radius:999px; background:var(--chip); font-weight:600; }
     #status { font-variant-numeric: tabular-nums; }
-    #log { white-space:pre-wrap; font-size:12px; color:#374151; max-height:3.5lh; overflow:auto; }
+    .controls { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+    button, input[type="text"] { appearance:none; border:1px solid #d1d5db; padding:8px 12px; border-radius:10px; font-weight:600; }
+    button { background:#111827; color:#fff; cursor:pointer; }
+    button[disabled] { opacity:.5; cursor:not-allowed; }
+    input[type="text"] { min-width:340px; font-weight:500; }
+    .note { font-size:12px; color:var(--muted); }
+    #diagnostics { border-bottom:1px solid var(--line); background:#fff; padding:8px 12px; }
+    #diagBody { font:12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; white-space:pre-wrap; }
     #map { position:relative; }
     #map, #map canvas { width:100%; height:100%; display:block; }
-    .controls { margin-left:auto; display:flex; gap:8px; }
-    button { appearance:none; border:1px solid #d1d5db; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer; }
-    button[disabled] { opacity:.5; cursor:not-allowed; }
-    .note { font-size:12px; color:#6b7280; }
-    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-size:12px; box-shadow:0 8px 20px rgba(0,0,0,.2); z-index:3; }
-    .pin { position:absolute; transform:translate(-50%, -100%); pointer-events:none; }
+    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-size:12px; box-shadow:0 8px 20px rgba(0,0,0,.2); z-index:5; }
   </style>
 </head>
 <body>
@@ -27,12 +31,21 @@
   <header>
     <span class="badge">YSU — Auto‑Capture</span>
     <strong id="status">0/7 captured</strong>
-    <span class="note">(Captures building polygons around known centers → merges parts → saves)</span>
+    <span class="note">(Provide Mapbox token → run diagnostics → auto‑capture 7 buildings → download GeoJSON)</span>
     <div class="controls">
-      <button id="startBtn">Start Auto‑Capture</button>
+      <input id="tokenInput" type="text" placeholder="Paste Mapbox access token (pk. or sk.)" />
+      <button id="saveTokenBtn" title="Save token to this browser">Save Token</button>
+      <button id="runDiagBtn" title="Run quick preflight checks">Run Diagnostics</button>
+      <button id="startBtn" disabled>Start Auto‑Capture</button>
       <button id="downloadBtn" disabled>Download ysu_race_buildings_exact.geojson</button>
     </div>
   </header>
+
+  <details id="diagnostics" open>
+    <summary><strong>Preflight diagnostics</strong> <span class="note">(token, style reachability, browser support)</span></summary>
+    <div id="diagBody">No diagnostics yet. Click <em>Run Diagnostics</em>.</div>
+  </details>
+
   <div id="map"></div>
 </div>
 
@@ -41,61 +54,151 @@
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 <script>
-// ======== CONFIG ========
-// 1) Put your real token here or inject via <script> before this file: window.MAPBOX_TOKEN = '...'
-mapboxgl.accessToken = window.MAPBOX_TOKEN || 'YOUR_MAPBOX_ACCESS_TOKEN_HERE';
-
-// 2) Camera & style (per your spec)
-const INITIAL_VIEW = {
-  center: [-80.644685, 41.107524],
-  zoom: 17.2,
-  pitch: 60,
-  bearing: -133.6
-};
+// ==============================
+// CONFIG
+// ==============================
 const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-
-// 3) Known building centers (approx). If a center is slightly off, the script retries with a bigger radius.
-//    You can fine‑tune lng/lat values later — the script will still finish.
+const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
 const BUILDING_CENTERS = [
-  { key:'lyden',        name:'Lyden House',               lng:-80.64783, lat:41.10696 },
-  { key:'cafaro',       name:'Cafaro House (incl. Annex)',lng:-80.64897, lat:41.10754 },
-  { key:'christman',    name:'Christman Dining',          lng:-80.64654, lat:41.10759 },
-  { key:'weller',       name:'Weller House',              lng:-80.64628, lat:41.10849 },
-  { key:'wick',         name:'Wick House',                lng:-80.64533, lat:41.10869 },
-  { key:'kilcawley',    name:'Kilcawley House',           lng:-80.64563, lat:41.10675 },
-  { key:'courtyards',   name:'University Courtyards',     lng:-80.65123, lat:41.10338 } // ← tweak if needed
+  { key:'lyden',      name:'Lyden House',                 lng:-80.64783, lat:41.10696 },
+  { key:'cafaro',     name:'Cafaro House (incl. Annex)',  lng:-80.64897, lat:41.10754 },
+  { key:'christman',  name:'Christman Dining',            lng:-80.64654, lat:41.10759 },
+  { key:'weller',     name:'Weller House',                lng:-80.64628, lat:41.10849 },
+  { key:'wick',       name:'Wick House',                  lng:-80.64533, lat:41.10869 },
+  { key:'kilcawley',  name:'Kilcawley House',             lng:-80.64563, lat:41.10675 },
+  { key:'courtyards', name:'University Courtyards',       lng:-80.65123, lat:41.10338 }
 ];
+const LOGO_URL = 'housing-overlay.png'; // optional local file
 
-// 4) Optional: custom logo overlay (comment out if not used)
-const LOGO_URL = 'housing-overlay.png'; // ensure file exists next to this HTML
+// ==============================
+// STATE
+// ==============================
+let map = null;
+let candidateLayers = [];
+let captured = [];
 
-// 5) How we detect candidate building layers in your style
+const els = {
+  tokenInput: document.getElementById('tokenInput'),
+  saveTokenBtn: document.getElementById('saveTokenBtn'),
+  runDiagBtn: document.getElementById('runDiagBtn'),
+  startBtn: document.getElementById('startBtn'),
+  downloadBtn: document.getElementById('downloadBtn'),
+  status: document.getElementById('status'),
+  toast: document.getElementById('toast'),
+  diagBody: document.getElementById('diagBody')
+};
+
+function toast(msg, ms=2200){
+  els.toast.textContent = msg; els.toast.style.display='block';
+  clearTimeout(els.toast._t); els.toast._t = setTimeout(()=> els.toast.style.display='none', ms);
+}
+
+// ==============================
+// TOKEN HANDLING
+// ==============================
+function getTokenFromMeta(){
+  const m = document.querySelector('meta[name="mapbox-token"]');
+  return m && m.content ? m.content.trim() : '';
+}
+function getTokenFromQuery(){
+  const u = new URL(location.href);
+  return u.searchParams.get('token') || u.searchParams.get('mbtoken') || u.searchParams.get('access_token') || '';
+}
+function getSavedToken(){ return localStorage.getItem('MB_TOKEN') || '' }
+function setSavedToken(tok){ localStorage.setItem('MB_TOKEN', tok) }
+function getTokenCandidates(){
+  const cands = [];
+  if (window.MAPBOX_TOKEN) cands.push(String(window.MAPBOX_TOKEN));
+  const q = getTokenFromQuery(); if (q) cands.push(q);
+  const meta = getTokenFromMeta(); if (meta) cands.push(meta);
+  const saved = getSavedToken(); if (saved) cands.push(saved);
+  return cands.filter(Boolean);
+}
+function pickToken(){
+  const tok = getTokenCandidates()[0] || '';
+  if (tok) els.tokenInput.value = tok;
+  return tok;
+}
+function validTokenFormat(tok){
+  if (!tok) return false;
+  // Accept pk./sk. or very long tokens (org tokens can be long)
+  return tok.startsWith('pk.') || tok.startsWith('sk.') || tok.length > 60;
+}
+
+// ==============================
+// DIAGNOSTICS (acts like lightweight test cases)
+// ==============================
+async function runDiagnostics(token){
+  const results = [];
+  // Test 1: token present
+  results.push({ name:'Token present', pass: !!token, info: token ? 'Provided' : 'Missing' });
+
+  // Test 2: token format sanity
+  results.push({ name:'Token format', pass: validTokenFormat(token), info: validTokenFormat(token) ? 'Looks OK' : 'Expected pk./sk. (or long org token)' });
+
+  // Test 3: Mapbox GL supported
+  const supported = mapboxgl.supported();
+  results.push({ name:'Mapbox GL supported()', pass: supported, info: supported ? 'WebGL available' : 'WebGL not available' });
+
+  // Test 4: Style reachable with token
+  let styleOk = false, styleStatus = 'Not checked';
+  if (token){
+    try{
+      const url = `https://api.mapbox.com/styles/v1/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q?access_token=${encodeURIComponent(token)}`;
+      const r = await fetch(url, { method:'GET', mode:'cors' });
+      styleOk = r.ok;
+      styleStatus = r.ok ? `OK (${r.status})` : `HTTP ${r.status}`;
+    }catch(err){
+      styleOk = false;
+      styleStatus = (err && err.message) ? err.message : 'Network error';
+    }
+  }
+  results.push({ name:'Style reachable', pass: styleOk, info: styleStatus });
+
+  // Render results
+  els.diagBody.innerHTML = results.map(r => `• <strong>${r.name}</strong>: ${r.pass ? '✅' : '❌'} — <span class="note">${r.info}</span>`).join('\n');
+
+  // Enable map init only if fundamental checks passed
+  return results.every(r => r.pass || r.name === 'Token format'); // allow non‑fatal format warning
+}
+
+// ==============================
+// MAP INIT (only after token verified)
+// ==============================
+async function initMapWithToken(token){
+  // Set and try to init map
+  mapboxgl.accessToken = token;
+  // Clean previous map if any (hot reloads)
+  if (map && map.remove){ try{ map.remove(); }catch(_){} }
+  map = new mapboxgl.Map({ container:'map', style:STYLE, ...INITIAL_VIEW });
+  map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
+
+  map.on('error', (e)=>{
+    console.error('Mapbox GL error', e && e.error);
+    toast('Map error: ' + (e && e.error && e.error.message ? e.error.message : 'see console'));
+  });
+
+  map.on('load', ()=>{
+    // Detect building layers
+    candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id);
+    if (!candidateLayers.length){
+      toast('Heads‑up: No obvious building layers found in style. Will still try capture.');
+    }
+    els.startBtn.disabled = false;
+  });
+}
+
+// ==============================
+// CAPTURE HELPERS
+// ==============================
 const BUILDING_LAYER_PREDICATE = (layer) => {
   if (!layer) return false;
   const tid = String(layer.id || '').toLowerCase();
-  return (layer.type === 'fill' || layer.type === 'fill-extrusion') &&
-         (tid.includes('building') || tid.includes('bldg'));
+  return (layer.type === 'fill' || layer.type === 'fill-extrusion') && (tid.includes('building') || tid.includes('bldg'));
 };
 
-// ======== APP ========
-const map = new mapboxgl.Map({ container:'map', style:STYLE, ...INITIAL_VIEW });
-map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
-
-let candidateLayers = [];
-let captured = [];
-const startBtn = document.getElementById('startBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-const statusEl = document.getElementById('status');
-const toastEl = document.getElementById('toast');
-
-function toast(msg, ms=1800){
-  toastEl.textContent = msg; toastEl.style.display='block';
-  clearTimeout(toastEl._t); toastEl._t = setTimeout(()=> toastEl.style.display='none', ms);
-}
-
 function metersToPixelsAtLat(meters, lat, zoom){
-  // Mapbox GL helper — convert meters to pixel radius at given latitude/zoom
-  const earthCircumference = 40075017; // meters
+  const earthCircumference = 40075017; // m
   const latRad = lat * Math.PI / 180;
   return meters / (earthCircumference * Math.cos(latRad) / Math.pow(2, zoom));
 }
@@ -116,23 +219,17 @@ function layerIds(){
 function queryBuildingsInBox(box){
   const layers = layerIds();
   const features = map.queryRenderedFeatures(box, { layers });
-  // keep only polygonal
   return features.filter(f => (f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')));
 }
 
 function dissolve(features){
   if (!features.length) return null;
-  // Convert to FeatureCollection and union stepwise
   let fc = turf.featureCollection(features.map(f => turf.clone(f)));
-  // Some building layers return duplicates; dissolve by buffering tiny amount then union
   try {
     let u = fc.features[0];
-    for (let i=1; i<fc.features.length; i++) {
-      u = turf.union(u, fc.features[i]);
-    }
+    for (let i=1; i<fc.features.length; i++) u = turf.union(u, fc.features[i]);
     return u;
   } catch(e){
-    // fallback: merge as MultiPolygon
     return turf.combine(fc);
   }
 }
@@ -146,7 +243,7 @@ async function flyAndIdle(opts){
 }
 
 async function captureOne(target, attempt=1){
-  const maxAttempts = 4; // expands radius per attempt
+  const maxAttempts = 4;
   const radii = [28, 42, 60, 85]; // meters
   const radius = radii[Math.min(attempt-1, radii.length-1)];
   await flyAndIdle({ center:[target.lng, target.lat], zoom: Math.max(INITIAL_VIEW.zoom, 17.2), pitch: INITIAL_VIEW.pitch, bearing: INITIAL_VIEW.bearing });
@@ -164,16 +261,15 @@ async function captureOne(target, attempt=1){
   const merged = dissolve(feats);
   if (!merged) throw new Error(`Could not merge features for ${target.name}.`);
 
-  // Normalize polygon orientation & precision
   const fixed = turf.truncate(merged, { precision: 6, coordinates: 3 });
   fixed.properties = { name: target.name, key: target.key };
   return fixed;
 }
 
 function updateStatus(){
-  statusEl.textContent = `${captured.length}/7 captured`;
+  els.status.textContent = `${captured.length}/7 captured`;
   if (captured.length === BUILDING_CENTERS.length){
-    downloadBtn.disabled = false;
+    els.downloadBtn.disabled = false;
     toast('All 7 captured — ready to download');
   }
 }
@@ -183,19 +279,19 @@ function downloadGeoJSON(){
   const blob = new Blob([JSON.stringify(fc, null, 2)], { type:'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = 'ysu_race_buildings_exact.geojson';
+  a.href = url; a.download = 'ysu_race_buildings_exact.geojson';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=> URL.revokeObjectURL(url), 2000);
 }
 
-downloadBtn.addEventListener('click', downloadGeoJSON);
+els.downloadBtn.addEventListener('click', downloadGeoJSON);
 
 async function runAutoCapture(){
-  startBtn.disabled = true; downloadBtn.disabled = true; captured = []; updateStatus();
+  if (!map){ toast('Map not initialized — set token then Run Diagnostics', 2800); return; }
+  els.startBtn.disabled = true; els.downloadBtn.disabled = true; captured = []; updateStatus();
   toast('Starting auto‑capture…');
 
-  // add logo once (optional)
+  // Optional logo overlay
   try {
     if (LOGO_URL){
       map.loadImage(LOGO_URL, (err, image)=>{
@@ -223,11 +319,10 @@ async function runAutoCapture(){
 
   if (captured.length < BUILDING_CENTERS.length){
     toast(`Captured ${captured.length}/7. You can tweak the center(s) and click Start again.` , 2600);
-    startBtn.disabled = false; // allow rerun after tweaking
+    els.startBtn.disabled = false;
     return;
   }
 
-  // Show the results on map
   try {
     const fc = { type:'FeatureCollection', features: captured };
     if (!map.getSource('captured')){
@@ -243,15 +338,36 @@ async function runAutoCapture(){
   updateStatus();
 }
 
-startBtn.addEventListener('click', runAutoCapture);
+els.startBtn.addEventListener('click', runAutoCapture);
 
-map.on('load', ()=>{
-  // detect building layers once style is ready
-  candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id);
-  if (!candidateLayers.length){
-    toast('Heads‑up: No obvious building layers found. Capture may still work if style uses custom IDs.');
+// ==============================
+// BOOT
+// ==============================
+(async function boot(){
+  const tok = pickToken();
+  if (!tok){ toast('Paste your Mapbox token, save, then run diagnostics.', 2600); }
+
+  // Save token handler
+  els.saveTokenBtn.addEventListener('click', async ()=>{
+    const t = els.tokenInput.value.trim();
+    if (!t){ toast('Token is empty'); return; }
+    setSavedToken(t); toast('Token saved to this browser');
+  });
+
+  // Run diagnostics and initialize map if OK
+  els.runDiagBtn.addEventListener('click', async ()=>{
+    const t = els.tokenInput.value.trim();
+    const ok = await runDiagnostics(t);
+    if (ok){ await initMapWithToken(t); toast('Map initialized'); }
+  });
+
+  // Auto-run diagnostics if we already have a token (convenience for reloads)
+  if (tok){
+    els.diagBody.textContent = 'Running diagnostics…';
+    const ok = await runDiagnostics(tok);
+    if (ok){ await initMapWithToken(tok); }
   }
-});
+})();
 </script>
 </body>
 </html>
