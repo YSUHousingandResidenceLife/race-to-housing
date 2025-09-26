@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Debug Overlay & Labels</title>
+  <title>Race to Housing — Logo Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
@@ -11,157 +11,72 @@
     #map { position:absolute; inset:0; }
     #coords {
       position:absolute; bottom:10px; left:10px;
-      background:rgba(255,255,255,0.9); padding:8px; font:12px monospace;
-      max-width:360px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.2);
-      white-space:pre-wrap;
+      background:rgba(255,255,255,0.9); padding:8px;
+      font:12px monospace; border-radius:6px;
+      max-width:400px; white-space:pre-wrap;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <pre id="coords">Drag overlay corners + label points. Coordinates will update here.</pre>
+  <pre id="coords">Draw or edit the 4-corner box to place/rotate/resize the logo. Final coords will appear here.</pre>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
   <script>
-    const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
-    const COURTYARDS_URL = 'university_courtyards.geojson';
-
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     const map = new mapboxgl.Map({
       container: 'map',
-      style: STYLE_ID,
+      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
       center: [-80.6458, 41.1090],
       zoom: 16.5,
       pitch: 60,
       bearing: -133.6
     });
 
+    // Controls
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    const Draw = new MapboxDraw({ displayControlsDefault:false });
+    const Draw = new MapboxDraw({ displayControlsDefault:true });
     map.addControl(Draw);
 
-    async function loadJSON(url){ const r=await fetch(url); return r.json(); }
-
-    map.on('load', async () => {
-      const data = await loadJSON(GEOJSON_URL);
-      const courtyards = await loadJSON(COURTYARDS_URL);
-
-      map.addSource('race', { type:'geojson', data });
-      map.addSource('courtyards', { type:'geojson', data:courtyards });
-
-      // Building colors
-      const colorExpression = [
-        'match',
-        ['get','name'],
-        'Lyden House', '#FF69B4',
-        'Cafaro House', '#0072CE',
-        'Wick House (Art)', '#FFFF00',
-        'Weller House', '#582C83',
-        'Christman Dining', '#FFDF00',
-        'Kilcawley House', '#E4002B',
-        /* fallback */ '#d6001c'
-      ];
-
-      map.addLayer({
-        id:'race-buildings',
-        type:'fill-extrusion',
-        source:'race',
-        paint:{
-          'fill-extrusion-color': colorExpression,
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96,
-          'fill-extrusion-vertical-gradient': false
-        }
-      });
-
-      map.addLayer({
-        id:'courtyards-fill3d',
-        type:'fill-extrusion',
-        source:'courtyards',
-        paint:{
-          'fill-extrusion-color':'#78BE20',
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96,
-          'fill-extrusion-vertical-gradient': false
-        }
-      });
-
-      // === Editable Overlay ===
-      const overlayCoords = [
-        [-80.6490, 41.1115],
-        [-80.6425, 41.1115],
-        [-80.6425, 41.1075],
-        [-80.6490, 41.1075]
-      ];
-
+    // Add placeholder overlay
+    const startCoords = [
+      [-80.6485, 41.1115], // top-left
+      [-80.6435, 41.1115], // top-right
+      [-80.6435, 41.1075], // bottom-right
+      [-80.6485, 41.1075]  // bottom-left
+    ];
+    map.on('load', () => {
       map.addSource('housing-overlay', {
         type:'image',
         url:'housing-overlay.png',
-        coordinates: overlayCoords
+        coordinates:startCoords
       });
-      map.addLayer({ id:'housing-overlay-layer', source:'housing-overlay', type:'raster' });
+      map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay' });
 
-      // Draw polygon for overlay
+      // Add editable polygon
       Draw.add({
         id:'overlay-shape',
         type:'Feature',
-        properties:{type:'overlay'},
-        geometry:{ type:'Polygon', coordinates:[[...overlayCoords, overlayCoords[0]]] }
+        properties:{overlay:true},
+        geometry:{ type:'Polygon', coordinates:[[...startCoords, startCoords[0]]] }
       });
 
-      // === Editable Label Points ===
-      const labelsGeoJSON = {
-        type:"FeatureCollection",
-        features:[
-          { type:"Feature", properties:{name:"Lyden House"}, geometry:{type:"Point", coordinates:[-80.6465,41.1106]} },
-          { type:"Feature", properties:{name:"Cafaro House"}, geometry:{type:"Point", coordinates:[-80.6458,41.1105]} },
-          { type:"Feature", properties:{name:"Wick House (Art)"}, geometry:{type:"Point", coordinates:[-80.6442,41.1108]} },
-          { type:"Feature", properties:{name:"Weller House"}, geometry:{type:"Point", coordinates:[-80.6475,41.1095]} },
-          { type:"Feature", properties:{name:"Christman Dining"}, geometry:{type:"Point", coordinates:[-80.6454,41.1109]} },
-          { type:"Feature", properties:{name:"Kilcawley House"}, geometry:{type:"Point", coordinates:[-80.6486,41.1117]} }
-        ]
-      };
-      labelsGeoJSON.features.forEach(f => Draw.add(f));
-
-      map.addSource('labels', { type:'geojson', data:labelsGeoJSON });
-      map.addLayer({
-        id:'building-labels',
-        type:'symbol',
-        source:'labels',
-        layout:{
-          'text-field':['get','name'],
-          'text-font':['Open Sans Bold','Arial Unicode MS Bold'],
-          'text-size':16,
-          'text-offset':[0,1.5],
-          'text-anchor':'bottom',
-          'text-allow-overlap': true
-        },
-        paint:{
-          'text-color':'#000000',
-          'text-halo-color':'#ffffff',
-          'text-halo-width':3
-        }
-      });
-
-      // Update overlay + labels dynamically
-      map.on('draw.update', updateAll);
-      map.on('draw.create', updateAll);
-
-      function updateAll(){
-        const features = Draw.getAll().features;
-        const overlayFeature = features.find(f => f.properties.type==='overlay');
-        if(overlayFeature){
-          const coords = overlayFeature.geometry.coordinates[0].slice(0,4);
-          map.getSource('housing-overlay').setCoordinates(coords);
-        }
-        const labelFeatures = features.filter(f => f.geometry.type==='Point');
-        map.getSource('labels').setData({ type:"FeatureCollection", features:labelFeatures });
-        document.getElementById('coords').textContent = JSON.stringify(Draw.getAll(),null,2);
-      }
+      // Update overlay when polygon is changed
+      map.on('draw.update', syncOverlay);
+      map.on('draw.create', syncOverlay);
     });
+
+    function syncOverlay(){
+      const f = Draw.getAll().features.find(ft => ft.properties.overlay);
+      if(!f) return;
+      const coords = f.geometry.coordinates[0].slice(0,4);
+      map.getSource('housing-overlay').setCoordinates(coords);
+      document.getElementById('coords').textContent =
+        "Paste these 4 coords into your final script:\n" +
+        JSON.stringify(coords,null,2);
+    }
   </script>
 </body>
 </html>
