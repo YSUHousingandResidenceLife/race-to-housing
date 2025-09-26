@@ -123,16 +123,15 @@
 
       const colorExpression = [
         'case',
-          ['==', ['get','name'], 'Lyden House'], '#FF69B4',
-          ['==', ['get','name'], 'Cafaro House'], '#0072CE',
-          ['==', ['get','name'], 'Wick House'], '#FFF200',
-          ['==', ['get','name'], 'Weller House'], '#582C83',
-          ['==', ['get','name'], 'Christman Hall'], '##c2af0',  
-          ['==', ['get','name'], 'Kilcawley House'], '#E4002B',
+          ['==', ['get','name'], 'Lyden House'], '#FF69B4',   // Pink
+          ['==', ['get','name'], 'Cafaro House'], '#0072CE',  // Blue (Pantone 285)
+          ['==', ['get','name'], 'Wick House'], '#FFC72C',    // Yellow (Pantone 128)
+          ['==', ['get','name'], 'Weller House'], '#582C83',  // Purple (Pantone 268)
+          ['==', ['get','name'], 'Christman Hall'], '#FFD700',// Gold
+          ['==', ['get','name'], 'Kilcawley House'], '#E4002B', // Red (Pantone 186)
           ['coalesce',['get','fill'],'#d6001c']
       ];
 
-      // 3D extrusions only (no flat fills, avoids footprint coloring)
       map.addLayer({
         id:'race-buildings',
         type:'fill-extrusion',
@@ -150,7 +149,7 @@
         type:'fill-extrusion',
         source:'courtyards',
         paint:{
-          'fill-extrusion-color':'#78BE20',
+          'fill-extrusion-color':'#78BE20', // Green (Pantone 367)
           'fill-extrusion-height':['coalesce',['get','height'],22],
           'fill-extrusion-opacity':0.96,
           'fill-extrusion-vertical-gradient': false
