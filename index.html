@@ -130,22 +130,28 @@
       map.addLayer({
         id:'race-buildings', type:'fill-extrusion', source:'race',
         paint:{
-          'fill-extrusion-color':['coalesce',['get','fill'],'#d6001c'],
+          'fill-extrusion-color': [
+            'case',
+              ['==', ['get','name'], 'Kilcawley House'], '#800020', // burgundy for Kilcawley
+              ['coalesce',['get','fill'],'#d6001c']
+          ],
           'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
         }
       });
 
-      // Courtyards — gold (no outline layer)
+      // Courtyards — green
       map.addSource('courtyards', { type:'geojson', data:courtyards, generateId:true });
       map.addLayer({
         id:'courtyards-fill',
         type:'fill-extrusion',
         source:'courtyards',
         paint:{
-          'fill-extrusion-color':'#FFD700',
+          'fill-extrusion-color':'#228B22', // green
           'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
         }
       });
 
