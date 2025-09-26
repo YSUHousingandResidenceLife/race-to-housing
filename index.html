@@ -37,7 +37,6 @@
 </div>
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 <script>
 mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
@@ -60,8 +59,8 @@ function toast(msg, ms=2000){
 }
 
 map.on('load', ()=>{
-  // Load your uploaded GeoJSON
-  map.addSource('all-buildings', { type:'geojson', data:'ysu_race_buildings_exact (2).geojson' });
+  // Load your GeoJSON from repo (renamed to avoid spaces)
+  map.addSource('all-buildings', { type:'geojson', data:'ysu_race_buildings_exact.geojson' });
 
   // Show all polygons in light gray initially
   map.addLayer({ id:'all-fill', type:'fill', source:'all-buildings', paint:{ 'fill-color':'#cccccc','fill-opacity':0.3 } });
@@ -77,7 +76,7 @@ map.on('load', ()=>{
   map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width':2,'line-color':'#ff0000' } });
 });
 
-// Hover preview
+// Hover preview from GeoJSON
 map.on('mousemove', (e)=>{
   const features = map.queryRenderedFeatures(e.point, { layers:['all-fill'] });
   const poly = features[0];
