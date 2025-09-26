@@ -2,23 +2,30 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Overlay + Labels Debug</title>
+  <title>Race to Housing — Overlay Debug</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
   <style>
     html,body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
+    #coords {
+      position:absolute; bottom:10px; left:10px;
+      background:rgba(255,255,255,0.9); padding:8px; font:12px monospace;
+      max-width:340px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <pre id="coords">Drag the overlay corners. Coordinates will show here.</pre>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
   <script>
     const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
     const COURTYARDS_URL = 'university_courtyards.geojson';
-    const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
 
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
@@ -26,29 +33,17 @@
       container: 'map',
       style: STYLE_ID,
       center: [-80.6458, 41.1090],
-      zoom: 16.8,
+      zoom: 16.5,
       pitch: 60,
-      bearing: -133.6,
-      maxBounds: CAMPUS_BOUNDS
+      bearing: -133.6
     });
+
+    // Add controls
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    const Draw = new MapboxDraw({ displayControlsDefault:false });
+    map.addControl(Draw);
 
-    async function loadJSON(url){
-      const r = await fetch(url,{cache:'no-store'});
-      return r.json();
-    }
-
-    function bboxFromFeatures(fc){
-      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-      for(const f of fc.features||[]){ 
-        const g=f.geometry; if(!g) continue;
-        const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
-        for(const poly of polys) for(const ring of poly) for(const [x,y] of ring){
-          if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;
-        }
-      }
-      return [[minX,minY],[maxX,maxY]];
-    }
+    async function loadJSON(url){ const r=await fetch(url); return r.json(); }
 
     map.on('load', async () => {
       const data = await loadJSON(GEOJSON_URL);
@@ -57,15 +52,16 @@
       map.addSource('race', { type:'geojson', data });
       map.addSource('courtyards', { type:'geojson', data:courtyards });
 
+      // Building colors
       const colorExpression = [
         'match',
-        ['get', 'name'],
-        'Lyden House', '#FF69B4',          // Pink
-        'Cafaro House', '#0072CE',         // Blue
-        'Wick House (Art)', '#FFFF00',     // Yellow
-        'Weller House', '#582C83',         // Purple
-        'Christman Dining', '#FFDF00',     // Bright Gold
-        'Kilcawley House', '#E4002B',      // Red
+        ['get','name'],
+        'Lyden House', '#FF69B4',
+        'Cafaro House', '#0072CE',
+        'Wick House (Art)', '#FFFF00',
+        'Weller House', '#582C83',
+        'Christman Dining', '#FFDF00',
+        'Kilcawley House', '#E4002B',
         /* fallback */ '#d6001c'
       ];
 
@@ -93,7 +89,7 @@
         }
       });
 
-      // 🏠 Floating building labels
+      // Floating building labels
       map.addLayer({
         id:'building-labels',
         type:'symbol',
@@ -101,40 +97,50 @@
         layout:{
           'text-field':['get','name'],
           'text-font':['Open Sans Bold','Arial Unicode MS Bold'],
-          'text-size':14,
-          'text-offset':[0,2],
-          'text-anchor':'bottom'
+          'text-size':16,
+          'text-offset':[0,3], // float higher
+          'text-anchor':'bottom',
+          'text-allow-overlap': true
         },
         paint:{
           'text-color':'#000000',
           'text-halo-color':'#ffffff',
-          'text-halo-width':2
+          'text-halo-width':3
         }
       });
 
-      // 🖼️ Housing overlay (edit coordinates to place)
+      // Initial overlay quad
+      const overlayCoords = [
+        [-80.6490, 41.1115], // top-left
+        [-80.6425, 41.1115], // top-right
+        [-80.6425, 41.1075], // bottom-right
+        [-80.6490, 41.1075]  // bottom-left
+      ];
+
       map.addSource('housing-overlay', {
         type:'image',
         url:'housing-overlay.png',
-        coordinates: [
-          [-80.6490, 41.1115], // top-left
-          [-80.6425, 41.1115], // top-right
-          [-80.6425, 41.1075], // bottom-right
-          [-80.6490, 41.1075]  // bottom-left
-        ]
+        coordinates: overlayCoords
       });
-      map.addLayer({
-        id:'housing-overlay-layer',
-        source:'housing-overlay',
-        type:'raster',
-        paint:{ 'raster-opacity':1.0 }
+      map.addLayer({ id:'housing-overlay-layer', source:'housing-overlay', type:'raster' });
+
+      // Add editable polygon for overlay corners
+      Draw.add({
+        type:'Feature',
+        geometry:{ type:'Polygon', coordinates:[[...overlayCoords, overlayCoords[0]]] }
       });
 
-      const combined = { type:"FeatureCollection", features:[...data.features, ...courtyards.features] };
-      map.fitBounds(bboxFromFeatures(combined), {
-        padding:{ top:80, right:160, bottom:120, left:320 },
-        maxZoom:18, pitch:60, bearing:-133.6, duration:500
-      });
+      // Update overlay when moved
+      map.on('draw.update', updateOverlay);
+      map.on('draw.create', updateOverlay);
+
+      function updateOverlay(){
+        const f = Draw.getAll().features[0];
+        if(!f) return;
+        const coords = f.geometry.coordinates[0].slice(0,4); // 4 corners
+        map.getSource('housing-overlay').setCoordinates(coords);
+        document.getElementById('coords').textContent = JSON.stringify(coords,null,2);
+      }
     });
   </script>
 </body>
