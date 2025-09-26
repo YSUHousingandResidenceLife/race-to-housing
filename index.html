@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Race to Housing — Manual Selection from GeoJSON</title>
+  <title>Race to Housing — Manual Selection (Default Mapbox)</title>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
     html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
@@ -38,9 +38,12 @@
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 <script>
-mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
+// Use Mapbox public demo token
+mapboxgl.accessToken = 'pk.eyJ1IjoiZGVtb3VzZXIiLCJhIjoiY2p2eWJtNHRiMDJmczQ0bzE0bXBpdW9rciJ9.SQBB0BlZ6AQ63w7k86rwvw';
+
+// Use standard free style
+const STYLE = 'mapbox://styles/mapbox/streets-v12';
+const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 16.5, pitch: 0, bearing: 0 };
 
 let map = new mapboxgl.Map({ container:'map', style:STYLE, ...INITIAL_VIEW });
 map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
@@ -59,10 +62,10 @@ function toast(msg, ms=2000){
 }
 
 map.on('load', ()=>{
-  // Load your GeoJSON from repo (renamed to avoid spaces)
+  // Load your GeoJSON from repo (rename to remove spaces if needed)
   map.addSource('all-buildings', { type:'geojson', data:'ysu_race_buildings_exact.geojson' });
 
-  // Show all polygons in light gray initially
+  // Show all polygons in light gray
   map.addLayer({ id:'all-fill', type:'fill', source:'all-buildings', paint:{ 'fill-color':'#cccccc','fill-opacity':0.3 } });
   map.addLayer({ id:'all-outline', type:'line', source:'all-buildings', paint:{ 'line-color':'#666666','line-width':1 } });
 
