@@ -136,7 +136,7 @@
         }
       });
 
-      // Courtyards — gold
+      // Courtyards — gold (no outline layer)
       map.addSource('courtyards', { type:'geojson', data:courtyards, generateId:true });
       map.addLayer({
         id:'courtyards-fill',
@@ -146,15 +146,6 @@
           'fill-extrusion-color':'#FFD700',
           'fill-extrusion-height':['coalesce',['get','height'],22],
           'fill-extrusion-opacity':0.96
-        }
-      });
-      map.addLayer({
-        id:'courtyards-outline',
-        type:'line',
-        source:'courtyards',
-        paint:{
-          'line-color':'#000',
-          'line-width':1.2
         }
       });
 
