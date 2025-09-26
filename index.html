@@ -1,409 +1,218 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Building Capture + Live Board</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
-  <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Race to Housing — Auto‑Capture (7/7) Buildings</title>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
-    :root{ --card-bg:rgba(255,255,255,.96); --card-border:#e5e5e5; --accent:#d6001c; --muted:#6b7280; }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    #map{position:absolute;inset:0}
-
-    /* Panels */
-    .panel{position:absolute;top:12px;z-index:20;width:360px;background:var(--card-bg);
-      border:1px solid var(--card-border);border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.1);
-      overflow:hidden;display:flex;flex-direction:column}
-    .panel.instructions{left:12px} .panel.players{right:12px}
-    .panel header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--card-border);background:#fff}
-    .panel header h3{margin:0;font-size:16px}
-    .panel .content{padding:12px 14px;max-height:48vh;overflow:auto}
-
-    /* Editor toolbar */
-    .toolbar{
-      position:absolute; left:50%; top:12px; transform:translateX(-50%); z-index:25;
-      display:flex; gap:8px; background:var(--card-bg); border:1px solid var(--card-border);
-      border-radius:12px; padding:8px; box-shadow:0 10px 25px rgba(0,0,0,.1)
-    }
-    .toolbar button{
-      background:#fff; border:1px solid var(--card-border); border-radius:8px; padding:8px 10px;
-      cursor:pointer; font-weight:600;
-    }
-    .toolbar .primary{ background:#d6001c; color:#fff; border-color:#c01a1a }
-    .toolbar .ghost{ background:#fff }
-    .toolbar .hint{ align-self:center; color:#384151; font-size:13px; padding:0 6px }
-
-    /* Instructions */
-    .steps{display:grid;gap:10px}
-    .step{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:10px}
-    .step .num{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
-
-    /* Players */
-    .players .content{display:grid;gap:8px}
-    .player{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:8px 10px}
-    .token{width:24px;height:24px;border-radius:6px;border:1px solid rgba(0,0,0,.1);background:#222}
-    .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .score{color:var(--muted);font-size:13px}
-
-    @media (max-width:960px){
-      .panel{width:min(92vw,380px)}
-      .panel.instructions{left:8px}
-      .panel.players{right:8px}
-      .toolbar{top:auto; bottom:12px}
-    }
+    html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    #app { display:grid; grid-template-rows:auto 1fr; height:100%; }
+    header { display:flex; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid #e5e7eb; background:#fff; position:sticky; top:0; z-index:2; }
+    .badge { padding:4px 8px; border-radius:999px; background:#f3f4f6; font-weight:600; }
+    #status { font-variant-numeric: tabular-nums; }
+    .controls { margin-left:auto; display:flex; gap:8px; }
+    button { border:1px solid #d1d5db; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer; }
+    button[disabled] { opacity:.5; cursor:not-allowed; }
+    .note { font-size:12px; color:#6b7280; }
+    #map { position:relative; }
+    #map, #map canvas { width:100%; height:100%; display:block; }
+    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-size:12px; box-shadow:0 8px 20px rgba(0,0,0,.2); z-index:3; }
   </style>
 </head>
 <body>
+<div id="app">
+  <header>
+    <span class="badge">YSU — Auto‑Capture</span>
+    <strong id="status">0/7 captured</strong>
+    <span class="note">(Hard‑coded token. Auto‑captures all 7 buildings including University Courtyards.)</span>
+    <div class="controls">
+      <button id="startBtn">Start Auto‑Capture</button>
+      <button id="downloadBtn" disabled>Download ysu_race_buildings_exact.geojson</button>
+    </div>
+  </header>
   <div id="map"></div>
+</div>
 
-  <div class="toolbar" id="toolbar">
-    <button id="btnDownloadBuildings" class="primary">Download Selected Buildings GeoJSON</button>
-    <button id="btnDraw" class="ghost">Start / Resume Route</button>
-    <button id="btnClear" class="ghost">Clear Route</button>
-    <div class="hint">Click "Download Selected Buildings GeoJSON" to capture specified YSU buildings.</div>
-  </div>
+<div id="toast" class="toast" style="display:none"></div>
 
-  <section class="panel instructions" id="instructionsPanel">
-    <header><h3>Building Capture Mode</h3></header>
-    <div class="content">
-      <div class="steps">
-        <div class="step"><div class="num">1</div><div>Click the **Download Selected Buildings GeoJSON** button above to save the GeoJSON for the specific YSU housing buildings.</div></div>
-        <div class="step"><div class="num">2</div><div>The map now only displays the features for: **Lyden House, Cafaro, Christman Dining, Weller, Wick, Kilcawley, and University Courtyards.**</div></div>
-        <div class="step"><div class="num">3</div><div>Route drawing controls (Start/Clear) are still available for manual route editing, if needed.</div></div>
-      </div>
-    </div>
-  </section>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script>
+// ===== CONFIG =====
+// 🔒 Hard‑code your working token here per your request
+mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-  <section class="panel players" id="playersPanel">
-    <header><h3>Players Board</h3></header>
-    <div class="content">
-      <div id="playersList"></div>
-      <div class="meta" id="playersMeta">Loading players…</div>
-    </div>
-  </section>
+const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
 
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
+// All 7 building centers (includes University Courtyards)
+const BUILDING_CENTERS = [
+  { key:'lyden',      name:'Lyden House',                 lng:-80.64783, lat:41.10696 },
+  { key:'cafaro',     name:'Cafaro House (incl. Annex)',  lng:-80.64897, lat:41.10754 },
+  { key:'christman',  name:'Christman Dining',            lng:-80.64654, lat:41.10759 },
+  { key:'weller',     name:'Weller House',                lng:-80.64628, lat:41.10849 },
+  { key:'wick',       name:'Wick House',                  lng:-80.64533, lat:41.10869 },
+  { key:'kilcawley',  name:'Kilcawley House',             lng:-80.64563, lat:41.10675 },
+  { key:'courtyards', name:'University Courtyards',       lng:-80.65123, lat:41.10338 }
+];
 
-  <script type="module">
-    /************ MAP ************/
-    const STYLE_ID   = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-    const GEOJSON_URL= encodeURI('ysu_race_buildings_exact final.geojson');
-    const ROUTE_URL  = 'route.geojson'; // auto-load if present
-    const CAMPUS_BOUNDS = [[-80.6570, 41.1026], [-80.6415, 41.1120]];
-    const PITCH = 60, BEARING = -133.6;
-    
-    // 🡻 NEW: List of building names to filter for (case-insensitive) 🡻
-    const TARGET_BUILDINGS = [
-        'lyden house', 
-        'cafaro', 
-        'christman dining', 
-        'weller', 
-        'wick', 
-        'kilcawley', 
-        'university courtyards'
-    ];
-    let filteredBuildingsGeoJSON = { type:'FeatureCollection', features:[] };
-    // 🡺 END NEW 🡸
+let map = new mapboxgl.Map({ container:'map', style:STYLE, ...INITIAL_VIEW });
+map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
 
-    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+let candidateLayers = [];
+let captured = [];
 
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: STYLE_ID,
-      center: [-80.6458, 41.1090],
-      zoom: 16.8,
-      pitch: PITCH,
-      bearing: BEARING,
-      minZoom: 15,
-      maxZoom: 19,
-      maxBounds: CAMPUS_BOUNDS
-    });
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+const startBtn = document.getElementById('startBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const statusEl = document.getElementById('status');
+const toastEl = document.getElementById('toast');
 
-    function hideLabelsAndBaseBuildings() {
-      const layers = map.getStyle().layers || [];
-      for (const lyr of layers) {
-        if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-        }
-      }
-      for (const lyr of layers) {
-        if (/building/i.test(lyr.id) && (lyr.type === 'fill-extrusion' || lyr.type === 'fill')) {
-          try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
-        }
-      }
+function toast(msg, ms=1800){
+  toastEl.textContent = msg; toastEl.style.display='block';
+  clearTimeout(toastEl._t); toastEl._t = setTimeout(()=> toastEl.style.display='none', ms);
+}
+
+const BUILDING_LAYER_PREDICATE = (layer) => {
+  if (!layer) return false;
+  const tid = String(layer.id || '').toLowerCase();
+  return (layer.type === 'fill' || layer.type === 'fill-extrusion') &&
+         (tid.includes('building') || tid.includes('bldg'));
+};
+
+function metersToPixelsAtLat(meters, lat, zoom){
+  const earthCircumference = 40075017; // meters
+  const latRad = lat * Math.PI / 180;
+  return meters / (earthCircumference * Math.cos(latRad) / Math.pow(2, zoom));
+}
+
+function bboxAround([lng,lat], meters, z){
+  const px = metersToPixelsAtLat(meters, lat, z);
+  const p1 = map.project([lng, lat]);
+  const min = [p1.x - px, p1.y + px];
+  const max = [p1.x + px, p1.y - px];
+  const sw = map.unproject(min), ne = map.unproject(max);
+  return [sw.lng, sw.lat, ne.lng, ne.lat];
+}
+
+function layerIds(){
+  return candidateLayers.length ? candidateLayers : (candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id));
+}
+
+function queryBuildingsInBox(box){
+  const layers = layerIds();
+  const features = map.queryRenderedFeatures(box, { layers });
+  return features.filter(f => (f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')));
+}
+
+function dissolve(features){
+  if (!features.length) return null;
+  let fc = turf.featureCollection(features.map(f => turf.clone(f)));
+  try {
+    let u = fc.features[0];
+    for (let i=1; i<fc.features.length; i++) u = turf.union(u, fc.features[i]);
+    return u;
+  } catch(e){
+    return turf.combine(fc);
+  }
+}
+
+async function flyAndIdle(opts){
+  return new Promise(resolve => {
+    const done = ()=>{ map.off('idle', done); resolve(); };
+    map.once('idle', done);
+    map.flyTo({ ...opts, duration:700 });
+  });
+}
+
+async function captureOne(target, attempt=1){
+  const maxAttempts = 4;
+  const radii = [28, 42, 60, 85];
+  const radius = radii[Math.min(attempt-1, radii.length-1)];
+  await flyAndIdle({ center:[target.lng, target.lat], zoom: Math.max(INITIAL_VIEW.zoom, 17.2), pitch: INITIAL_VIEW.pitch, bearing: INITIAL_VIEW.bearing });
+  const box = bboxAround([target.lng, target.lat], radius, map.getZoom());
+  const feats = queryBuildingsInBox(box);
+
+  if (!feats.length){
+    if (attempt < maxAttempts){
+      toast(`No features at ${target.name} (try ${attempt+1}/${maxAttempts}) — widening search…`);
+      return captureOne(target, attempt+1);
     }
-    async function loadJSON(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(url); return r.json(); }
-    function bboxFromFeatures(fc){
-      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-      for(const f of fc.features||[]){ const g=f.geometry; if(!g) continue;
-        const polys=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
-        for(const poly of polys) for(const ring of poly) for(const [x,y] of ring){
-          if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y;
-        }}
-      return [[minX,minY],[maxX,maxY]];
+    throw new Error(`No building polygons found for ${target.name}`);
+  }
+
+  const merged = dissolve(feats);
+  if (!merged) throw new Error(`Could not merge features for ${target.name}.`);
+
+  const fixed = turf.truncate(merged, { precision: 6, coordinates: 3 });
+  fixed.properties = { name: target.name, key: target.key };
+  return fixed;
+}
+
+function updateStatus(){
+  statusEl.textContent = `${captured.length}/7 captured`;
+  if (captured.length === BUILDING_CENTERS.length){
+    downloadBtn.disabled = false;
+    toast('All 7 captured — ready to download');
+  }
+}
+
+function downloadGeoJSON(){
+  const fc = { type:'FeatureCollection', features: captured };
+  const blob = new Blob([JSON.stringify(fc, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'ysu_race_buildings_exact.geojson';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+}
+
+downloadBtn.addEventListener('click', downloadGeoJSON);
+
+async function runAutoCapture(){
+  startBtn.disabled = true; downloadBtn.disabled = true; captured = []; updateStatus();
+  toast('Starting auto‑capture…');
+
+  for (const target of BUILDING_CENTERS){
+    try {
+      const feat = await captureOne(target);
+      captured.push(feat);
+      updateStatus();
+    } catch(e){
+      console.error(e);
+      toast(e.message, 2400);
     }
+  }
 
-    /************ DRAW (editor) ************/
-    const Draw = new MapboxDraw({
-      displayControlsDefault:false,
-      controls:{ line_string:true, trash:true },
-      defaultMode:'simple_select',
-      styles:[
-        {
-          id:'gl-draw-polygon-and-line-vertex-halo-active',
-          type:'circle',
-          filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':7,'circle-color':'#fff'}
-        },
-        {
-          id:'gl-draw-polygon-and-line-vertex-active',
-          type:'circle',
-          filter:['all',['==','meta','vertex'],['==','$type','Point'],['==','active','true']],
-          paint:{'circle-radius':5,'circle-color':'#d6001c'}
-        },
-        {
-          id:'gl-draw-line',
-          type:'line',
-          filter:['all',['==','$type','LineString'],['!=','mode','static']],
-          paint:{'line-color':'#d6001c','line-width':3}
-        },
-        {
-          id:'gl-draw-line-static',
-          type:'line',
-          filter:['all',['==','$type','LineString'],['==','mode','static']],
-          paint:{'line-color':'#d6001c','line-width':3}
-        }
-      ]
-    });
-    map.addControl(Draw, 'top-right'); // show line+trash icons as a fallback
+  if (captured.length < BUILDING_CENTERS.length){
+    toast(`Captured ${captured.length}/7. Adjust centers if needed and run again.` , 2600);
+    startBtn.disabled = false;
+    return;
+  }
 
-    // start draw mode & disable double-click zoom while drawing
-    function startDraw(){
-      map.doubleClickZoom.disable();
-      Draw.changeMode('draw_line_string');
-      map.getCanvas().style.cursor = 'crosshair';
+  try {
+    const fc = { type:'FeatureCollection', features: captured };
+    if (!map.getSource('captured')){
+      map.addSource('captured', { type:'geojson', data: fc });
+      map.addLayer({ id:'captured-fill', type:'fill', source:'captured', paint:{ 'fill-opacity': 0.35 } });
+      map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width': 2 } });
+      map.addLayer({ id:'captured-labels', type:'symbol', source:'captured', layout:{ 'text-field':['get','name'], 'text-size': 12, 'text-offset':[0, 1.2] }, paint:{ 'text-halo-width':1, 'text-halo-color':'#ffffff' } });
+    } else {
+      map.getSource('captured').setData(fc);
     }
-    map.on('draw.modechange', (e)=>{
-      if (e.mode !== 'draw_line_string'){
-        map.doubleClickZoom.enable();
-        map.getCanvas().style.cursor = '';
-      }
-    });
+  } catch(e){ console.warn('Render overlay failed', e); }
 
-    // keep route source in sync with draw layer + persist browser draft
-    function syncRouteFromDraw(){
-      const fc = Draw.getAll();
-      const line = fc.features.find(f => f.geometry?.type==='LineString');
-      const out = { type:'FeatureCollection', features: line ? [line] : [] };
-      const src = map.getSource('route-src');
-      if (src) src.setData(out);
-      localStorage.setItem('race_route_draft', JSON.stringify(out));
-    }
-    map.on('draw.create', syncRouteFromDraw);
-    map.on('draw.update', syncRouteFromDraw);
-    map.on('draw.delete', syncRouteFromDraw);
+  updateStatus();
+}
 
-    // toolbar actions
-    document.getElementById('btnDraw').onclick  = startDraw;
-    document.getElementById('btnClear').onclick = ()=>{ Draw.deleteAll(); syncRouteFromDraw(); startDraw(); };
-    
-    // 🡻 NEW: Download the filtered buildings GeoJSON 🡻
-    document.getElementById('btnDownloadBuildings').onclick  = ()=>{
-        if (!filteredBuildingsGeoJSON.features.length){
-            alert('Building data has not loaded yet. Please wait a moment.'); 
-            return; 
-        }
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([JSON.stringify(filteredBuildingsGeoJSON, null, 2)], {type:'application/json'}));
-        a.download = 'selected_buildings.geojson';
-        a.click();
-        URL.revokeObjectURL(a.href);
-    };
-    // 🡺 END NEW 🡸
+startBtn.addEventListener('click', runAutoCapture);
 
-    /************ BUILDINGS + ROUTE LAYERS ************/
-    map.on('load', async () => {
-      hideLabelsAndBaseBuildings();
-
-      // Buildings
-      const bldg = await loadJSON(GEOJSON_URL);
-      
-      // 🡻 NEW: Filter the features for the specified buildings 🡻
-      const filteredFeatures = bldg.features.filter(f => {
-          const name = f.properties?.name || f.properties?.NAME || '';
-          return TARGET_BUILDINGS.some(target => name.toLowerCase().includes(target));
-      });
-      
-      filteredBuildingsGeoJSON.features = filteredFeatures;
-      // 🡺 END NEW 🡸
-      
-      // Update the map to only show the filtered buildings
-      map.addSource('race-buildings-src', { type:'geojson', data:filteredBuildingsGeoJSON, generateId:true });
-      map.addLayer({
-        id:'race-buildings', type:'fill-extrusion', source:'race-buildings-src',
-        paint:{
-          'fill-extrusion-color':['coalesce',['get','fill'],'#d6001c'],
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96
-        }
-      });
-      
-      // Empty route source (filled from saved file / draft / draw)
-      map.addSource('route-src', { type:'geojson', data:{type:'FeatureCollection', features:[]} });
-
-      // Red track (ground)
-      map.addLayer({
-        id:'route-track',
-        type:'line',
-        source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
-        paint:{
-          'line-color':'#D62D20',
-          'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
-          'line-opacity': 0.96
-        }
-      });
-
-      // Plank tiles (dashed caps over the red track)
-      map.addLayer({
-        id:'route-tiles',
-        type:'line',
-        source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
-        paint:{
-          'line-color':'#9C1A13',
-          'line-width': ['interpolate',['linear'],['zoom'],14,10,16,14,18,18],
-          'line-dasharray':[0, 2, 1.2, 2]
-        }
-      });
-
-      // Animated lights on top
-      const dashSeq = [[0,4,3,4],[1,4,2,4],[2,4,1,4],[3,4,0,4],[4,4,0,4],[3,4,1,4],[2,4,2,4],[1,4,3,4]];
-      let dashIndex = 0;
-      map.addLayer({
-        id:'route-lights',
-        type:'line',
-        source:'route-src',
-        layout:{ 'line-cap':'round', 'line-join':'round' },
-        paint:{
-          'line-color':'#FFD54A',
-          'line-width': ['interpolate',['linear'],['zoom'],14,5,16,7,18,9],
-          'line-dasharray': dashSeq[0]
-        }
-      });
-      (function animateLights(){
-        dashIndex = (dashIndex + 1) % dashSeq.length;
-        map.setPaintProperty('route-lights','line-dasharray', dashSeq[dashIndex]);
-        requestAnimationFrame(animateLights);
-      })();
-
-      // Try to load saved route.geojson from repo
-      try {
-        const r = await fetch(ROUTE_URL, {cache:'no-store'});
-        if (r.ok) {
-          const route = await r.json();
-          map.getSource('route-src').setData(route);
-          if (route.features?.length) Draw.add(route.features[0]);
-        }
-      } catch(e){ /* ignore if missing */ }
-
-      // Load in-browser draft if no route loaded
-      if (!Draw.getAll().features.length) {
-        const draft = localStorage.getItem('race_route_draft');
-        if (draft) {
-          try {
-            const fc = JSON.parse(draft);
-            if (fc.features?.length) {
-              map.getSource('route-src').setData(fc);
-              Draw.add(fc.features[0]);
-            }
-          } catch(e){}
-        }
-      }
-
-      // Fit to buildings, then nudge zoom
-      // 🡻 UPDATED: Fit to the new, filtered buildings 🡻
-      const bounds = bboxFromFeatures(filteredBuildingsGeoJSON); 
-      map.fitBounds(bounds, {
-        padding:{ top:80, right:160, bottom:120, left:320 },
-        maxZoom:18, pitch:PITCH, bearing:BEARING, duration:500
-      });
-      map.once('moveend', ()=> map.zoomTo(map.getZoom()+0.6,{duration:400}));
-      // 🡺 END UPDATED 🡸
-    });
-
-    /************ FIRESTORE (Players Board) ************/
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js';
-    import { getFirestore, collection, query, where, orderBy, limit, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js';
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
-      authDomain: "race-to-housing.firebaseapp.com",
-      projectId: "race-to-housing",
-      storageBucket: "race-to-housing.firebasestorage.app",
-      messagingSenderId: "569695954799",
-      appId: "1:569695954799:web:93f20901d27bebaeadaa9a",
-      measurementId: "G-VQKHZ1ZTWE"
-    };
-
-    const appFB = initializeApp(firebaseConfig);
-    const db = getFirestore(appFB);
-
-    const playersEl = document.getElementById('playersList');
-    const metaEl = document.getElementById('playersMeta');
-
-    const q = query(
-      collection(db, 'players'),
-      where('active', '==', true),
-      orderBy('points', 'desc'),
-      orderBy('name', 'asc'),
-      limit(350)
-    );
-
-    onSnapshot(q, (snap) => {
-      const frag = document.createDocumentFragment();
-      let count = 0;
-
-      snap.forEach((doc, idx) => {
-        const p = doc.data();
-        const row = document.createElement('div');
-        row.className = 'player';
-
-        const token = document.createElement('div');
-        token.className = 'token';
-
-        if (idx === 0) {
-          token.style.position = "relative";
-          const crown = document.createElement('span');
-          crown.textContent = "👑";
-          crown.style.position = "absolute";
-          crown.style.top = "-10px";
-          crown.style.right = "-10px";
-          crown.style.fontSize = "18px";
-          row.style.fontWeight = "700";
-          token.appendChild(crown);
-        }
-
-        const name = document.createElement('div');
-        name.className = 'name';
-        name.textContent = p.name || '(unnamed)';
-
-        const score = document.createElement('div');
-        score.className = 'score';
-        score.textContent = `Pts: ${Number(p.points || 0)}`;
-
-        row.append(token, name, score);
-        frag.append(row);
-        count++;
-      });
-
-      playersEl.replaceChildren(frag);
-      metaEl.textContent = `${count} active player${count===1?'':'s'}`;
-    });
-  </script>
+map.on('load', ()=>{
+  candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id);
+  if (!candidateLayers.length){
+    toast('No obvious building layers found in style.');
+  }
+});
+</script>
 </body>
 </html>
