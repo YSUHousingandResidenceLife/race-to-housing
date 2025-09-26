@@ -16,6 +16,7 @@
     #map { position:relative; width:100%; height:100%; }
     button { border:1px solid #d1d5db; background:#111827; color:#fff; padding:6px 10px; border-radius:6px; font-weight:600; cursor:pointer; margin-top:10px; }
     button[disabled] { opacity:.5; cursor:not-allowed; }
+    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff; padding:6px 10px; border-radius:6px; font-size:12px; box-shadow:0 4px 10px rgba(0,0,0,.2); }
   </style>
 </head>
 <body>
@@ -28,16 +29,16 @@
   <div>
     <header>
       <strong id="status">0 captured</strong>
-      <span style="margin-left:10px; font-size:12px; color:#6b7280">Click buildings to add them</span>
+      <span style="margin-left:10px; font-size:12px; color:#6b7280">Hover to preview, click to capture</span>
     </header>
     <div id="map"></div>
+    <div id="toast" class="toast" style="display:none"></div>
   </div>
 </div>
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 <script>
-// ===== CONFIG =====
 mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
 const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
@@ -45,29 +46,21 @@ const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, b
 let map = new mapboxgl.Map({ container:'map', style:STYLE, ...INITIAL_VIEW });
 map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
 
-let candidateLayers = [];
 let captured = [];
-
 const statusEl = document.getElementById('status');
 const listEl = document.getElementById('capturedList');
 const downloadBtn = document.getElementById('downloadBtn');
+const toastEl = document.getElementById('toast');
 
-const BUILDING_LAYER_PREDICATE = (layer) => {
-  if (!layer) return false;
-  const tid = String(layer.id || '').toLowerCase();
-  return (layer.type === 'fill' || layer.type === 'fill-extrusion') &&
-         (tid.includes('building') || tid.includes('bldg'));
-};
-
-function layerIds(){
-  return candidateLayers.length ? candidateLayers : (candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id));
+function toast(msg, ms=2000){
+  toastEl.textContent = msg;
+  toastEl.style.display='block';
+  clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(()=> toastEl.style.display='none', ms);
 }
 
 map.on('load', ()=>{
-  candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id);
-  if (!candidateLayers.length){ console.warn('No obvious building layers found in style.'); }
-
-  // Highlight layers
+  // Highlight sources/layers
   map.addSource('hover', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
   map.addLayer({ id:'hover-line', type:'line', source:'hover', paint:{ 'line-color':'#FFD700', 'line-width':3 } });
 
@@ -76,10 +69,11 @@ map.on('load', ()=>{
   map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width':2,'line-color':'#ff0000' } });
 });
 
-// Hover preview
+// Hover preview: query ALL fill/fill-extrusion layers
 map.on('mousemove', (e)=>{
-  const features = map.queryRenderedFeatures(e.point, { layers: layerIds() });
-  const poly = features.find(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
+  const allLayers = (map.getStyle().layers || []).filter(l => l.type==='fill' || l.type==='fill-extrusion').map(l=>l.id);
+  const features = map.queryRenderedFeatures(e.point, { layers: allLayers });
+  const poly = features.find(f => f.geometry && (f.geometry.type==='Polygon' || f.geometry.type==='MultiPolygon'));
   if (poly){
     map.getSource('hover').setData(poly);
   } else {
@@ -89,20 +83,24 @@ map.on('mousemove', (e)=>{
 
 // Capture on click
 map.on('click', (e)=>{
-  const features = map.queryRenderedFeatures(e.point, { layers: layerIds() });
-  const poly = features.find(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
+  const allLayers = (map.getStyle().layers || []).filter(l => l.type==='fill' || l.type==='fill-extrusion').map(l=>l.id);
+  const features = map.queryRenderedFeatures(e.point, { layers: allLayers });
+  const poly = features.find(f => f.geometry && (f.geometry.type==='Polygon' || f.geometry.type==='MultiPolygon'));
   if (poly){
     if (!poly.properties) poly.properties = {};
     if (!poly.properties.name) poly.properties.name = `building_${captured.length+1}`;
 
-    // prevent duplicates
     if (!captured.find(f => f.properties.name === poly.properties.name)){
       captured.push(poly);
       statusEl.textContent = `${captured.length} captured`;
       listEl.innerHTML = captured.map(f => `<li>${f.properties.name}</li>`).join('');
       downloadBtn.disabled = false;
       map.getSource('captured').setData({ type:'FeatureCollection', features: captured });
+      toast(`Captured: ${poly.properties.name}`);
     }
+  } else {
+    console.log('No polygon features here. Layers available:', (map.getStyle().layers||[]).map(l=>l.id));
+    toast('No building feature at this point');
   }
 });
 
