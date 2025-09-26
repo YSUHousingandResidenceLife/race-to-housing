@@ -7,29 +7,31 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
     html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-    #app { display:grid; grid-template-rows:auto 1fr; height:100%; }
-    header { display:flex; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid #e5e7eb; background:#fff; position:sticky; top:0; z-index:2; }
-    .badge { padding:4px 8px; border-radius:999px; background:#f3f4f6; font-weight:600; }
-    #status { font-variant-numeric: tabular-nums; }
-    .controls { margin-left:auto; display:flex; gap:8px; }
-    button { border:1px solid #d1d5db; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer; }
+    #app { display:grid; grid-template-columns:250px 1fr; height:100%; }
+    aside { background:#f9fafb; border-right:1px solid #e5e7eb; padding:10px; overflow-y:auto; }
+    aside h2 { font-size:16px; margin:0 0 10px 0; }
+    #capturedList { font-size:14px; line-height:1.4; }
+    #capturedList li { margin-bottom:4px; }
+    header { padding:10px; border-bottom:1px solid #e5e7eb; background:#fff; font-size:14px; }
+    #map { position:relative; width:100%; height:100%; }
+    button { border:1px solid #d1d5db; background:#111827; color:#fff; padding:6px 10px; border-radius:6px; font-weight:600; cursor:pointer; margin-top:10px; }
     button[disabled] { opacity:.5; cursor:not-allowed; }
-    .note { font-size:12px; color:#6b7280; }
-    #map { position:relative; }
-    #map, #map canvas { width:100%; height:100%; display:block; }
   </style>
 </head>
 <body>
 <div id="app">
-  <header>
-    <span class="badge">YSU — Manual Capture</span>
-    <strong id="status">0 captured</strong>
-    <span class="note">(Click map to select buildings, then download GeoJSON)</span>
-    <div class="controls">
-      <button id="downloadBtn" disabled>Download ysu_race_buildings_manual.geojson</button>
-    </div>
-  </header>
-  <div id="map"></div>
+  <aside>
+    <h2>Captured Buildings</h2>
+    <ul id="capturedList"></ul>
+    <button id="downloadBtn" disabled>Download GeoJSON</button>
+  </aside>
+  <div>
+    <header>
+      <strong id="status">0 captured</strong>
+      <span style="margin-left:10px; font-size:12px; color:#6b7280">Click buildings to add them</span>
+    </header>
+    <div id="map"></div>
+  </div>
 </div>
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
@@ -37,7 +39,6 @@
 <script>
 // ===== CONFIG =====
 mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-
 const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
 const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
 
@@ -47,8 +48,9 @@ map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
 let candidateLayers = [];
 let captured = [];
 
-const downloadBtn = document.getElementById('downloadBtn');
 const statusEl = document.getElementById('status');
+const listEl = document.getElementById('capturedList');
+const downloadBtn = document.getElementById('downloadBtn');
 
 const BUILDING_LAYER_PREDICATE = (layer) => {
   if (!layer) return false;
@@ -63,27 +65,43 @@ function layerIds(){
 
 map.on('load', ()=>{
   candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id);
-  if (!candidateLayers.length){
-    console.warn('No obvious building layers found in style.');
+  if (!candidateLayers.length){ console.warn('No obvious building layers found in style.'); }
+
+  // Highlight layers
+  map.addSource('hover', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+  map.addLayer({ id:'hover-line', type:'line', source:'hover', paint:{ 'line-color':'#FFD700', 'line-width':3 } });
+
+  map.addSource('captured', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+  map.addLayer({ id:'captured-fill', type:'fill', source:'captured', paint:{ 'fill-color':'#ff0000','fill-opacity':0.4 } });
+  map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width':2,'line-color':'#ff0000' } });
+});
+
+// Hover preview
+map.on('mousemove', (e)=>{
+  const features = map.queryRenderedFeatures(e.point, { layers: layerIds() });
+  const poly = features.find(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
+  if (poly){
+    map.getSource('hover').setData(poly);
+  } else {
+    map.getSource('hover').setData({ type:'FeatureCollection', features:[] });
   }
 });
 
+// Capture on click
 map.on('click', (e)=>{
   const features = map.queryRenderedFeatures(e.point, { layers: layerIds() });
   const poly = features.find(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
   if (poly){
-    poly.properties = { name: poly.properties.name || `building_${captured.length+1}` };
-    captured.push(poly);
-    statusEl.textContent = `${captured.length} captured`;
-    downloadBtn.disabled = false;
-    // highlight on map
-    const fc = { type:'FeatureCollection', features: captured };
-    if (!map.getSource('captured')){
-      map.addSource('captured', { type:'geojson', data: fc });
-      map.addLayer({ id:'captured-fill', type:'fill', source:'captured', paint:{ 'fill-color':'#ff0000','fill-opacity':0.4 } });
-      map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width':2,'line-color':'#ff0000' } });
-    } else {
-      map.getSource('captured').setData(fc);
+    if (!poly.properties) poly.properties = {};
+    if (!poly.properties.name) poly.properties.name = `building_${captured.length+1}`;
+
+    // prevent duplicates
+    if (!captured.find(f => f.properties.name === poly.properties.name)){
+      captured.push(poly);
+      statusEl.textContent = `${captured.length} captured`;
+      listEl.innerHTML = captured.map(f => `<li>${f.properties.name}</li>`).join('');
+      downloadBtn.disabled = false;
+      map.getSource('captured').setData({ type:'FeatureCollection', features: captured });
     }
   }
 });
