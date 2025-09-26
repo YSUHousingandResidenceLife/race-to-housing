@@ -2,294 +2,256 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Reliable 7/7 Capture (Fixed)</title>
-  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Race to Housing — Auto‑Capture (7/7) Buildings</title>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
-    html,body{height:100%;margin:0}
-    #map{position:absolute;inset:0}
-    .ui{
-      position:absolute;right:12px;top:12px;z-index:10;background:#fff;border:1px solid #e5e7eb;
-      border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.15);padding:12px;min-width:340px
-    }
-    .ui header{font:700 15px system-ui;margin-bottom:8px}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
-    button{cursor:pointer;border-radius:8px;padding:8px 12px;font:600 14px system-ui}
-    #startBtn{background:#111827;color:#fff;border:1px solid #111827}
-    #downloadBtn{background:#fff;border:1px solid #111827;color:#111827;opacity:.4;pointer-events:none}
-    #downloadBtn.enabled{opacity:1;pointer-events:auto}
-    .small{font:12px system-ui;color:#374151}
-    .list{display:grid;grid-template-columns:1fr auto;gap:4px;margin-top:8px;font:13px system-ui}
-    .ok{color:#059669;font-weight:700}
-    .miss{color:#b91c1c;font-weight:700}
-    .badge{margin-left:auto;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:2px 8px;font:700 12px system-ui}
-    .note{background:#f9fafb;border:1px dashed #e5e7eb;border-radius:8px;padding:8px;margin-top:8px;font:12px system-ui}
-    /* Error overlay */
-    .err{
-      position:absolute;left:12px;bottom:12px;z-index:20;background:#111827;color:#fff;border-radius:10px;
-      padding:10px 12px;font:13px/1.35 system-ui;box-shadow:0 10px 24px rgba(0,0,0,.18);max-width:min(680px,92vw);display:none
-    }
-    .err b{color:#fca5a5}
+    html, body { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
+    #app { display:grid; grid-template-rows:auto 1fr; height:100%; }
+    header { display:flex; gap:12px; align-items:center; padding:10px 12px; border-bottom:1px solid #e5e7eb; background:#fff; position:sticky; top:0; z-index:2; }
+    .badge { padding:4px 8px; border-radius:999px; background:#f3f4f6; font-weight:600; }
+    #status { font-variant-numeric: tabular-nums; }
+    #log { white-space:pre-wrap; font-size:12px; color:#374151; max-height:3.5lh; overflow:auto; }
+    #map { position:relative; }
+    #map, #map canvas { width:100%; height:100%; display:block; }
+    .controls { margin-left:auto; display:flex; gap:8px; }
+    button { appearance:none; border:1px solid #d1d5db; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer; }
+    button[disabled] { opacity:.5; cursor:not-allowed; }
+    .note { font-size:12px; color:#6b7280; }
+    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff; padding:8px 12px; border-radius:10px; font-size:12px; box-shadow:0 8px 20px rgba(0,0,0,.2); z-index:3; }
+    .pin { position:absolute; transform:translate(-50%, -100%); pointer-events:none; }
   </style>
 </head>
 <body>
+<div id="app">
+  <header>
+    <span class="badge">YSU — Auto‑Capture</span>
+    <strong id="status">0/7 captured</strong>
+    <span class="note">(Captures building polygons around known centers → merges parts → saves)</span>
+    <div class="controls">
+      <button id="startBtn">Start Auto‑Capture</button>
+      <button id="downloadBtn" disabled>Download ysu_race_buildings_exact.geojson</button>
+    </div>
+  </header>
   <div id="map"></div>
+</div>
 
-  <div class="ui">
-    <header>Auto-capture exact footprints <span id="countBadge" class="badge">0/7</span></header>
-    <div class="row">
-      <button id="startBtn">Start capture</button>
-      <button id="downloadBtn" title="Enabled after at least 1 capture">Download GeoJSON</button>
-    </div>
-    <div id="status" class="small">Press <b>Start capture</b>. The camera flies to each building and records its polygon.</div>
-    <div id="metrics" class="small"></div>
-    <div id="list" class="list"></div>
-    <div class="note">
-      If auto-capture can’t find a footprint, you’ll be prompted to <b>click the building outline</b> to capture.
-    </div>
-  </div>
+<div id="toast" class="toast" style="display:none"></div>
 
-  <div id="err" class="err"></div>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script>
+// ======== CONFIG ========
+// 1) Put your real token here or inject via <script> before this file: window.MAPBOX_TOKEN = '...'
+mapboxgl.accessToken = window.MAPBOX_TOKEN || 'YOUR_MAPBOX_ACCESS_TOKEN_HERE';
 
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-  <script>
-  // ===== ERROR OVERLAY =====
-  const errEl = document.getElementById('err');
-  function showErr(msg){
-    errEl.innerHTML = '<b>Script error:</b> ' + msg;
-    errEl.style.display = 'block';
+// 2) Camera & style (per your spec)
+const INITIAL_VIEW = {
+  center: [-80.644685, 41.107524],
+  zoom: 17.2,
+  pitch: 60,
+  bearing: -133.6
+};
+const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
+
+// 3) Known building centers (approx). If a center is slightly off, the script retries with a bigger radius.
+//    You can fine‑tune lng/lat values later — the script will still finish.
+const BUILDING_CENTERS = [
+  { key:'lyden',        name:'Lyden House',               lng:-80.64783, lat:41.10696 },
+  { key:'cafaro',       name:'Cafaro House (incl. Annex)',lng:-80.64897, lat:41.10754 },
+  { key:'christman',    name:'Christman Dining',          lng:-80.64654, lat:41.10759 },
+  { key:'weller',       name:'Weller House',              lng:-80.64628, lat:41.10849 },
+  { key:'wick',         name:'Wick House',                lng:-80.64533, lat:41.10869 },
+  { key:'kilcawley',    name:'Kilcawley House',           lng:-80.64563, lat:41.10675 },
+  { key:'courtyards',   name:'University Courtyards',     lng:-80.65123, lat:41.10338 } // ← tweak if needed
+];
+
+// 4) Optional: custom logo overlay (comment out if not used)
+const LOGO_URL = 'housing-overlay.png'; // ensure file exists next to this HTML
+
+// 5) How we detect candidate building layers in your style
+const BUILDING_LAYER_PREDICATE = (layer) => {
+  if (!layer) return false;
+  const tid = String(layer.id || '').toLowerCase();
+  return (layer.type === 'fill' || layer.type === 'fill-extrusion') &&
+         (tid.includes('building') || tid.includes('bldg'));
+};
+
+// ======== APP ========
+const map = new mapboxgl.Map({ container:'map', style:STYLE, ...INITIAL_VIEW });
+map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
+
+let candidateLayers = [];
+let captured = [];
+const startBtn = document.getElementById('startBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const statusEl = document.getElementById('status');
+const toastEl = document.getElementById('toast');
+
+function toast(msg, ms=1800){
+  toastEl.textContent = msg; toastEl.style.display='block';
+  clearTimeout(toastEl._t); toastEl._t = setTimeout(()=> toastEl.style.display='none', ms);
+}
+
+function metersToPixelsAtLat(meters, lat, zoom){
+  // Mapbox GL helper — convert meters to pixel radius at given latitude/zoom
+  const earthCircumference = 40075017; // meters
+  const latRad = lat * Math.PI / 180;
+  return meters / (earthCircumference * Math.cos(latRad) / Math.pow(2, zoom));
+}
+
+function bboxAround([lng,lat], meters, z){
+  const px = metersToPixelsAtLat(meters, lat, z);
+  const p1 = map.project([lng, lat]);
+  const min = [p1.x - px, p1.y - px];
+  const max = [p1.x + px, p1.y + px];
+  const sw = map.unproject(min), ne = map.unproject(max);
+  return [sw.lng, sw.lat, ne.lng, ne.lat];
+}
+
+function layerIds(){
+  return candidateLayers.length ? candidateLayers : (candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id));
+}
+
+function queryBuildingsInBox(box){
+  const layers = layerIds();
+  const features = map.queryRenderedFeatures(box, { layers });
+  // keep only polygonal
+  return features.filter(f => (f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')));
+}
+
+function dissolve(features){
+  if (!features.length) return null;
+  // Convert to FeatureCollection and union stepwise
+  let fc = turf.featureCollection(features.map(f => turf.clone(f)));
+  // Some building layers return duplicates; dissolve by buffering tiny amount then union
+  try {
+    let u = fc.features[0];
+    for (let i=1; i<fc.features.length; i++) {
+      u = turf.union(u, fc.features[i]);
+    }
+    return u;
+  } catch(e){
+    // fallback: merge as MultiPolygon
+    return turf.combine(fc);
   }
-  window.addEventListener('error', e => showErr(e.message || String(e)));
-  window.addEventListener('unhandledrejection', e => showErr(e.reason && e.reason.message ? e.reason.message : String(e.reason)));
+}
 
-  // ===== CONFIG =====
-  mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-  const STYLE = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-  const niceView = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
-
-  const TARGETS = [
-    {key:'lyden',        name:'Lyden House',            color:'#FFD94A', coord:[-80.647458, 41.111143]},
-    {key:'cafaro',       name:'Cafaro House',           color:'#FF8A00', coord:[-80.6461376731338, 41.11100745921387]},
-    {key:'christman',    name:'Christman Dining',       color:'#808000', coord:[-80.64724052183561, 41.110525670257104]},
-    {key:'weller',       name:'Weller House',           color:'#00FFFF', coord:[-80.64483333333334, 41.10769444444445]},
-    {key:'wick',         name:'Wick House (Art)',       color:'#B67BFF', coord:[-80.64426251711262, 41.107489184836176]},
-    {key:'kilcawley',    name:'Kilcawley House',        color:'#00A651', coord:[-80.64731987291158, 41.10673909169142]},
-    {key:'courtyards',   name:'University Courtyards',  color:'#FF3D71', coord:[-80.64555, 41.10690]}
-  ];
-
-  // ===== MAP =====
-  const map = new mapboxgl.Map({ container:'map', style:STYLE, ...niceView, minZoom:15, maxZoom:20 });
-  map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-  map.on('styledata', ()=>{
-    (map.getStyle().layers||[]).forEach(lyr=>{
-      if(lyr.type==='symbol'||/label/i.test(lyr.id)){
-        try{ map.setLayoutProperty(lyr.id,'visibility','none'); }catch(e){}
-      }
-    });
+async function flyAndIdle(opts){
+  return new Promise(resolve => {
+    const done = ()=>{ map.off('idle', done); resolve(); };
+    map.once('idle', done);
+    map.flyTo({ ...opts, duration:700 });
   });
+}
 
-  // ===== UI =====
-  const startBtn   = document.getElementById('startBtn');
-  const downloadBtn= document.getElementById('downloadBtn');
-  const statusEl   = document.getElementById('status');
-  const metricsEl  = document.getElementById('metrics');
-  const listEl     = document.getElementById('list');
-  const badgeEl    = document.getElementById('countBadge');
+async function captureOne(target, attempt=1){
+  const maxAttempts = 4; // expands radius per attempt
+  const radii = [28, 42, 60, 85]; // meters
+  const radius = radii[Math.min(attempt-1, radii.length-1)];
+  await flyAndIdle({ center:[target.lng, target.lat], zoom: Math.max(INITIAL_VIEW.zoom, 17.2), pitch: INITIAL_VIEW.pitch, bearing: INITIAL_VIEW.bearing });
+  const box = bboxAround([target.lng, target.lat], radius, map.getZoom());
+  const feats = queryBuildingsInBox(box);
 
-  function setStatus(html){ statusEl.innerHTML = html; }
-  function setBadge(done){ badgeEl.textContent = `${done}/7`; startBtn.textContent = done ? `Resume (${done}/7)` : 'Start capture'; }
-  function enableDownload(enabled, count){
-    if(enabled){ downloadBtn.classList.add('enabled'); downloadBtn.textContent = `Download GeoJSON (${count} features)`; downloadBtn.title=''; }
-    else       { downloadBtn.classList.remove('enabled'); downloadBtn.textContent = 'Download GeoJSON'; downloadBtn.title='Enabled after at least 1 capture'; }
-  }
-
-  function renderList(){
-    listEl.innerHTML='';
-    TARGETS.forEach(t=>{
-      const l=document.createElement('div'); l.textContent=t.name;
-      const r=document.createElement('div'); r.id=`chk-${t.key}`; r.textContent='—'; r.className='miss';
-      listEl.appendChild(l); listEl.appendChild(r);
-    });
-  }
-  renderList(); setBadge(0); enableDownload(false,0);
-
-  // ===== CAPTURE STATE =====
-  const board = { type:'FeatureCollection', features:[] };
-  const captured = {}; // key -> true
-
-  function metersPerLon(lat){ return 111320 * Math.cos(lat*Math.PI/180); }
-  function metersPerLat(){ return 111320; }
-  function polygonMetrics(coords){
-    const lats=coords.map(c=>c[1]), lngs=coords.map(c=>c[0]);
-    const minLat=Math.min(...lats), maxLat=Math.max(...lats);
-    const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
-    const midLat=(minLat+maxLat)/2;
-    const width  = (maxLng-minLng)*metersPerLon(midLat);
-    const length = (maxLat-minLat)*metersPerLat();
-    return { width_m:Math.round(width), length_m:Math.round(length) };
-  }
-  function showMetrics(m){ metricsEl.textContent = `Width: ${m.width_m} m · Length: ${m.length_m} m`; }
-
-  function waitSettle(ms=900){
-    return new Promise(res=>{
-      let done=false; const finish=()=>{ if(!done){done=true; res();} };
-      const t=setTimeout(finish, ms);
-      map.once('moveend', ()=>{ clearTimeout(t); finish(); });
-      map.once('idle', ()=>{ clearTimeout(t); finish(); });
-    });
-  }
-  async function flyTo(center){ map.easeTo({center, zoom:19.2, pitch:0, bearing:0, duration:900}); await waitSettle(); }
-
-  function footprintAtPoint(pointPx){
-    const pads=[14,18,22,26,32];
-    for(const p of pads){
-      const bbox=[[pointPx.x-p,pointPx.y-p],[pointPx.x+p,pointPx.y+p]];
-      let feats=map.queryRenderedFeatures(bbox);
-      feats=feats.filter(f=>{
-        const sl=f.sourceLayer||f['source-layer']||'';
-        const lid=(f.layer&&f.layer.id)||'';
-        const cls=(f.properties&&(f.properties.class||f.properties.type||f.properties.kind))||'';
-        return (f.geometry && (f.geometry.type==='Polygon'||f.geometry.type==='MultiPolygon')) &&
-               (/building/i.test(sl)||/building/i.test(lid)||/building/i.test(String(cls)));
-      });
-      if(!feats.length) continue;
-      feats.sort((a,b)=>{
-        const al = (a.geometry.type==='Polygon'?a.geometry.coordinates[0].length:a.geometry.coordinates[0][0].length);
-        const bl = (b.geometry.type==='Polygon'?b.geometry.coordinates[0].length:b.geometry.coordinates[0][0].length);
-        return bl-al;
-      });
-      return feats[0].geometry;
+  if (!feats.length){
+    if (attempt < maxAttempts){
+      toast(`No features at ${target.name} (try ${attempt+1}/${maxAttempts}) — widening search…`);
+      return captureOne(target, attempt+1);
     }
-    return null;
+    throw new Error(`No building polygons found for ${target.name} after ${maxAttempts} attempts.`);
   }
 
-  function manualCaptureFor(target){
-    return new Promise(resolve=>{
-      setStatus(`Auto-capture missed <b>${target.name}</b>. Click directly on its roof outline.`);
-      const once = (e)=>{
-        map.getCanvas().style.cursor='crosshair';
-        const geom = footprintAtPoint(e.point);
-        map.getCanvas().style.cursor='';
-        map.off('click', once);
-        if(geom){ resolve(geom); }
-        else { setStatus(`No polygon at click. Try again on <b>${target.name}</b>.`); resolve(null); }
-      };
-      map.once('click', once);
-    });
+  const merged = dissolve(feats);
+  if (!merged) throw new Error(`Could not merge features for ${target.name}.`);
+
+  // Normalize polygon orientation & precision
+  const fixed = turf.truncate(merged, { precision: 6, coordinates: 3 });
+  fixed.properties = { name: target.name, key: target.key };
+  return fixed;
+}
+
+function updateStatus(){
+  statusEl.textContent = `${captured.length}/7 captured`;
+  if (captured.length === BUILDING_CENTERS.length){
+    downloadBtn.disabled = false;
+    toast('All 7 captured — ready to download');
   }
+}
 
-  function markDone(tkey){
-    const cell = document.getElementById(`chk-${tkey}`);
-    if(cell){ cell.textContent='✔'; cell.className='ok'; }
-    const done = Object.keys(captured).length;
-    setBadge(done);
-    enableDownload(done>0, board.features.length);
-  }
+function downloadGeoJSON(){
+  const fc = { type:'FeatureCollection', features: captured };
+  const blob = new Blob([JSON.stringify(fc, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ysu_race_buildings_exact.geojson';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 2000);
+}
 
-  function previewBoard(){
-    if(!map.getSource('race')) map.addSource('race',{type:'geojson',data:board});
-    else map.getSource('race').setData(board);
+downloadBtn.addEventListener('click', downloadGeoJSON);
 
-    if(!map.getLayer('race-fill')){
-      map.addLayer({
-        id:'race-fill', type:'fill',
-        source:'race',
-        filter:['==',['get','type'],'building'],
-        paint:{ 'fill-color':['get','fill'], 'fill-opacity':0.98 }
-      });
-    }
-    if(!map.getLayer('race-3d')){
-      map.addLayer({
-        id:'race-3d', type:'fill-extrusion', source:'race',
-        filter:['==',['get','type'],'building'],
-        paint:{
-          'fill-extrusion-color':['get','fill'],
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96
+async function runAutoCapture(){
+  startBtn.disabled = true; downloadBtn.disabled = true; captured = []; updateStatus();
+  toast('Starting auto‑capture…');
+
+  // add logo once (optional)
+  try {
+    if (LOGO_URL){
+      map.loadImage(LOGO_URL, (err, image)=>{
+        if (!err && image && !map.hasImage('ysu-logo')){
+          map.addImage('ysu-logo', image, { sdf:false });
+          if (!map.getSource('logo-pt')){
+            map.addSource('logo-pt', { type:'geojson', data:{ type:'FeatureCollection', features:[ { type:'Feature', properties:{}, geometry:{ type:'Point', coordinates: INITIAL_VIEW.center } } ] } });
+            map.addLayer({ id:'logo-pt-layer', type:'symbol', source:'logo-pt', layout:{ 'icon-image':'ysu-logo', 'icon-size': 0.25, 'icon-anchor':'bottom' } });
+          }
         }
       });
     }
-    if(!map.getLayer('race-labels')){
-      map.addLayer({
-        id:'race-labels', type:'symbol', source:'race',
-        filter:['==',['get','type'],'building'],
-        layout:{
-          'text-field':['get','name'],
-          'text-size':13,
-          'text-allow-overlap':true,
-          'text-ignore-placement':true,
-          'text-anchor':'center',
-          'text-font':['Open Sans Semibold','Arial Unicode MS Bold']
-        },
-        paint:{
-          'text-color':'#111',
-          'text-halo-color':'#fff',
-          'text-halo-width':1.6
-        }
-      });
+  } catch(e){ /* non‑fatal */ }
+
+  for (const target of BUILDING_CENTERS){
+    try {
+      const feat = await captureOne(target);
+      captured.push(feat);
+      updateStatus();
+    } catch(e){
+      console.error(e);
+      toast(e.message, 2400);
     }
   }
 
-  async function captureOne(t){
-    setStatus(`Flying to <b>${t.name}</b>…`);
-    await flyTo(t.coord);
-
-    const pt = map.project(t.coord);
-    let geom = footprintAtPoint(pt);
-
-    if(!geom){
-      geom = await manualCaptureFor(t);
-      if(!geom) return false;
-    }
-
-    // ensure closed ring & metrics
-    const ring = geom.type==='Polygon' ? geom.coordinates[0] : geom.coordinates[0][0];
-    if(ring && ring.length){
-      const a=ring[0], b=ring[ring.length-1];
-      if(a[0]!==b[0] || a[1]!==b[1]) ring.push(a);
-      const m = polygonMetrics(ring); showMetrics(m);
-    }
-
-    board.features.push({
-      type:'Feature',
-      properties:{ type:'building', name:t.name, fill:t.color, height:22 },
-      geometry: geom
-    });
-    captured[t.key]=true;
-    markDone(t.key);
-    previewBoard();
-    // ✅ FIXED: the line below had a syntax error before
-    setStatus(`Captured <b>${t.name}</b>.`);
-    return true;
+  if (captured.length < BUILDING_CENTERS.length){
+    toast(`Captured ${captured.length}/7. You can tweak the center(s) and click Start again.` , 2600);
+    startBtn.disabled = false; // allow rerun after tweaking
+    return;
   }
 
-  async function runAll(){
-    startBtn.disabled=true;
-    if(Object.keys(captured).length===0){
-      board.features.length = 0;
-      previewBoard();
+  // Show the results on map
+  try {
+    const fc = { type:'FeatureCollection', features: captured };
+    if (!map.getSource('captured')){
+      map.addSource('captured', { type:'geojson', data: fc });
+      map.addLayer({ id:'captured-fill', type:'fill', source:'captured', paint:{ 'fill-opacity': 0.35 } });
+      map.addLayer({ id:'captured-outline', type:'line', source:'captured', paint:{ 'line-width': 2 } });
+      map.addLayer({ id:'captured-labels', type:'symbol', source:'captured', layout:{ 'text-field':['get','name'], 'text-size': 12, 'text-offset':[0, 1.2] }, paint:{ 'text-halo-width':1, 'text-halo-color':'#ffffff' } });
+    } else {
+      map.getSource('captured').setData(fc);
     }
-    for(const t of TARGETS){
-      if(captured[t.key]) continue;
-      await captureOne(t);
-    }
-    map.easeTo({...niceView, duration:900});
-    const done = Object.keys(captured).length;
-    setStatus(done===7 ? 'All 7 captured. You can download now.' : `Captured ${done}/7. You can download partial results too.`);
-    enableDownload(done>0, board.features.length);
-    startBtn.disabled=false;
+  } catch(e){ console.warn('Render overlay failed', e); }
+
+  updateStatus();
+}
+
+startBtn.addEventListener('click', runAutoCapture);
+
+map.on('load', ()=>{
+  // detect building layers once style is ready
+  candidateLayers = (map.getStyle().layers || []).filter(BUILDING_LAYER_PREDICATE).map(l=>l.id);
+  if (!candidateLayers.length){
+    toast('Heads‑up: No obvious building layers found. Capture may still work if style uses custom IDs.');
   }
-
-  function downloadJSON(obj, filename){
-    const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a');
-    a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
-  }
-
-  startBtn.onclick = runAll;
-  downloadBtn.onclick = ()=>{ if(board.features.length>0) downloadJSON(board,'ysu_race_buildings_exact.geojson'); };
-
-  map.on('load', ()=>{ previewBoard(); });
-  </script>
+});
+</script>
 </body>
 </html>
