@@ -2,28 +2,38 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Recolor Mode</title>
+  <title>Race to Housing — Paintbrush Mode</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
     html, body { height:100%; margin:0; }
     #map { position:absolute; top:0; bottom:0; width:100%; }
-    #colorPicker {
-      position:absolute; top:10px; left:10px; z-index:10;
-      padding:4px; background:#fff; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,.2);
-      display:none;
+    #drawCanvas {
+      position:absolute; top:0; left:0; width:100%; height:100%;
+      pointer-events:none; /* turn on when painting */
+      z-index:20;
+    }
+    #controls {
+      position:absolute; top:10px; left:10px; z-index:30;
+      background:#fff; padding:8px; border-radius:6px;
+      box-shadow:0 2px 6px rgba(0,0,0,.2);
+      display:flex; gap:10px; align-items:center;
     }
     #downloadBtn {
-      position:absolute; top:10px; right:10px; z-index:10;
-      padding:8px 12px; background:#d6001c; color:#fff; border:none;
+      padding:6px 10px; background:#d6001c; color:#fff; border:none;
       border-radius:6px; cursor:pointer; font-weight:bold;
     }
   </style>
 </head>
 <body>
 <div id="map"></div>
-<input type="color" id="colorPicker" />
-<button id="downloadBtn">Download Painted GeoJSON</button>
+<canvas id="drawCanvas"></canvas>
+
+<div id="controls">
+  <input type="color" id="colorPicker" value="#ff0000" />
+  <input type="range" id="brushSize" min="2" max="50" value="8" />
+  <button id="downloadBtn">Download Painting</button>
+</div>
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 <script>
@@ -38,66 +48,61 @@ const map = new mapboxgl.Map({
   bearing: -133.6
 });
 
-let combined;
+// ----- PAINTBRUSH -----
+const canvas = document.getElementById("drawCanvas");
+const ctx = canvas.getContext("2d");
+resizeCanvas();
 
-// Load GeoJSONs
-async function loadJSON(url){ const r=await fetch(url); return r.json(); }
+let painting = false;
+let brushColor = document.getElementById("colorPicker").value;
+let brushSize = document.getElementById("brushSize").value;
 
-map.on("load", async () => {
-  const buildings = await loadJSON("ysu_race_buildings_exact_final.geojson");
-  const courtyards = await loadJSON("university_courtyards.geojson");
-  combined = { type:"FeatureCollection", features:[...buildings.features, ...courtyards.features] };
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
 
-  map.addSource("race", { type:"geojson", data: combined, generateId:true });
-  map.addLayer({
-    id:"race-buildings",
-    type:"fill-extrusion",
-    source:"race",
-    paint:{
-      "fill-extrusion-color": [
-        "case",
-          ["has", "fill"], ["get", "fill"],
-          "#d6001c" // fallback if no color
-      ],
-      "fill-extrusion-height": ["coalesce", ["get","height"], 22],
-      "fill-extrusion-opacity": 0.96,
-      "fill-extrusion-vertical-gradient": false
-    }
-  });
+function startPaint(e){
+  painting = true;
+  draw(e);
+}
+function endPaint(){
+  painting = false;
+  ctx.beginPath();
+}
+function draw(e){
+  if(!painting) return;
+  ctx.lineWidth = brushSize;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = brushColor;
 
-  // Click-to-paint
-  map.on("click","race-buildings",(e)=>{
-    if(!e.features.length) return;
-    const feature = e.features[0];
-    const name = feature.properties.name || "Unnamed";
+  ctx.lineTo(e.clientX, e.clientY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(e.clientX, e.clientY);
+}
 
-    const picker = document.getElementById("colorPicker");
-    picker.value = feature.properties.fill || "#ff0000";
-    picker.style.display = "block";
-
-    picker.oninput = ()=>{
-      const newColor = picker.value;
-      feature.properties.fill = newColor;
-
-      // Update source data
-      const idx = combined.features.findIndex(f => f.properties.name === name);
-      if(idx>-1){ combined.features[idx].properties.fill = newColor; }
-
-      map.getSource("race").setData(combined);
-    };
-  });
-
-  // Export
-  document.getElementById("downloadBtn").onclick = ()=>{
-    const blob = new Blob([JSON.stringify(combined,null,2)], {type:"application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "painted_buildings.geojson";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+canvas.addEventListener("mousedown", (e)=>{
+  canvas.style.pointerEvents="auto"; // enable drawing
+  startPaint(e);
 });
+canvas.addEventListener("mouseup", ()=>{
+  endPaint();
+  canvas.style.pointerEvents="none"; // disable so map is usable
+});
+canvas.addEventListener("mousemove", draw);
+
+document.getElementById("colorPicker").oninput = (e)=> brushColor = e.target.value;
+document.getElementById("brushSize").oninput = (e)=> brushSize = e.target.value;
+
+// Download painting as image
+document.getElementById("downloadBtn").onclick = ()=>{
+  const link = document.createElement("a");
+  link.download = "painting.png";
+  link.href = canvas.toDataURL();
+  link.click();
+};
 </script>
 </body>
 </html>
