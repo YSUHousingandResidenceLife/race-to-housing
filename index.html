@@ -52,7 +52,7 @@
     </div>
   </section>
 
-  <!-- Players (live from Firestore) -->
+  <!-- Players -->
   <section class="panel players" id="playersPanel">
     <header>
       <h3>Players Board</h3>
@@ -94,8 +94,6 @@
         if (lyr.type === 'symbol' || /label/i.test(lyr.id)) {
           try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
         }
-      }
-      for (const lyr of layers) {
         if (/building/i.test(lyr.id)) {
           try { map.setLayoutProperty(lyr.id, 'visibility', 'none'); } catch(e){}
         }
@@ -120,67 +118,45 @@
       const data = await loadJSON(GEOJSON_URL);
       const courtyards = await loadJSON(COURTYARDS_URL);
 
-      // Sources
       map.addSource('race', { type:'geojson', data, generateId:true });
       map.addSource('courtyards', { type:'geojson', data:courtyards, generateId:true });
 
-      // Shared color rules
       const colorExpression = [
         'case',
-          ['==', ['get','name'], 'Lyden House'], '#FF69B4',      // pink
-          ['==', ['get','name'], 'Cafaro House'], '#0072CE',     // blue
-          ['==', ['get','name'], 'Wick House'], '#FFC72C',       // yellow
-          ['==', ['get','name'], 'Weller House'], '#582C83',     // purple
-          ['==', ['get','name'], 'Christman Hall'], '#866D4B',   // gold (Pantone 872)
-          ['==', ['get','name'], 'Kilcawley House'], '#E4002B',  // red (Pantone 186)
+          ['==', ['get','name'], 'Lyden House'], '#FF69B4',
+          ['==', ['get','name'], 'Cafaro House'], '#0072CE',
+          ['==', ['get','name'], 'Wick House'], '#FFC72C',
+          ['==', ['get','name'], 'Weller House'], '#582C83',
+          ['==', ['get','name'], 'Christman Hall'], '#866D4B',  // Gold Pantone 872
+          ['==', ['get','name'], 'Kilcawley House'], '#E4002B',
           ['coalesce',['get','fill'],'#d6001c']
       ];
 
-      // Flat fill footprints
+      // 3D extrusions only (no flat fills, avoids footprint coloring)
       map.addLayer({
-        id:'race-fill',
-        type:'fill',
+        id:'race-buildings',
+        type:'fill-extrusion',
         source:'race',
-        paint:{ 'fill-color': colorExpression, 'fill-opacity':0.9 }
+        paint:{
+          'fill-extrusion-color': colorExpression,
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
+        }
       });
 
-      // 3D extrusions
-map.addLayer({
-  id:'race-buildings',
-  type:'fill-extrusion',
-  source:'race',
-  paint:{
-    'fill-extrusion-color': [
-      'case',
-        ['==', ['get','name'], 'Lyden House'], '#FF69B4',      // pink
-        ['==', ['get','name'], 'Cafaro House'], '#0072CE',     // blue
-        ['==', ['get','name'], 'Wick House'], '#FFC72C',       // yellow
-        ['==', ['get','name'], 'Weller House'], '#582C83',     // purple
-        ['==', ['get','name'], 'Christman Hall'], '#866D4B',   // gold (Pantone 872)
-        ['==', ['get','name'], 'Kilcawley House'], '#E4002B',  // red (Pantone 186)
-        ['coalesce',['get','fill'],'#d6001c']
-    ],
-    'fill-extrusion-height':['coalesce',['get','height'],22],
-    'fill-extrusion-opacity':0.96,
-    'fill-extrusion-vertical-gradient': false
-  }
-});
+      map.addLayer({
+        id:'courtyards-fill3d',
+        type:'fill-extrusion',
+        source:'courtyards',
+        paint:{
+          'fill-extrusion-color':'#78BE20',
+          'fill-extrusion-height':['coalesce',['get','height'],22],
+          'fill-extrusion-opacity':0.96,
+          'fill-extrusion-vertical-gradient': false
+        }
+      });
 
-// Courtyards
-map.addLayer({
-  id:'courtyards-fill3d',
-  type:'fill-extrusion',
-  source:'courtyards',
-  paint:{
-    'fill-extrusion-color':'#78BE20', // Pantone 367 green
-    'fill-extrusion-height':['coalesce',['get','height'],22],
-    'fill-extrusion-opacity':0.96,
-    'fill-extrusion-vertical-gradient': false
-  }
-});
-
-
-      // Fit view
       const combined = { type:"FeatureCollection", features:[...data.features, ...courtyards.features] };
       const bounds = bboxFromFeatures(combined);
       map.fitBounds(bounds, {
