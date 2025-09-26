@@ -1,142 +1,154 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>YSU Building Capture — One by One</title>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
-  <style>
-    html, body { height:100%; margin:0; font-family: system-ui, sans-serif; }
-    #app { display:grid; grid-template-columns:260px 1fr; height:100%; }
-    aside { background:#f9fafb; border-right:1px solid #ddd; padding:10px; overflow-y:auto; }
-    aside h2 { font-size:16px; margin:0 0 10px 0; }
-    #capturedList { font-size:14px; line-height:1.4; }
-    #capturedList li { margin-bottom:4px; }
-    header { padding:10px; border-bottom:1px solid #ddd; background:#fff; font-size:14px; }
-    #map { width:100%; height:100%; }
-    button { border:1px solid #d1d5db; background:#111827; color:#fff;
-             padding:6px 10px; border-radius:6px; font-weight:600; cursor:pointer; margin-top:10px; }
-    button[disabled] { opacity:.5; cursor:not-allowed; }
-    .toast { position:absolute; left:12px; bottom:12px; background:#111827; color:#fff;
-             padding:6px 10px; border-radius:6px; font-size:12px; box-shadow:0 4px 10px rgba(0,0,0,.2); }
-  </style>
+<meta charset="utf-8" />
+<title>Campus Route — No Key (Leaflet + OSM)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body, #map { height: 100%; margin: 0; }
+  .legend { position: fixed; left: 10px; top: 10px; background: #0b0c10cc; color: #e5e7eb; padding: 8px 10px; border-radius: 8px; font: 14px system-ui; z-index: 999; }
+  .penguin-icon {
+    font-size: 28px; line-height: 28px;
+    transform: translate(-50%, -50%); /* center on point */
+  }
+</style>
 </head>
 <body>
-<div id="app">
-  <aside>
-    <h2>Captured Buildings</h2>
-    <ul id="capturedList"></ul>
-    <button id="downloadBtn" disabled>Download GeoJSON</button>
-    <button id="resetBtn" disabled>Reset</button>
-  </aside>
-  <div>
-    <header>
-      <strong id="status">0 captured</strong>
-      <span style="margin-left:10px; font-size:12px; color:#6b7280">
-        Hover = yellow, Click = capture red
-      </span>
-    </header>
-    <div id="map"></div>
-    <div id="toast" class="toast" style="display:none"></div>
-  </div>
-</div>
+<div id="map"></div>
+<div class="legend">Drag to pan · wheel to zoom · <b>]</b> forward · <b>[</b> back</div>
 
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+(async function(){
+  // ===== CONFIG =====
+  // Put your GeoJSON file in the repo (recommend: data/route.geojson).
+  // If your current file is "route (3).geojson", rename it to "route.geojson" to avoid space issues.
+  const GEOJSON_URL = 'data/route.geojson'; // change if needed
 
-const STYLE_ID = 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q';
-const INITIAL_VIEW = { center: [-80.644685, 41.107524], zoom: 17.2, pitch: 60, bearing: -133.6 };
+  // Route style (black/red theme)
+  const routeStyle = {
+    color: '#ff3344',
+    weight: 5,
+    opacity: 0.95
+  };
 
-let map = new mapboxgl.Map({ container:'map', style:STYLE_ID, ...INITIAL_VIEW });
-map.addControl(new mapboxgl.NavigationControl({ showZoom:true }), 'top-right');
+  // Polygon (building) style
+  const polygonStyle = {
+    color: '#111', weight: 2, opacity: 1,
+    fillColor: '#ff3344', fillOpacity: 0.30
+  };
 
-let captured = [];
-const statusEl = document.getElementById('status');
-const listEl = document.getElementById('capturedList');
-const downloadBtn = document.getElementById('downloadBtn');
-const resetBtn = document.getElementById('resetBtn');
-const toastEl = document.getElementById('toast');
+  // ===== MAP (no API key) =====
+  const map = L.map('map', {
+    zoomControl: true, attributionControl: true
+  });
 
-function toast(msg, ms=2000){
-  toastEl.textContent = msg;
-  toastEl.style.display='block';
-  clearTimeout(toastEl._t);
-  toastEl._t = setTimeout(()=> toastEl.style.display='none', ms);
-}
+  // Free tiles (no token)
+  const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 20,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
 
-map.on('load', ()=> {
-  // Hover preview
-  map.addSource('hover', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
-  map.addLayer({ id:'hover-line', type:'line', source:'hover',
-                 paint:{ 'line-color':'#FFD700', 'line-width':3 } });
-
-  // Captured selection
-  map.addSource('captured', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
-  map.addLayer({ id:'captured-fill', type:'fill', source:'captured',
-                 paint:{ 'fill-color':'#ff0000','fill-opacity':0.4 } });
-  map.addLayer({ id:'captured-outline', type:'line', source:'captured',
-                 paint:{ 'line-width':2,'line-color':'#ff0000' } });
-  map.addLayer({ id:'captured-labels', type:'symbol', source:'captured',
-                 layout:{ 'text-field':['get','name'], 'text-size':12, 'text-offset':[0, 1.2] },
-                 paint:{ 'text-halo-width':1, 'text-halo-color':'#fff' } });
-});
-
-// Hover preview from building layer
-map.on('mousemove', (e)=> {
-  const features = map.queryRenderedFeatures(e.point, { layers:['building'] });
-  const poly = features[0];
-  if (poly) {
-    map.getSource('hover').setData(poly);
-  } else {
-    map.getSource('hover').setData({ type:'FeatureCollection', features:[] });
+  // ===== LOAD YOUR GEOJSON =====
+  let gj;
+  try {
+    const res = await fetch(GEOJSON_URL);
+    if (!res.ok) throw new Error('fetch failed: ' + GEOJSON_URL);
+    gj = await res.json();
+  } catch (e) {
+    alert('Could not load GeoJSON: ' + e.message);
+    return;
   }
-});
 
-// Click to capture
-map.on('click', (e)=> {
-  const features = map.queryRenderedFeatures(e.point, { layers:['building'] });
-  const poly = features[0];
-  if (poly) {
-    if (!poly.properties) poly.properties = {};
-    if (!poly.properties.name) poly.properties.name = `building_${captured.length+1}`;
+  // Normalize: accept Feature or FeatureCollection
+  const features = (gj.type === 'FeatureCollection') ? gj.features : [gj];
 
-    if (!captured.find(f => f.properties.name === poly.properties.name)) {
-      captured.push(poly);
-      statusEl.textContent = `${captured.length} captured`;
-      listEl.innerHTML = captured.map(f => `<li>${f.properties.name}</li>`).join('');
-      downloadBtn.disabled = false;
-      resetBtn.disabled = false;
-      map.getSource('captured').setData({ type:'FeatureCollection', features: captured });
-      toast(`Captured: ${poly.properties.name}`);
+  // Separate routes (LineString/MultiLineString) and polygons
+  const lines = [];
+  const polys = [];
+  for (const f of features) {
+    const t = f.geometry && f.geometry.type;
+    if (t === 'LineString' || t === 'MultiLineString') lines.push(f);
+    if (t === 'Polygon'    || t === 'MultiPolygon')    polys.push(f);
+  }
+
+  // Draw polygons (buildings) if present
+  let polyLayer = null, lineLayer = null;
+  if (polys.length) {
+    polyLayer = L.geoJSON({ type:'FeatureCollection', features: polys }, {
+      style: polygonStyle
+    }).addTo(map);
+  }
+
+  // Draw route(s)
+  if (lines.length) {
+    lineLayer = L.geoJSON({ type:'FeatureCollection', features: lines }, {
+      style: routeStyle
+    }).addTo(map);
+  }
+
+  // Fit bounds to whatever we have
+  const group = L.featureGroup([polyLayer, lineLayer].filter(Boolean));
+  if (group.getLayers().length) {
+    map.fitBounds(group.getBounds().pad(0.2));
+  } else {
+    // fallback: center on YSU-ish area
+    map.setView([41.103, -80.647], 15);
+  }
+
+  // ===== PENGUIN TOKEN ALONG ROUTE =====
+  // Extract a single array of route coordinates (lng,lat → lat,lng)
+  function collectRouteLatLngs() {
+    const latlngs = [];
+    for (const f of lines) {
+      const g = f.geometry;
+      if (g.type === 'LineString') {
+        g.coordinates.forEach(([lng,lat]) => latlngs.push([lat,lng]));
+      } else if (g.type === 'MultiLineString') {
+        g.coordinates.forEach(seg => seg.forEach(([lng,lat]) => latlngs.push([lat,lng])));
+      }
     }
-  } else {
-    toast('No building polygon here');
+    return latlngs;
   }
-});
 
-function downloadGeoJSON(){
-  const fc = { type:'FeatureCollection', features: captured };
-  const blob = new Blob([JSON.stringify(fc, null, 2)], { type:'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'ysu_race_buildings_manual.geojson';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=> URL.revokeObjectURL(url), 2000);
-}
+  const pathLatLngs = collectRouteLatLngs();
+  if (!pathLatLngs.length) {
+    console.warn('No LineString found. If you only have polygons, the penguin will not move.');
+  }
 
-function resetCaptures(){
-  captured = [];
-  statusEl.textContent = '0 captured';
-  listEl.innerHTML = '';
-  downloadBtn.disabled = true;
-  resetBtn.disabled = true;
-  map.getSource('captured').setData({ type:'FeatureCollection', features: [] });
-  toast('Selections cleared');
-}
+  // Penguin as a DivIcon so we can use emoji without image files
+  const penguinIcon = L.divIcon({
+    className: 'penguin-icon',
+    html: '🐧'
+  });
 
-downloadBtn.addEventListener('click', downloadGeoJSON);
-resetBtn.addEventListener('click', resetCaptures);
+  let idx = 0;
+  const penguin = pathLatLngs.length
+    ? L.marker(pathLatLngs[0], { icon: penguinIcon }).addTo(map)
+    : null;
+
+  function updatePenguin() {
+    if (!penguin || !pathLatLngs.length) return;
+    idx = Math.max(0, Math.min(idx, pathLatLngs.length - 1));
+    penguin.setLatLng(pathLatLngs[idx]);
+  }
+  updatePenguin();
+
+  // Keyboard controls to test progress (we’ll wire to Firestore later)
+  window.addEventListener('keydown', (e) => {
+    if (!pathLatLngs.length) return;
+    if (e.key === ']') { idx++; updatePenguin(); }
+    if (e.key === '[') { idx--; updatePenguin(); }
+  });
+
+  // ===== COMMON “no building polygon” CAUSES (and how this page avoids them) =====
+  // - If you have a building footprint: geometry.type MUST be "Polygon" (or MultiPolygon),
+  //   coordinates are arrays of [lng, lat], outer ring CLOSED (first==last), at least 4 points.
+  // - Routes should be LineString/MultiLineString; this page draws them as a red line automatically.
+  // - This page will happily show BOTH: polygons (as tinted fills) AND your red route.
+
+})();
 </script>
 </body>
 </html>
