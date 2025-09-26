@@ -2,61 +2,37 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Race to Housing — Auto Capture (Final Fixed)</title>
+  <title>Race to Housing — Auto-Capture</title>
   <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
   <style>
-    html, body { margin:0; padding:0; height:100%; overflow:hidden; }
-    #map { position:absolute; top:0; bottom:0; width:100%; }
-    #controls {
+    body { margin: 0; padding: 0; }
+    html, body, #map { height: 100%; width: 100%; }
+    #menu {
       position: absolute;
-      top: 8px;
-      left: 8px;
       background: white;
-      padding: 6px 10px;
-      font-family: sans-serif;
-      font-size: 13px;
-      box-shadow: 0 0 8px rgba(0,0,0,0.2);
-      z-index: 99;
-    }
-    #fatal {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      background: #fee;
-      border: 1px solid red;
+      z-index: 1;
       padding: 10px;
-      font-family: monospace;
-      color: darkred;
-      max-width: 90%;
+      font-family: sans-serif;
     }
+    #status {
+      font-size: 13px;
+      margin-top: 6px;
+    }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
   </style>
 </head>
 <body>
-<div id="map"></div>
-<div id="controls">
+<div id="menu">
   <button onclick="startCapture()">Start Auto-Capture</button>
-  <button id="downloadBtn" onclick="downloadGeoJSON()" disabled>Download ysu_race_buildings_exact.geojson</button>
-  <div id="status">YSU — Auto-Capture <span id="count">0</span>/7 captured</div>
+  <button id="download" onclick="downloadGeoJSON()" disabled>Download ysu_race_buildings_exact.geojson</button>
+  <div id="status">YSU — Auto-Capture 0/7 captured</div>
 </div>
-<div id="fatal"></div>
+<div id="map"></div>
 
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 <script>
-  mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWY5dXhybDUwM2MxM3BucHFpc3g2bTVyIn0.qhC12Z0m_FYlbCVhHQOWRA';
-
-  const buildingCenters = [
-    { name: "University Courtyards", center: [-80.64268880113872, 41.10532694438848] },
-    { name: "Lyden House", center: [-80.65, 41.11] },
-    { name: "Cafaro House", center: [-80.65, 41.11] },
-    { name: "Christman Dining Commons", center: [-80.6468, 41.1068] },
-    { name: "Weller House", center: [-80.64, 41.11] },
-    { name: "Wick House", center: [-80.64, 41.11] },
-    { name: "Kilcawley Center", center: [-80.65, 41.11] }
-  ];
-
-  const captured = [];
-  const features = [];
+  mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZwcDZ3OGowMHFmM3VxaDhzZjFrZGVwIn0.tMA9qEFK3UjPqmaZz9llLg';
 
   const map = new mapboxgl.Map({
     container: 'map',
@@ -66,54 +42,84 @@
     pitch: 60,
     bearing: -133.6,
     maxBounds: [
-      [-80.654, 41.102],
-      [-80.638, 41.113]
+      [-80.6505, 41.1044],
+      [-80.6385, 41.1115]
     ]
   });
 
-  map.on('load', () => {
-    console.log('Map loaded');
-  });
+  const buildings = [
+    { name: 'University Courtyards', center: [-80.64268880113872, 41.10532694438848] },
+    { name: 'Lyden House', center: [-80.65, 41.11] },
+    { name: 'Cafaro House', center: [-80.65, 41.11] },
+    { name: 'Christman Dining Commons', center: [-80.6468, 41.1068] },
+    { name: 'Weller House', center: [-80.64, 41.11] },
+    { name: 'Wick House', center: [-80.64, 41.11] },
+    { name: 'Kilcawley Center', center: [-80.65, 41.11] }
+  ];
 
-  async function startCapture() {
+  const captured = [];
+  let currentIndex = 0;
+  let radii = [40, 35, 30, 25, 20, 15];
+
+  function startCapture() {
+    currentIndex = 0;
     captured.length = 0;
-    features.length = 0;
-    document.getElementById('count').textContent = '0';
-
-    for (let b of buildingCenters) {
-      map.jumpTo({ center: b.center });
-      await new Promise(r => setTimeout(r, 1500));
-      const found = tryCapture(b);
-      if (!found) console.warn(`❌ No features found for ${b.name}`);
-    }
-
-    document.getElementById('downloadBtn').disabled = captured.length < 7;
+    document.getElementById('status').textContent = `YSU — Auto-Capture 0/${buildings.length} captured`;
+    nextCapture();
   }
 
-  function tryCapture(b) {
-    const radii = [40, 50, 60, 75, 90, 100];
-    for (let r of radii) {
-      const f = map.queryRenderedFeatures(map.project(b.center), {
-        layers: ['building'], radius: r
-      });
-      if (f.length > 0) {
-        const fPoly = f.find(x => x.geometry.type.includes('Polygon'));
-        if (fPoly) {
-          fPoly.properties.name = b.name;
-          features.push(fPoly);
-          captured.push(b.name);
-          document.getElementById('count').textContent = captured.length;
-          return true;
-        }
-      }
+  function nextCapture() {
+    if (currentIndex >= buildings.length) {
+      document.getElementById('download').disabled = false;
+      return;
     }
-    return false;
+
+    const building = buildings[currentIndex];
+    map.flyTo({ center: building.center, zoom: 18.5, pitch: 60, bearing: -133.6 });
+
+    setTimeout(() => {
+      tryCapture(building, 0);
+    }, 2500);
+  }
+
+  function tryCapture(building, radiusIndex) {
+    if (radiusIndex >= radii.length) {
+      currentIndex++;
+      nextCapture();
+      return;
+    }
+
+    const point = map.project(building.center);
+    const radius = radii[radiusIndex];
+    const bbox = [
+      [point.x - radius, point.y - radius],
+      [point.x + radius, point.y + radius]
+    ];
+
+    const features = map.queryRenderedFeatures(bbox, {
+      layers: ['building']
+    });
+
+    const polygon = features.find(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon');
+
+    if (polygon) {
+      captured.push({
+        type: 'Feature',
+        geometry: polygon.geometry,
+        properties: { name: building.name }
+      });
+      document.getElementById('status').textContent = `YSU — Auto-Capture ${captured.length}/${buildings.length} captured`;
+      currentIndex++;
+      nextCapture();
+    } else {
+      tryCapture(building, radiusIndex + 1);
+    }
   }
 
   function downloadGeoJSON() {
     const geojson = {
-      type: "FeatureCollection",
-      features: features
+      type: 'FeatureCollection',
+      features: captured
     };
     const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -121,6 +127,7 @@
     a.href = url;
     a.download = 'ysu_race_buildings_exact.geojson';
     a.click();
+    URL.revokeObjectURL(url);
   }
 </script>
 </body>
