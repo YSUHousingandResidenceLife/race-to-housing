@@ -1,25 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Race to Housing — Map with Logo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Race to Housing — Brick Dots Editor</title>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
-    html,body { height:100%; margin:0; }
+    html, body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
+
+    /* Top-left control panel */
+    .panel {
+      position: absolute;
+      top: 12px; left: 12px;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(4px);
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+      padding: 10px 12px;
+      font: 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      z-index: 10;
+      min-width: 260px;
+    }
+    .panel h1 { font-size: 14px; margin: 0 0 8px; font-weight: 700; }
+    .row { display:flex; gap:8px; align-items:center; margin:6px 0; flex-wrap: wrap; }
+    .row label { display:flex; align-items:center; gap:6px; }
+    .row input[type="text"]{ flex:1; padding:6px 8px; border-radius:8px; border:1px solid #ddd; }
+    .buttons { display:flex; gap:8px; flex-wrap: wrap; }
+    button {
+      appearance: none; border: none; cursor: pointer; padding: 8px 10px;
+      border-radius: 10px; background: #111; color: #fff; font-weight: 600;
+    }
+    button.secondary { background:#E4002B; }
+    button.ghost { background:#f2f2f2; color:#111; }
+    .hint { font-size:12px; color:#555; margin-top:4px; }
+
+    /* Subtle brick-like feel for dots via stroke */
+    /* (actual rendering handled by map layer) */
   </style>
 </head>
 <body>
   <div id="map"></div>
 
+  <div class="panel">
+    <h1>Brick Dots — Edit Mode</h1>
+    <div class="row">
+      <label><input type="checkbox" id="editToggle" /> Enable edit (click map to add)</label>
+    </div>
+    <div class="row">
+      <input id="defaultNote" type="text" placeholder="Optional note used if you don't type one on click…" />
+    </div>
+    <div class="buttons">
+      <button id="undoBtn" class="ghost" title="Remove the last dot">Undo</button>
+      <button id="clearBtn" class="ghost" title="Remove all dots">Clear</button>
+      <button id="downloadBtn" class="secondary" title="Download dots as GeoJSON">Download JSON</button>
+      <label for="fileInput" style="display:inline-block;">
+        <button class="ghost" title="Load a previously saved GeoJSON">Load JSON</button>
+        <input id="fileInput" type="file" accept="application/geo+json,.geojson,application/json,.json" style="display:none;" />
+      </label>
+    </div>
+    <div class="hint">Dots alternate <b style="color:#E4002B">red</b> then <b>black</b> automatically — like bricks laid on a path. Click while Edit is on to add one; you'll be prompted for a note (optional).</div>
+  </div>
+
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
+    // === Config ===
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
     const COURTYARDS_URL = 'university_courtyards.geojson';
-
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
+    // === Map ===
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
@@ -28,35 +78,91 @@
       pitch: 60,
       bearing: -133.6
     });
-
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    async function loadJSON(url){ const r=await fetch(url); return r.json(); }
+    // Helpers
+    async function loadJSON(url){ const r = await fetch(url); return r.json(); }
+    function download(filename, text) {
+      const blob = new Blob([text], {type: 'application/geo+json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    // Dots ("bricks") state
+    let nextIsRed = true; // alternate red -> black -> red -> ...
+
+    const emptyFC = () => ({ type:'FeatureCollection', features: [] });
+    const dots = emptyFC();
+
+    function addDot(lngLat, note) {
+      const color = nextIsRed ? '#E4002B' : '#111111';
+      nextIsRed = !nextIsRed;
+      const idx = dots.features.length + 1;
+      dots.features.push({
+        type:'Feature',
+        geometry:{ type:'Point', coordinates:[lngLat.lng, lngLat.lat] },
+        properties:{ idx, color, note: note || '' }
+      });
+      map.getSource('dots').setData(dots);
+      saveLocal();
+    }
+
+    function undoDot(){
+      if(dots.features.length === 0) return;
+      // Rewind alternation: the last placed defined the current nextIsRed; invert it
+      nextIsRed = !nextIsRed;
+      dots.features.pop();
+      map.getSource('dots').setData(dots);
+      saveLocal();
+    }
+
+    function clearDots(){
+      dots.features.length = 0;
+      nextIsRed = true;
+      map.getSource('dots').setData(dots);
+      saveLocal();
+    }
+
+    function saveLocal(){
+      try { localStorage.setItem('rth_dots_v1', JSON.stringify({dots, nextIsRed})); } catch(e){}
+    }
+    function loadLocal(){
+      try {
+        const raw = localStorage.getItem('rth_dots_v1');
+        if(!raw) return;
+        const obj = JSON.parse(raw);
+        if(obj && obj.dots && obj.dots.type === 'FeatureCollection'){
+          dots.features = obj.dots.features || [];
+          nextIsRed = obj.nextIsRed === false ? false : true; // default true
+          map.getSource('dots').setData(dots);
+        }
+      } catch(e){}
+    }
 
     map.on('load', async () => {
-      const data = await loadJSON(GEOJSON_URL);
-      const courtyards = await loadJSON(COURTYARDS_URL);
+      // Base building sources/layers (unchanged from your map)
+      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
+      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
+      if(race) map.addSource('race', { type:'geojson', data: race });
+      if(courtyards) map.addSource('courtyards', { type:'geojson', data: courtyards });
 
-      map.addSource('race', { type:'geojson', data });
-      map.addSource('courtyards', { type:'geojson', data:courtyards });
-
-      // Building colors
       const colorExpression = [
-        'match',
-        ['get','name'],
-        'Lyden House', '#FF69B4',          // Pink
-        'Cafaro House', '#0072CE',         // Blue
-        'Wick House (Art)', '#FFFF00',     // Yellow
-        'Weller House', '#582C83',         // Purple
-        'Christman Dining', '#FFDF00',     // Bright Gold
-        'Kilcawley House', '#E4002B',      // Red
+        'match', ['get','name'],
+        'Lyden House', '#FF69B4',
+        'Cafaro House', '#0072CE',
+        'Wick House (Art)', '#FFFF00',
+        'Weller House', '#582C83',
+        'Christman Dining', '#FFDF00',
+        'Kilcawley House', '#E4002B',
         /* fallback */ '#d6001c'
       ];
 
-      map.addLayer({
-        id:'race-buildings',
-        type:'fill-extrusion',
-        source:'race',
+      if(race) map.addLayer({
+        id:'race-buildings', type:'fill-extrusion', source:'race',
         paint:{
           'fill-extrusion-color': colorExpression,
           'fill-extrusion-height':['coalesce',['get','height'],22],
@@ -65,10 +171,8 @@
         }
       });
 
-      map.addLayer({
-        id:'courtyards-fill3d',
-        type:'fill-extrusion',
-        source:'courtyards',
+      if(courtyards) map.addLayer({
+        id:'courtyards-fill3d', type:'fill-extrusion', source:'courtyards',
         paint:{
           'fill-extrusion-color':'#78BE20',
           'fill-extrusion-height':['coalesce',['get','height'],22],
@@ -77,23 +181,101 @@
         }
       });
 
-      // === Logo Overlay (locked to your coords) ===
+      // Overlay image (kept intact)
       map.addSource('housing-overlay', {
         type:'image',
         url:'housing-overlay.png',
         coordinates: [
-          [-80.64825006745193, 41.102595011939734], // top-left
-          [-80.6538515500109,  41.104745219637],    // top-right
-          [-80.65205971026316, 41.109413121769485], // bottom-right
-          [-80.64645822770419, 41.107262914072216]  // bottom-left
+          [-80.64825006745193, 41.102595011939734],
+          [-80.6538515500109,  41.104745219637],
+          [-80.65205971026316, 41.109413121769485],
+          [-80.64645822770419, 41.107262914072216]
         ]
       });
+      map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay', paint:{ 'raster-opacity': 1.0 } });
 
+      // === Dots ("brick" points) ===
+      map.addSource('dots', { type:'geojson', data: dots });
       map.addLayer({
-        id:'housing-overlay-layer',
-        type:'raster',
-        source:'housing-overlay',
-        paint:{ 'raster-opacity': 1.0 }
+        id:'dots-layer',
+        type:'circle',
+        source:'dots',
+        paint:{
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            12, 2.4,
+            16, 5,
+            18, 7
+          ],
+          'circle-color': ['get','color'],
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 0.8,
+          'circle-blur': 0
+        }
+      });
+
+      // Restore from localStorage if present
+      loadLocal();
+
+      // === Interactions ===
+      const editToggle = document.getElementById('editToggle');
+      const defaultNote = document.getElementById('defaultNote');
+      const undoBtn = document.getElementById('undoBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const downloadBtn = document.getElementById('downloadBtn');
+      const fileInput = document.getElementById('fileInput');
+
+      map.on('click', (e) => {
+        if(!editToggle.checked) return;
+        const def = (defaultNote.value || '').trim();
+        const typed = prompt('Add a note for this dot (optional). Leave empty to use default note.', def);
+        const note = (typed === null) ? def : (typed || def);
+        addDot(e.lngLat, note);
+      });
+
+      undoBtn.addEventListener('click', () => undoDot());
+      clearBtn.addEventListener('click', () => { if(confirm('Clear ALL dots?')) clearDots(); });
+      downloadBtn.addEventListener('click', () => {
+        // Minimal FC for export (no local-only state)
+        const out = {
+          type:'FeatureCollection',
+          features: dots.features.map((f,i)=>({
+            type:'Feature',
+            geometry: { type:'Point', coordinates: f.geometry.coordinates },
+            properties: { idx: i+1, color: f.properties.color, note: f.properties.note || '' }
+          }))
+        };
+        download('race_bricks.geojson', JSON.stringify(out, null, 2));
+      });
+
+      fileInput.addEventListener('change', (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(reader.result);
+            if(data && data.type === 'FeatureCollection'){
+              dots.features = (data.features || []).filter(f=>f && f.geometry && f.geometry.type==='Point');
+              // Rebuild alternation from last color so the next matches the pattern
+              if(dots.features.length){
+                const last = dots.features[dots.features.length-1];
+                nextIsRed = (last.properties && last.properties.color === '#111111');
+              } else {
+                nextIsRed = true;
+              }
+              map.getSource('dots').setData(dots);
+              saveLocal();
+            } else {
+              alert('File is not a GeoJSON FeatureCollection.');
+            }
+          } catch(err){
+            alert('Could not parse JSON: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+        // reset input so selecting the same file again will retrigger
+        ev.target.value = '';
       });
     });
   </script>
