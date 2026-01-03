@@ -196,26 +196,24 @@
 
       // === Dots ("brick" points) ===
       map.addSource('dots', { type:'geojson', data: dots });
-     map.addLayer({
+map.addLayer({
   id: 'dots-layer',
   type: 'symbol',
   source: 'dots',
   layout: {
-    'icon-image': 'square-15',   // rectangular brick base
+    'icon-image': 'brick-square',
     'icon-size': [
       'interpolate', ['linear'], ['zoom'],
-      12, 0.6,
-      16, 1.0,
-      18, 1.4
+      12, 0.4,
+      16, 0.9,
+      18, 1.3
     ],
     'icon-allow-overlap': true,
     'icon-pitch-alignment': 'map',
     'icon-rotation-alignment': 'map'
   },
   paint: {
-    'icon-color': ['get', 'color'],
-    'icon-halo-color': '#ffffff',
-    'icon-halo-width': 0.6
+    'icon-color': ['get','color']
   }
 });
 
