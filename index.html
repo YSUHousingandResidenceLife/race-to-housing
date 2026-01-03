@@ -292,5 +292,18 @@
       });
     });
   </script>
+
+  // --- DEBUG TOOL: DRAG LOGO CORNERS ---
+      overlayCoords.map((coords, i) => {
+        const el = document.createElement('div');
+        el.style.width='15px'; el.style.height='15px'; el.style.background='#00ff00'; el.style.borderRadius='50%'; el.style.cursor='move';
+        const m = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat(coords).addTo(map);
+        m.on('drag', () => {
+          overlayCoords[i] = [m.getLngLat().lng, m.getLngLat().lat];
+          map.getSource('housing-overlay').setCoordinates(overlayCoords);
+        });
+        m.on('dragend', () => console.log("NEW LOGO COORDS:", JSON.stringify(overlayCoords)));
+      });
+    });
 </body>
 </html>
