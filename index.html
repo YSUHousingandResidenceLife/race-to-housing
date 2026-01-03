@@ -293,17 +293,35 @@
     });
   </script>
 
-  // --- DEBUG TOOL: DRAG LOGO CORNERS ---
-      overlayCoords.map((coords, i) => {
-        const el = document.createElement('div');
-        el.style.width='15px'; el.style.height='15px'; el.style.background='#00ff00'; el.style.borderRadius='50%'; el.style.cursor='move';
-        const m = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat(coords).addTo(map);
-        m.on('drag', () => {
-          overlayCoords[i] = [m.getLngLat().lng, m.getLngLat().lat];
-          map.getSource('housing-overlay').setCoordinates(overlayCoords);
-        });
-        m.on('dragend', () => console.log("NEW LOGO COORDS:", JSON.stringify(overlayCoords)));
-      });
-    });
+// --- LOGO DEBUG TOOL (WASD to Move, L to Log) ---
+window.addEventListener('keydown', (e) => {
+  const source = map.getSource('housing-overlay');
+  if (!source) return;
+
+  const coords = source.coordinates;
+  const step = 0.00001; // Sensitivity of movement
+
+  switch (e.key.toLowerCase()) {
+    case 'w': // Move Up
+      coords.forEach(c => c[1] += step);
+      break;
+    case 's': // Move Down
+      coords.forEach(c => c[1] -= step);
+      break;
+    case 'a': // Move Left
+      coords.forEach(c => c[0] -= step);
+      break;
+    case 'd': // Move Right
+      coords.forEach(c => c[0] += step);
+      break;
+    case 'l': // Log to Console
+      console.log("UPDATED LOGO COORDS:", JSON.stringify(coords));
+      alert("Coordinates logged to console!");
+      return;
+  }
+
+  // Apply the movement to the map
+  source.setCoordinates(coords);
+});
 </body>
 </html>
