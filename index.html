@@ -293,35 +293,33 @@
     });
   </script>
 
-// --- LOGO DEBUG TOOL (WASD to Move, L to Log) ---
+// --- LOGO DEBUG DROP-IN (WASD to Move, L to Log) ---
+let overlayCoords = [
+  [-80.64825006745193, 41.102595011939734], 
+  [-80.6538515500109, 41.104745219637], 
+  [-80.65205971026316, 41.109413121769485], 
+  [-80.64645822770419, 41.107262914072216]
+];
+
 window.addEventListener('keydown', (e) => {
-  const source = map.getSource('housing-overlay');
-  if (!source) return;
+  const step = 0.00002; 
+  let moved = false;
+  const key = e.key.toLowerCase();
 
-  const coords = source.coordinates;
-  const step = 0.005; // Sensitivity of movement
-
-  switch (e.key.toLowerCase()) {
-    case 'w': // Move Up
-      coords.forEach(c => c[1] += step);
-      break;
-    case 's': // Move Down
-      coords.forEach(c => c[1] -= step);
-      break;
-    case 'a': // Move Left
-      coords.forEach(c => c[0] -= step);
-      break;
-    case 'd': // Move Right
-      coords.forEach(c => c[0] += step);
-      break;
-    case 'l': // Log to Console
-      console.log("UPDATED LOGO COORDS:", JSON.stringify(coords));
-      alert("Coordinates logged to console!");
-      return;
+  if (key === 'w') { overlayCoords = overlayCoords.map(c => [c[0], c[1] + step]); moved = true; }
+  if (key === 's') { overlayCoords = overlayCoords.map(c => [c[0], c[1] - step]); moved = true; }
+  if (key === 'a') { overlayCoords = overlayCoords.map(c => [c[0] - step, c[1]]); moved = true; }
+  if (key === 'd') { overlayCoords = overlayCoords.map(c => [c[0] + step, c[1]]); moved = true; }
+  
+  if (key === 'l') { 
+    console.log("NEW LOGO COORDS:", JSON.stringify(overlayCoords));
+    alert("Coordinates logged to console!");
   }
 
-  // Apply the movement to the map
-  source.setCoordinates(coords);
+  if (moved) {
+    const source = map.getSource('housing-overlay');
+    if (source) source.setCoordinates(overlayCoords);
+  }
 });
 </body>
 </html>
