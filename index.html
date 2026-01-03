@@ -208,10 +208,10 @@
         type:'image',
         url:'housing-overlay.png',
         coordinates: [
-          [-80.64825006745193, 41.102595011939734],
-          [-80.6538515500109,  41.104745219637],
-          [-80.65205971026316, 41.109413121769485],
-          [-80.64645822770419, 41.107262914072216]
+         [-80.64895006745193, 41.102595011939734], // Adjusted West
+  [-80.6545515500109,  41.104745219637],     // Adjusted West
+  [-80.65275971026316, 41.109413121769485],    // Adjusted West
+  [-80.64715822770419, 41.107262914072216]     // Adjusted West
         ]
       });
       map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay', paint:{ 'raster-opacity': 1.0 } });
@@ -293,30 +293,5 @@
     });
   </script>
 
-// --- LOGO NUDGE TOOL ---
-window.addEventListener('keydown', (e) => {
-  const source = map.getSource('housing-overlay');
-  if (!source) return;
-
-  // Get current coordinates from the source
-  let coords = source.coordinates;
-  const step = 0.00002; 
-  const key = e.key.toLowerCase();
-  let moved = false;
-
-  if (key === 'w') { coords = coords.map(c => [c[0], c[1] + step]); moved = true; }
-  if (key === 's') { coords = coords.map(c => [c[0], c[1] - step]); moved = true; }
-  if (key === 'a') { coords = coords.map(c => [c[0] - step, c[1]]); moved = true; }
-  if (key === 'd') { coords = coords.map(c => [c[0] + step, c[1]]); moved = true; }
-  
-  if (key === 'l') { 
-    console.log("COPY THESE COORDS:", JSON.stringify(coords));
-    alert("Coordinates printed to Console (F12)");
-  }
-
-  if (moved) {
-    source.setCoordinates(coords);
-  }
-});
 </body>
 </html>
