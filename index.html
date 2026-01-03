@@ -34,9 +34,6 @@
     button.secondary { background:#E4002B; }
     button.ghost { background:#f2f2f2; color:#111; }
     .hint { font-size:12px; color:#555; margin-top:4px; }
-
-    /* Subtle brick-like feel for dots via stroke */
-    /* (actual rendering handled by map layer) */
   </style>
 </head>
 <body>
@@ -93,10 +90,40 @@
     }
 
     // Dots ("bricks") state
-    let nextIsRed = true; // alternate red -> black -> red -> ...
+    let nextIsRed = true; 
+    const dots = { type:'FeatureCollection', features: [] };
 
-    const emptyFC = () => ({ type:'FeatureCollection', features: [] });
-    const dots = emptyFC();
+    /**
+     * Converts Point coordinates into Rectangle Polygons based on the mapfix logic
+     */
+    function syncRectangles() {
+      const sizeLng = 0.00006;
+      const sizeLat = 0.000011;
+
+      const polygonDots = {
+        type: 'FeatureCollection',
+        features: dots.features.map(f => {
+          const [lng, lat] = f.geometry.coordinates;
+          return {
+            type: 'Feature',
+            properties: f.properties,
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[
+                [lng - sizeLng, lat - sizeLat],
+                [lng + sizeLng, lat - sizeLat],
+                [lng + sizeLng, lat + sizeLat],
+                [lng - sizeLng, lat + sizeLat],
+                [lng - sizeLng, lat - sizeLat]
+              ]]
+            }
+          };
+        })
+      };
+
+      map.getSource('dots').setData(polygonDots);
+      saveLocal();
+    }
 
     function addDot(lngLat, note) {
       const color = nextIsRed ? '#E4002B' : '#111111';
@@ -107,29 +134,26 @@
         geometry:{ type:'Point', coordinates:[lngLat.lng, lngLat.lat] },
         properties:{ idx, color, note: note || '' }
       });
-      map.getSource('dots').setData(dots);
-      saveLocal();
+      syncRectangles();
     }
 
     function undoDot(){
       if(dots.features.length === 0) return;
-      // Rewind alternation: the last placed defined the current nextIsRed; invert it
       nextIsRed = !nextIsRed;
       dots.features.pop();
-      map.getSource('dots').setData(dots);
-      saveLocal();
+      syncRectangles();
     }
 
     function clearDots(){
       dots.features.length = 0;
       nextIsRed = true;
-      map.getSource('dots').setData(dots);
-      saveLocal();
+      syncRectangles();
     }
 
     function saveLocal(){
       try { localStorage.setItem('rth_dots_v1', JSON.stringify({dots, nextIsRed})); } catch(e){}
     }
+
     function loadLocal(){
       try {
         const raw = localStorage.getItem('rth_dots_v1');
@@ -137,14 +161,13 @@
         const obj = JSON.parse(raw);
         if(obj && obj.dots && obj.dots.type === 'FeatureCollection'){
           dots.features = obj.dots.features || [];
-          nextIsRed = obj.nextIsRed === false ? false : true; // default true
-          map.getSource('dots').setData(dots);
+          nextIsRed = obj.nextIsRed === false ? false : true;
+          syncRectangles();
         }
       } catch(e){}
     }
 
     map.on('load', async () => {
-      // Base building sources/layers (unchanged from your map)
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       if(race) map.addSource('race', { type:'geojson', data: race });
@@ -158,7 +181,7 @@
         'Weller House', '#582C83',
         'Christman Dining', '#FFDF00',
         'Kilcawley House', '#E4002B',
-        /* fallback */ '#d6001c'
+        '#d6001c'
       ];
 
       if(race) map.addLayer({
@@ -181,7 +204,6 @@
         }
       });
 
-      // Overlay image (kept intact)
       map.addSource('housing-overlay', {
         type:'image',
         url:'housing-overlay.png',
@@ -194,31 +216,22 @@
       });
       map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay', paint:{ 'raster-opacity': 1.0 } });
 
-      // === Dots ("brick" points) ===
-      map.addSource('dots', { type:'geojson', data: dots });
-map.addLayer({
-  id: 'dots-layer',
-  type: 'symbol',
-  source: 'dots',
-  layout: {
-    'icon-image': 'brick-square',
-    'icon-size': [
-      'interpolate', ['linear'], ['zoom'],
-      12, 0.4,
-      16, 0.9,
-      18, 1.3
-    ],
-    'icon-allow-overlap': true,
-    'icon-pitch-alignment': 'map',
-    'icon-rotation-alignment': 'map'
-  },
-  paint: {
-    'icon-color': ['get','color']
-  }
-});
+      // === Rectangle Bricks Layer ===
+      map.addSource('dots', { 
+        type:'geojson', 
+        data: { type:'FeatureCollection', features: [] } 
+      });
+      
+      map.addLayer({
+        id: 'dots-layer',
+        type: 'fill',
+        source: 'dots',
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': 1
+        }
+      });
 
-
-      // Restore from localStorage if present
       loadLocal();
 
       // === Interactions ===
@@ -240,7 +253,6 @@ map.addLayer({
       undoBtn.addEventListener('click', () => undoDot());
       clearBtn.addEventListener('click', () => { if(confirm('Clear ALL dots?')) clearDots(); });
       downloadBtn.addEventListener('click', () => {
-        // Minimal FC for export (no local-only state)
         const out = {
           type:'FeatureCollection',
           features: dots.features.map((f,i)=>({
@@ -261,15 +273,13 @@ map.addLayer({
             const data = JSON.parse(reader.result);
             if(data && data.type === 'FeatureCollection'){
               dots.features = (data.features || []).filter(f=>f && f.geometry && f.geometry.type==='Point');
-              // Rebuild alternation from last color so the next matches the pattern
               if(dots.features.length){
                 const last = dots.features[dots.features.length-1];
                 nextIsRed = (last.properties && last.properties.color === '#111111');
               } else {
                 nextIsRed = true;
               }
-              map.getSource('dots').setData(dots);
-              saveLocal();
+              syncRectangles();
             } else {
               alert('File is not a GeoJSON FeatureCollection.');
             }
@@ -278,7 +288,6 @@ map.addLayer({
           }
         };
         reader.readAsText(file);
-        // reset input so selecting the same file again will retrigger
         ev.target.value = '';
       });
     });
