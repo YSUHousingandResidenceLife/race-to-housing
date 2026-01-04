@@ -75,7 +75,7 @@
     const totalPoints = 1000;
     const modelAltitude = 0.5; 
     const modelRotate = [Math.PI / 2, Math.PI, 0];
-    let playerPositions = [];
+    let playerPositions = []; // Array of Mercator coordinates
     
     const map = new mapboxgl.Map({
       container: 'map',
@@ -140,18 +140,30 @@
         directionalLight.position.set(0, -70, 100).normalize();
         this.scene.add(directionalLight);
         const loader = new THREE.GLTFLoader();
-        loader.load('penguinpete.glb', (gltf) => { gltf.scene.scale.set(10, 10, 10); this.scene.add(gltf.scene); });
+        loader.load('penguinpete.glb', (gltf) => { 
+          this.penguinModel = gltf.scene; // Store reference to the model
+          this.penguinModel.scale.set(10, 10, 10);
+          this.scene.add(this.penguinModel); 
+        });
         this.map = map;
         this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
         this.renderer.autoClear = false;
       },
       render: function (gl, matrix) {
+        if (!this.penguinModel) return; // Wait for model to load
+
         const m = new THREE.Matrix4().fromArray(matrix);
         const rotationX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
         const rotationY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rotationZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
+
         playerPositions.forEach(pos => {
-          const l = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z).scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits())).multiply(rotationX).multiply(rotationY).multiply(rotationZ);
+          // Calculate the world matrix for THIS specific penguin position
+          const l = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z)
+            .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
+            .multiply(rotationX).multiply(rotationY).multiply(rotationZ);
+
+          // Correct projection: Anchor THIS penguin to the map matrix
           this.camera.projectionMatrix.copy(m).multiply(l);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
@@ -179,7 +191,7 @@
         map.addLayer({ id: 'marker-labels', type: 'symbol', source: 'markers', layout: { 'text-field': ['get', 'label'], 'text-size': 14, 'text-offset': [0, -0.5], 'text-anchor': 'bottom', 'text-allow-overlap': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 } });
         
         map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, 1.5], 'text-anchor': 'top' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1 } });
+        map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, -1.8], 'text-anchor': 'bottom' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 } });
       }
 
       if(race) {
