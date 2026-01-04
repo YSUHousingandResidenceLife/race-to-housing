@@ -99,7 +99,7 @@
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     let allBricks = [];
-    const totalPoints = 850;
+    const totalPoints = 1000;
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -300,8 +300,7 @@ window.validateCode = async () => {
       const player = playerSnap.data();
       const newPoints = (player.points || 0) + earned;
       const pointsPerBrick = totalPoints / allBricks.length;
-      const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
-
+const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
       tx.update(playerRef, {
         points: newPoints,
         brickIndex: newIndex,
@@ -316,7 +315,7 @@ window.validateCode = async () => {
 
       const nextCoords = allBricks[newIndex].geometry.coordinates;
       updatePlayerOnMap(username, nextCoords);
-      document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 850 Points`;
+document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
       map.flyTo({ center: nextCoords, duration: 1000 });
     });
     document.getElementById('redeemCode').value = "";
