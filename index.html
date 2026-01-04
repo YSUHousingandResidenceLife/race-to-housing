@@ -292,6 +292,48 @@
       });
     });
   </script>
+// --- SIMPLE LOGO DRAG TOOL ---
+let isDragging = false;
+let startCoords = [];
+let overlayCoords = [
+  [-80.64825006745193, 41.102595011939734], 
+  [-80.6538515500109, 41.104745219637], 
+  [-80.65205971026316, 41.109413121769485], 
+  [-80.64645822770419, 41.107262914072216]
+];
 
+map.on('mousedown', 'housing-overlay-layer', (e) => {
+  isDragging = true;
+  startCoords = [e.lngLat.lng, e.lngLat.lat];
+  map.getCanvas().style.cursor = 'grabbing';
+  // Disable map panning while dragging logo
+  map.dragPan.disable();
+});
+
+map.on('mousemove', (e) => {
+  if (!isDragging) return;
+
+  const currentCoords = [e.lngLat.lng, e.lngLat.lat];
+  const lngDiff = currentCoords[0] - startCoords[0];
+  const latDiff = currentCoords[1] - startCoords[1];
+
+  // Update all four corners by the movement difference
+  overlayCoords = overlayCoords.map(c => [c[0] + lngDiff, c[1] + latDiff]);
+  
+  const source = map.getSource('housing-overlay');
+  if (source) source.setCoordinates(overlayCoords);
+  
+  // Reset start point for next frame
+  startCoords = currentCoords;
+});
+
+map.on('mouseup', () => {
+  if (isDragging) {
+    console.log("FINAL LOGO COORDS:", JSON.stringify(overlayCoords));
+    isDragging = false;
+    map.getCanvas().style.cursor = '';
+    map.dragPan.enable();
+  }
+});
 </body>
 </html>
