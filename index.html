@@ -8,8 +8,6 @@
   <style>
     html, body { height:100%; margin:0; overflow: hidden; }
     #map { position:absolute; inset:0; }
-
-    /* Left Console: Leaderboard */
     .console-left {
       position: absolute; bottom: 20px; left: 20px;
       width: 220px; background: rgba(17, 17, 17, 0.9);
@@ -19,8 +17,6 @@
     }
     .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
     .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; }
-
-    /* Right Console: Redeem */
     .console-right {
       position: absolute; bottom: 20px; right: 20px;
       width: 260px; background: rgba(255, 255, 255, 0.95);
@@ -39,19 +35,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import {
-    getFirestore,
-    doc,
-    collection,
-    query,
-    where,
-    orderBy,
-    limit,
-    runTransaction,
-    serverTimestamp,
-    onSnapshot
-  } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
+  import { getFirestore, doc, collection, query, where, orderBy, limit, runTransaction, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
   const firebaseConfig = {
     apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
     authDomain: "race-to-housing.firebaseapp.com",
@@ -61,30 +45,17 @@
     appId: "1:569695954799:web:93f20901d27bebaeadaa9a",
     measurementId: "G-VQKHZ1ZTWE"
   };
-
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-
-  window.db = db;
-  window.doc = doc;
-  window.collection = collection;
-  window.query = query;
-  window.where = where;
-  window.orderBy = orderBy;
-  window.limit = limit;
-  window.runTransaction = runTransaction;
-  window.serverTimestamp = serverTimestamp;
-  window.onSnapshot = onSnapshot;
+  window.db = db; window.doc = doc; window.collection = collection; window.query = query; window.where = where; window.orderBy = orderBy; window.limit = limit; window.runTransaction = runTransaction; window.serverTimestamp = serverTimestamp; window.onSnapshot = onSnapshot;
 </script>
 
 <body>
   <div id="map"></div>
-
   <div class="console-left">
     <h2>Top 7 Players</h2>
     <div id="leaderboard-list"></div>
   </div>
-
   <div class="console-right">
     <span id="score-display">Progress: 0 / 1000 Points</span>
     <input type="text" id="username" placeholder="Username" />
@@ -102,10 +73,8 @@
 
     let allBricks = [];
     const totalPoints = 1000;
-    const modelAltitude = 0;
+    const modelAltitude = 0.5; // Lifted slightly to stay on top of tiles
     const modelRotate = [Math.PI / 2, Math.PI, 0];
-    
-    // Global array for 3D model positions
     let playerPositions = [];
     
     const map = new mapboxgl.Map({
@@ -128,52 +97,38 @@
           const [lng, lat] = f.geometry.coordinates;
           const angle = ((f.properties.rotation || 123) * -1) * (Math.PI / 180);
           const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]];
-          const rotated = points.map(([dx, dy]) => [
-            lng + (dx * Math.cos(angle) - dy * Math.sin(angle)),
-            lat + (dx * Math.sin(angle) + dy * Math.cos(angle))
-          ]);
+          const rotated = points.map(([dx, dy]) => [lng + (dx * Math.cos(angle) - dy * Math.sin(angle)), lat + (dx * Math.sin(angle) + dy * Math.cos(angle))]);
           rotated.push(rotated[0]);
           return { type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: [rotated] } };
         })
       };
     }
 
-function liveLeaderboard() {
-  if (!window.db || !window.query || allBricks.length === 0) { 
-    setTimeout(liveLeaderboard, 500); 
-    return; 
-  }
-  const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
-  
-  window.onSnapshot(q, (snap) => {
-    const list = document.getElementById("leaderboard-list");
-    list.innerHTML = "";
-    
-    let rank = 1; 
-    const newPositions = [];
-
-    snap.forEach(d => {
-      const p = d.data();
-      list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
-      
-      const bIndex = p.brickIndex || 0;
-      if (allBricks[bIndex]) {
-        const coords = allBricks[bIndex].geometry.coordinates;
-        const mercator = mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude);
-        newPositions.push(mercator);
-      }
-      rank++; 
-    });
-
-    playerPositions = newPositions;
-    map.triggerRepaint();
-  });
-}
+    function liveLeaderboard() {
+      if (!window.db || !window.query || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
+      const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
+      window.onSnapshot(q, (snap) => {
+        const list = document.getElementById("leaderboard-list");
+        list.innerHTML = "";
+        let rank = 1; 
+        const newPositions = [];
+        snap.forEach(d => {
+          const p = d.data();
+          list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
+          const bIndex = p.brickIndex || 0;
+          if (allBricks[bIndex]) {
+            const coords = allBricks[bIndex].geometry.coordinates;
+            newPositions.push(mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude));
+          }
+          rank++; 
+        });
+        playerPositions = newPositions;
+        map.triggerRepaint();
+      });
+    }
 
     const customLayer = {
-      id: '3d-model',
-      type: 'custom',
-      renderingMode: '3d',
+      id: '3d-model', type: 'custom', renderingMode: '3d',
       onAdd: function (map, gl) {
         this.camera = new THREE.Camera();
         this.scene = new THREE.Scene();
@@ -182,10 +137,7 @@ function liveLeaderboard() {
         directionalLight.position.set(0, -70, 100).normalize();
         this.scene.add(directionalLight);
         const loader = new THREE.GLTFLoader();
-        loader.load('penguinpete.glb', (gltf) => {
-          gltf.scene.scale.set(10, 10, 10);
-          this.scene.add(gltf.scene);
-        });
+        loader.load('penguinpete.glb', (gltf) => { gltf.scene.scale.set(10, 10, 10); this.scene.add(gltf.scene); });
         this.map = map;
         this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
         this.renderer.autoClear = false;
@@ -195,108 +147,78 @@ function liveLeaderboard() {
         const rotationX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
         const rotationY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rotationZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
-
-        // Draw models for every position in the array
         playerPositions.forEach(pos => {
-          const l = new THREE.Matrix4()
-            .makeTranslation(pos.x, pos.y, pos.z)
-            .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
-            .multiply(rotationX).multiply(rotationY).multiply(rotationZ);
-
+          const l = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z).scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits())).multiply(rotationX).multiply(rotationY).multiply(rotationZ);
           this.camera.projectionMatrix.copy(m).multiply(l);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
         });
-
         this.map.triggerRepaint();
       }
     };   
 
     map.on('load', async () => {
-      map.addLayer(customLayer);
-
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // Process bricks first so leaderboard has coordinate data ready
-      if(brickData) processBricks(brickData);
-      liveLeaderboard();
-
-      map.addSource('housing-overlay', {
-        type: 'image',
-        url: 'housing-overlay.png',
-        coordinates: [
-          [-80.64760006745172, 41.10229501193964],
-          [-80.65320155001069, 41.10444521963691],
-          [-80.65140971026295, 41.10911312176939],
-          [-80.64580822770398, 41.10696291407212]
-        ]
-      });
+      // 1. ADD BASE OVERLAYS
+      map.addSource('housing-overlay', { type: 'image', url: 'housing-overlay.png', coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]] });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
-      if(race) {
-        map.addSource('race', { type:'geojson', data: race });
-        map.addLayer({
-          id:'race-buildings', type:'fill-extrusion', source:'race',
-          paint:{
-            'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
-            'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96
-          }
-        });
-      }
-
-      if(courtyards) {
-        map.addSource('courtyards', { type: 'geojson', data: courtyards });
-        map.addLayer({
-          id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards',
-          paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 }
-        });
-      }
-
+      // 2. ADD BRICKS
       if(brickData) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
       }
+
+      // 3. ADD LABELS (Must be after dots to be on top)
+      if(brickData) {
+        const startPoint = brickData.features[0].geometry.coordinates;
+        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
+        const turnPoint = brickData.features[41].geometry.coordinates;
+        map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: turnPoint }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }] } });
+        map.addLayer({ id: 'marker-labels', type: 'symbol', source: 'markers', layout: { 'text-field': ['get', 'label'], 'text-size': 14, 'text-offset': [0, -0.5], 'text-anchor': 'bottom', 'text-allow-overlap': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 } });
+      }
+
+      // 4. ADD BUILDINGS & 3D MODELS
+      if(race) {
+        map.addSource('race', { type:'geojson', data: race });
+        map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
+      }
+      if(courtyards) {
+        map.addSource('courtyards', { type: 'geojson', data: courtyards });
+        map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
+      }
+      
+      map.addLayer(customLayer);
+      liveLeaderboard();
     });
 
     window.validateCode = async () => {
       const username = document.getElementById('username').value.trim();
       const code = document.getElementById('redeemCode').value.trim();
       if (!username || !code) return alert("Enter username and code!");
-
       try {
         const playerRef = window.doc(window.db, "players", username);
-        const codeRef = window.doc(window.db, "codes", code);
+        const codeRef = window.doc(window.doc(window.db, "codes", code));
         const claimRef = window.doc(window.db, "globalClaims", code);
-
         await window.runTransaction(window.db, async (tx) => {
           const codeSnap = await tx.get(codeRef);
           if (!codeSnap.exists()) throw "Invalid code";
-          
           const claimSnap = await tx.get(claimRef);
           if (claimSnap.exists()) throw "Code already claimed!";
-
           const playerSnap = await tx.get(playerRef);
           if (!playerSnap.exists()) throw "User not found!";
-
           const earned = codeSnap.data().points || 0;
           const player = playerSnap.data();
           const newPoints = (player.points || 0) + earned;
           const pointsPerBrick = totalPoints / allBricks.length;
           const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
-          
-          tx.update(playerRef, {
-            points: newPoints,
-            brickIndex: newIndex,
-            lastUpdated: window.serverTimestamp()
-          });
-
+          tx.update(playerRef, { points: newPoints, brickIndex: newIndex, lastUpdated: window.serverTimestamp() });
           tx.set(claimRef, { codeId: code, claimedBy: username, claimedAt: window.serverTimestamp() });
-
-          const nextCoords = allBricks[newIndex].geometry.coordinates;
           document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
-          map.flyTo({ center: nextCoords, duration: 1000 });
+          map.flyTo({ center: allBricks[newIndex].geometry.coordinates, duration: 1000 });
         });
         document.getElementById('redeemCode').value = "";
       } catch (err) { alert(err); }
