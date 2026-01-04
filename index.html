@@ -8,8 +8,6 @@
   <style>
     html, body { height:100%; margin:0; overflow: hidden; }
     #map { position:absolute; inset:0; }
-
-    /* Left Console: Leaderboard */
     .console-left {
       position: absolute; bottom: 20px; left: 20px;
       width: 220px; background: rgba(17, 17, 17, 0.9);
@@ -19,8 +17,6 @@
     }
     .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
     .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; }
-
-    /* Right Console: Redeem */
     .console-right {
       position: absolute; bottom: 20px; right: 20px;
       width: 260px; background: rgba(255, 255, 255, 0.95);
@@ -79,12 +75,10 @@
 
 <body>
   <div id="map"></div>
-
   <div class="console-left">
     <h2>Top 7 Players</h2>
     <div id="leaderboard-list"></div>
   </div>
-
   <div class="console-right">
     <span id="score-display">Progress: 0 / 1000 Points</span>
     <input type="text" id="username" placeholder="Username" />
@@ -119,8 +113,8 @@
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
     function processBricks(data) {
-      const sizeLng = 0.00005, sizeLat = 0.00009;
       allBricks = data.features;
+      const sizeLng = 0.00005, sizeLat = 0.00009;
       return {
         type: 'FeatureCollection',
         features: data.features.map(f => {
@@ -139,19 +133,19 @@
 
     function liveLeaderboard() {
       if (!window.db || !window.query) { setTimeout(liveLeaderboard, 500); return; }
-      const q = window.query(
-        window.collection(window.db, "players"),
-        window.where("points", ">", 0),
-        window.orderBy("points", "desc"),
-        window.limit(7)
-      );
+      const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
       window.onSnapshot(q, (snap) => {
         const list = document.getElementById("leaderboard-list");
+        const currentSearch = document.getElementById('username').value.trim();
         list.innerHTML = "";
         let rank = 1;
         snap.forEach(d => {
           const p = d.data();
           list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
+          if (d.id === currentSearch && allBricks.length > 0) {
+              const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
+              updatePlayerOnMap(d.id, coords);
+          }
           rank++;
         });
       });
@@ -164,12 +158,14 @@
       onAdd: function (map, gl) {
         this.camera = new THREE.Camera();
         this.scene = new THREE.Scene();
-        const directionalLight = new THREE.DirectionalLight(0xffffff);
+        // Lighting Fix: High intensity Ambient and Directional lights
+        this.scene.add(new THREE.AmbientLight(0xffffff, 1.2)); 
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
         directionalLight.position.set(0, -70, 100).normalize();
         this.scene.add(directionalLight);
         const loader = new THREE.GLTFLoader();
         loader.load('penguinpete.glb', (gltf) => {
-          gltf.scene.scale.set(25, 25, 25); 
+          gltf.scene.scale.set(35, 35, 35); // Scaling Penguin Pete
           this.scene.add(gltf.scene);
         });
         this.map = map;
@@ -198,17 +194,17 @@
     }
 
     map.on('load', async () => {
-      liveLeaderboard();
       map.addLayer(customLayer);
-
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+      if (brickData) processBricks(brickData);
+      liveLeaderboard();
 
       map.addSource('housing-overlay', {
         type: 'image',
         url: 'housing-overlay.png',
-        coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]]
+        coordinates: [[-80.6476, 41.1023], [-80.6532, 41.1044], [-80.6514, 41.1091], [-80.6458, 41.1070]]
       });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
@@ -222,14 +218,13 @@
         map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
       }
 
-      if(brickData && brickData.features.length > 0) {
+      if(brickData) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
         const startPoint = brickData.features[0].geometry.coordinates;
         const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
-        const turnPoint = brickData.features[41].geometry.coordinates;
-        map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: turnPoint }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }] } });
-        map.addLayer({ id: 'marker-labels', type: 'symbol', source: 'markers', layout: { 'text-field': ['get', 'label'], 'text-size': ['match', ['get', 'id'], 'turn-arrow', 15, 14], 'text-offset': [0, -0.5], 'text-anchor': 'bottom', 'visibility': 'visible', 'text-allow-overlap': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': ['coalesce', ['get', 'color'], '#E4002B'], 'text-halo-width': 2 } });
+        map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }] } });
+        map.addLayer({ id: 'marker-labels', type: 'symbol', source: 'markers', layout: { 'text-field': ['get', 'label'], 'text-size': 14, 'text-offset': [0, -0.5], 'text-anchor': 'bottom', 'text-allow-overlap': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 } });
       }
     });
 
@@ -243,16 +238,11 @@
         const claimRef = window.doc(window.db, "globalClaims", code);
         await window.runTransaction(window.db, async (tx) => {
           const codeSnap = await tx.get(codeRef);
-          if (!codeSnap.exists()) throw "Invalid code";
           const claimSnap = await tx.get(claimRef);
-          if (claimSnap.exists()) throw "Code already used!";
           const playerSnap = await tx.get(playerRef);
-          if (!playerSnap.exists()) throw "User not found!";
-          const earned = codeSnap.data().points || 0;
-          const player = playerSnap.data();
-          const newPoints = (player.points || 0) + earned;
-          const pointsPerBrick = totalPoints / allBricks.length;
-          const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
+          if (!codeSnap.exists() || claimSnap.exists() || !playerSnap.exists()) throw "Invalid state";
+          const newPoints = (playerSnap.data().points || 0) + codeSnap.data().points;
+          const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / (totalPoints / allBricks.length)));
           tx.update(playerRef, { points: newPoints, brickIndex: newIndex, lastUpdated: window.serverTimestamp() });
           tx.set(claimRef, { codeId: code, claimedBy: username, claimedAt: window.serverTimestamp() });
           const nextCoords = allBricks[newIndex].geometry.coordinates;
