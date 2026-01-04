@@ -105,7 +105,7 @@
     const modelAltitude = 0;
     const modelRotate = [Math.PI / 2, Math.PI, 0];
     
-    // Track all player coordinates for the 3D layer
+    // Array to hold Mercator coordinates for all players
     let playerPositions = [];
     
     const map = new mapboxgl.Map({
@@ -155,7 +155,7 @@ function liveLeaderboard() {
       
       if (allBricks.length > 0) {
         const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
-        // Convert to Mercator and add to global rendering array
+        // Store the position for 3D rendering
         const mercator = mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude);
         newPositions.push(mercator);
       }
@@ -193,7 +193,7 @@ function liveLeaderboard() {
         const rotationY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rotationZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
 
-        // Draw a penguin for every player in the list
+        // Loop through all positions and render the penguin model
         playerPositions.forEach(pos => {
           const l = new THREE.Matrix4()
             .makeTranslation(pos.x, pos.y, pos.z)
