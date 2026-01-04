@@ -96,34 +96,51 @@
     /**
      * Converts Point coordinates into Rectangle Polygons based on the mapfix logic
      */
-    function syncRectangles() {
-      const sizeLng = 0.00006;
-      const sizeLat = 0.000011;
+function syncRectangles() {
+  // Use these values to control the physical size (bigger = larger brick)
+  const sizeLng = 0.00006; 
+  const sizeLat = 0.000011;
+  
+  // This is the angle of your map (converted to math radians)
+  const angle = -133.6 * (Math.PI / 180);
 
-      const polygonDots = {
-        type: 'FeatureCollection',
-        features: dots.features.map(f => {
-          const [lng, lat] = f.geometry.coordinates;
-          return {
-            type: 'Feature',
-            properties: f.properties,
-            geometry: {
-              type: 'Polygon',
-              coordinates: [[
-                [lng - sizeLng, lat - sizeLat],
-                [lng + sizeLng, lat - sizeLat],
-                [lng + sizeLng, lat + sizeLat],
-                [lng - sizeLng, lat + sizeLat],
-                [lng - sizeLng, lat - sizeLat]
-              ]]
-            }
-          };
-        })
+  const polygonDots = {
+    type: 'FeatureCollection',
+    features: dots.features.map(f => {
+      const [lng, lat] = f.geometry.coordinates;
+
+      // The 4 corners of your brick
+      const points = [
+        [-sizeLng, -sizeLat],
+        [sizeLng, -sizeLat],
+        [sizeLng, sizeLat],
+        [-sizeLng, sizeLat]
+      ];
+
+      // This math "spins" the brick so it isn't slanted
+      const rotated = points.map(([dx, dy]) => {
+        const x = dx * Math.cos(angle) - dy * Math.sin(angle);
+        const y = dx * Math.sin(angle) + dy * Math.cos(angle);
+        return [lng + x, lat + y];
+      });
+
+      // Close the shape by repeating the first point
+      rotated.push(rotated[0]);
+
+      return {
+        type: 'Feature',
+        properties: f.properties,
+        geometry: {
+          type: 'Polygon',
+          coordinates: [rotated]
+        }
       };
+    })
+  };
 
-      map.getSource('dots').setData(polygonDots);
-      saveLocal();
-    }
+  map.getSource('dots').setData(polygonDots);
+  saveLocal();
+}
 
     function addDot(lngLat, note) {
       const color = nextIsRed ? '#E4002B' : '#111111';
