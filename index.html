@@ -15,7 +15,6 @@
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
-    // === Config ===
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
     const COURTYARDS_URL = 'university_courtyards.geojson';
     const BRICKS_FILE_URL = 'race_bricks.geojson';
@@ -25,61 +24,45 @@
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
-      center: [-80.64848, 41.10985],
-      zoom: 16.72,
-      pitch: 60.0,
-      bearing: -172.0
+      center: [-80.6458, 41.1090],
+      zoom: 16.8,
+      pitch: 60,
+      bearing: -133.6
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
-    /**
-     * Converts Point coordinates into Rectangle Polygons based on the saved rotation
-     */
     function processBricks(data) {
       const sizeLng = 0.00005; 
       const sizeLat = 0.00009;
-
       return {
         type: 'FeatureCollection',
         features: data.features.map(f => {
-          if (!f.geometry || f.geometry.type !== 'Point') return null;
-          
           const [lng, lat] = f.geometry.coordinates;
-          // Use the specific rotation saved for this brick (fallback to 123)
           const brickAngle = f.properties.rotation || 123;
           const angle = (brickAngle * -1) * (Math.PI / 180);
-
-          const points = [
-            [-sizeLng, -sizeLat],
-            [sizeLng, -sizeLat],
-            [sizeLng, sizeLat],
-            [-sizeLng, sizeLat]
-          ];
-
+          const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]];
           const rotated = points.map(([dx, dy]) => {
             const x = dx * Math.cos(angle) - dy * Math.sin(angle);
             const y = dx * Math.sin(angle) + dy * Math.cos(angle);
             return [lng + x, lat + y];
           });
           rotated.push(rotated[0]);
-
-          return {
-            type: 'Feature',
-            properties: f.properties,
-            geometry: { type: 'Polygon', coordinates: [rotated] }
-          };
-        }).filter(f => f !== null)
+          return { type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: [rotated] } };
+        })
       };
     }
 
     map.on('load', async () => {
+      // Load markers
+      map.loadImage('start-flag.png', (error, image) => { if (!error) map.addImage('start-icon', image); });
+      map.loadImage('end-flag.png', (error, image) => { if (!error) map.addImage('end-icon', image); });
+
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // 1. Race Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
@@ -87,56 +70,65 @@
           paint:{
             'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
             'fill-extrusion-height':['coalesce',['get','height'],22],
-            'fill-extrusion-opacity':0.96,
-            'fill-extrusion-vertical-gradient': false
+            'fill-extrusion-opacity':0.96
           }
         });
       }
 
-      // 2. Courtyards
-      if(courtyards) {
-        map.addSource('courtyards', { type:'geojson', data: courtyards });
-        map.addLayer({
-          id:'courtyards-fill3d', type:'fill-extrusion', source:'courtyards',
-          paint:{
-            'fill-extrusion-color':'#78BE20',
-            'fill-extrusion-height':['coalesce',['get','height'],22],
-            'fill-extrusion-opacity':0.96,
-            'fill-extrusion-vertical-gradient': false
-          }
-        });
-      }
-
-      // 3. Housing Overlay
       map.addSource('housing-overlay', {
-        type:'image',
-        url:'housing-overlay.png',
-        coordinates: [
-          [-80.64760006745172, 41.10229501193964],
-          [-80.65320155001069, 41.10444521963691],
-          [-80.65140971026295, 41.10911312176939],
-          [-80.64580822770398, 41.10696291407212]
-        ]
+        type:'image', url:'housing-overlay.png',
+        coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]]
       });
-      map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay', paint:{ 'raster-opacity': 1.0 } });
+      map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay' });
 
-      // 4. Bricks
-      if(brickData) {
+      if(brickData && brickData.features.length > 0) {
         const processed = processBricks(brickData);
         map.addSource('dots', { type:'geojson', data: processed });
         map.addLayer({
-          id: 'dots-layer',
-          type: 'fill',
-          source: 'dots',
-          paint: {
-            'fill-color': ['get', 'color'],
-            'fill-opacity': 1
+          id: 'dots-layer', type: 'fill', source: 'dots',
+          paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 1 }
+        });
+
+        // ADD START/END FLAGS
+        const startPoint = brickData.features[0].geometry.coordinates;
+        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
+
+        map.addSource('flags', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: [
+              { type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { icon: 'start-icon' } },
+              { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { icon: 'end-icon' } }
+            ]
           }
+        });
+
+        map.addLayer({
+          id: 'flag-layer',
+          type: 'symbol',
+          source: 'flags',
+          layout: { 'icon-image': ['get', 'icon'], 'icon-size': 0.08, 'icon-allow-overlap': true, 'icon-anchor': 'bottom' }
         });
       }
     });
-</script>
+  </script>
 
-  
+  <div id="view-debug" style="position:fixed; bottom:12px; right:12px; background:rgba(255,255,255,0.9); padding:10px; border-radius:8px; font:11px monospace; z-index:9999; border:1px solid #ccc;">
+    <div id="debug-coords">Move map...</div>
+    <button onclick="copyViewCode()" style="margin-top:5px; width:100%; cursor:pointer;">Copy View Code</button>
+  </div>
+  <script>
+    function updateDebug() {
+      const c = map.getCenter();
+      document.getElementById('debug-coords').innerHTML = `L: ${c.lng.toFixed(5)}<br>A: ${c.lat.toFixed(5)}<br>Z: ${map.getZoom().toFixed(1)}<br>B: ${map.getBearing().toFixed(1)}`;
+    }
+    map.on('move', updateDebug);
+    window.copyViewCode = () => {
+      const c = map.getCenter();
+      navigator.clipboard.writeText(`center: [${c.lng.toFixed(5)}, ${c.lat.toFixed(5)}],\nzoom: ${map.getZoom().toFixed(2)},\npitch: ${map.getPitch().toFixed(1)},\nbearing: ${map.getBearing().toFixed(1)}`);
+      alert("Copied!");
+    };
+  </script>
 </body>
 </html>
