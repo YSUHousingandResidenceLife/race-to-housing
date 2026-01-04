@@ -73,7 +73,7 @@
 
     let allBricks = [];
     const totalPoints = 1000;
-    const modelAltitude = 0.5; // Lifted slightly to stay on top of tiles
+    const modelAltitude = 0.5; 
     const modelRotate = [Math.PI / 2, Math.PI, 0];
     let playerPositions = [];
     
@@ -112,6 +112,7 @@
         list.innerHTML = "";
         let rank = 1; 
         const newPositions = [];
+        const labelFeatures = [];
         snap.forEach(d => {
           const p = d.data();
           list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
@@ -119,10 +120,12 @@
           if (allBricks[bIndex]) {
             const coords = allBricks[bIndex].geometry.coordinates;
             newPositions.push(mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude));
+            labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords }, properties: { name: d.id } });
           }
           rank++; 
         });
         playerPositions = newPositions;
+        if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
         map.triggerRepaint();
       });
     }
@@ -162,26 +165,23 @@
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // 1. ADD BASE OVERLAYS
       map.addSource('housing-overlay', { type: 'image', url: 'housing-overlay.png', coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]] });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
-      // 2. ADD BRICKS
       if(brickData) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
-      }
-
-      // 3. ADD LABELS (Must be after dots to be on top)
-      if(brickData) {
+        
         const startPoint = brickData.features[0].geometry.coordinates;
         const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
         const turnPoint = brickData.features[41].geometry.coordinates;
         map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: turnPoint }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }] } });
         map.addLayer({ id: 'marker-labels', type: 'symbol', source: 'markers', layout: { 'text-field': ['get', 'label'], 'text-size': 14, 'text-offset': [0, -0.5], 'text-anchor': 'bottom', 'text-allow-overlap': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 } });
+        
+        map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+        map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, 1.5], 'text-anchor': 'top' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1 } });
       }
 
-      // 4. ADD BUILDINGS & 3D MODELS
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
@@ -201,7 +201,7 @@
       if (!username || !code) return alert("Enter username and code!");
       try {
         const playerRef = window.doc(window.db, "players", username);
-        const codeRef = window.doc(window.doc(window.db, "codes", code));
+        const codeRef = window.doc(window.db, "codes", code);
         const claimRef = window.doc(window.db, "globalClaims", code);
         await window.runTransaction(window.db, async (tx) => {
           const codeSnap = await tx.get(codeRef);
