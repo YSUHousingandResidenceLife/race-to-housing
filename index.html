@@ -8,18 +8,42 @@
   <style>
     html, body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
+    .debug-panel {
+      position: fixed; bottom: 12px; right: 12px;
+      background: rgba(255,255,255,0.9); padding: 12px;
+      border-radius: 8px; font: 12px monospace; z-index: 9999;
+      border: 1px solid #ccc; width: 240px;
+    }
+    .debug-panel b { display: block; margin-bottom: 5px; }
+    button { width: 100%; margin-top: 5px; cursor: pointer; padding: 5px; }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
+  <div class="debug-panel">
+    <b>🚩 Flag Controller</b>
+    <div id="active-flag">Active: None (Click a flag)</div>
+    <div style="margin-top:5px; color:#666;">Use W, A, S, D to move selected flag</div>
+    <button onclick="saveFlagLocs()">Save Flag Locations</button>
+    <hr>
+    <b>🎥 Viewport</b>
+    <div id="debug-coords">Move map...</div>
+    <button onclick="copyViewCode()">Copy View Config</button>
+  </div>
+
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
-    const COURTYARDS_URL = 'university_courtyards.geojson';
     const BRICKS_FILE_URL = 'race_bricks.geojson';
-    
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+
+    // Default or Saved positions
+    let flagPositions = JSON.parse(localStorage.getItem('hrl_flags')) || {
+      start: [-80.6458, 41.1090],
+      stop: [-80.6460, 41.1092]
+    };
+    let activeFlag = null;
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -29,25 +53,21 @@
       pitch: 60,
       bearing: -133.6
     });
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
     function processBricks(data) {
-      const sizeLng = 0.00005; 
-      const sizeLat = 0.00009;
+      const sizeLng = 0.00005, sizeLat = 0.00009;
       return {
         type: 'FeatureCollection',
         features: data.features.map(f => {
           const [lng, lat] = f.geometry.coordinates;
-          const brickAngle = f.properties.rotation || 123;
-          const angle = (brickAngle * -1) * (Math.PI / 180);
+          const angle = ((f.properties.rotation || 123) * -1) * (Math.PI / 180);
           const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]];
-          const rotated = points.map(([dx, dy]) => {
-            const x = dx * Math.cos(angle) - dy * Math.sin(angle);
-            const y = dx * Math.sin(angle) + dy * Math.cos(angle);
-            return [lng + x, lat + y];
-          });
+          const rotated = points.map(([dx, dy]) => [
+            lng + (dx * Math.cos(angle) - dy * Math.sin(angle)),
+            lat + (dx * Math.sin(angle) + dy * Math.cos(angle))
+          ]);
           rotated.push(rotated[0]);
           return { type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: [rotated] } };
         })
@@ -55,8 +75,11 @@
     }
 
     map.on('load', async () => {
+      // Load Images
+      map.loadImage('hrlstart.png', (e, img) => { if(!e) map.addImage('icon-start', img); });
+      map.loadImage('hrlstop.png', (e, img) => { if(!e) map.addImage('icon-stop', img); });
+
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
       if(race) {
@@ -65,80 +88,79 @@
           id:'race-buildings', type:'fill-extrusion', source:'race',
           paint:{
             'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
-            'fill-extrusion-height':['coalesce',['get','height'],22],
-            'fill-extrusion-opacity':0.96
+            'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96
           }
         });
       }
 
-      if(courtyards) {
-        map.addSource('courtyards', { type:'geojson', data: courtyards });
-        map.addLayer({
-          id:'courtyards-fill3d', type:'fill-extrusion', source:'courtyards',
-          paint:{ 'fill-extrusion-color':'#78BE20', 'fill-extrusion-height':22, 'fill-extrusion-opacity':0.96 }
-        });
+      // Bricks
+      if(brickData) {
+        map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
+        map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
       }
 
-      map.addSource('housing-overlay', {
-        type:'image', url:'housing-overlay.png',
-        coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]]
+      // Flags Source
+      map.addSource('flags', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [
+            { type: 'Feature', properties: { id: 'start', icon: 'icon-start' }, geometry: { type: 'Point', coordinates: flagPositions.start } },
+            { type: 'Feature', properties: { id: 'stop', icon: 'icon-stop' }, geometry: { type: 'Point', coordinates: flagPositions.stop } }
+          ]
+        }
       });
-      map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay' });
 
-      if(brickData && brickData.features.length > 0) {
-        const processed = processBricks(brickData);
-        map.addSource('dots', { type:'geojson', data: processed });
-        map.addLayer({
-          id: 'dots-layer', type: 'fill', source: 'dots',
-          paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 1 }
-        });
+      map.addLayer({
+        id: 'flag-layer', type: 'symbol', source: 'flags',
+        layout: { 'icon-image': ['get', 'icon'], 'icon-size': 0.1, 'icon-allow-overlap': true, 'icon-anchor': 'bottom' }
+      });
 
-        // FLAG EMOJIS
-        const startCoord = brickData.features[0].geometry.coordinates;
-        const endCoord = brickData.features[brickData.features.length - 1].geometry.coordinates;
-
-        map.addSource('flags', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: [
-              { type: 'Feature', geometry: { type: 'Point', coordinates: startCoord }, properties: { symbol: '🏁' } },
-              { type: 'Feature', geometry: { type: 'Point', coordinates: endCoord }, properties: { symbol: '🏠' } }
-            ]
-          }
-        });
-
-        map.addLayer({
-          id: 'flag-layer',
-          type: 'symbol',
-          source: 'flags',
-          layout: {
-            'text-field': ['get', 'symbol'],
-            'text-size': 30,
-            'text-allow-overlap': true,
-            'text-ignore-placement': true,
-            'text-anchor': 'bottom'
-          }
-        });
-      }
+      // Selection logic
+      map.on('click', 'flag-layer', (e) => {
+        activeFlag = e.features[0].properties.id;
+        document.getElementById('active-flag').innerText = "Active: " + activeFlag.toUpperCase();
+      });
     });
-  </script>
 
-  <div id="view-debug" style="position:fixed; bottom:12px; right:12px; background:rgba(255,255,255,0.9); padding:10px; border-radius:8px; font:11px monospace; z-index:9999; border:1px solid #ccc;">
-    <div id="debug-coords">Move map...</div>
-    <button onclick="copyViewCode()" style="margin-top:5px; width:100%; cursor:pointer;">Copy View Code</button>
-  </div>
-  <script>
-    function updateDebug() {
-      const c = map.getCenter();
-      document.getElementById('debug-coords').innerHTML = `Lng: ${c.lng.toFixed(5)}<br>Lat: ${c.lat.toFixed(5)}<br>Zoom: ${map.getZoom().toFixed(1)}<br>Bear: ${map.getBearing().toFixed(1)}`;
-    }
-    map.on('move', updateDebug);
+    // Keyboard Movement (W,A,S,D)
+    window.addEventListener('keydown', e => {
+      if (!activeFlag) return;
+      const STEP = 0.00001;
+      let [lng, lat] = flagPositions[activeFlag];
+      if (e.key === 'w') lat += STEP;
+      if (e.key === 's') lat -= STEP;
+      if (e.key === 'a') lng -= STEP;
+      if (e.key === 'd') lng += STEP;
+      
+      flagPositions[activeFlag] = [lng, lat];
+      
+      map.getSource('flags').setData({
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', properties: { id: 'start', icon: 'icon-start' }, geometry: { type: 'Point', coordinates: flagPositions.start } },
+          { type: 'Feature', properties: { id: 'stop', icon: 'icon-stop' }, geometry: { type: 'Point', coordinates: flagPositions.stop } }
+        ]
+      });
+    });
+
+    window.saveFlagLocs = () => {
+      localStorage.setItem('hrl_flags', JSON.stringify(flagPositions));
+      console.log("SAVED FLAG POSITIONS:", flagPositions);
+      alert("Flag positions saved locally!");
+    };
+
     window.copyViewCode = () => {
       const c = map.getCenter();
-      navigator.clipboard.writeText(`center: [${c.lng.toFixed(5)}, ${c.lat.toFixed(5)}],\nzoom: ${map.getZoom().toFixed(2)},\npitch: ${map.getPitch().toFixed(1)},\nbearing: ${map.getBearing().toFixed(1)}`);
-      alert("Config Copied!");
+      const code = `center: [${c.lng.toFixed(5)}, ${c.lat.toFixed(5)}],\nzoom: ${map.getZoom().toFixed(2)},\npitch: ${map.getPitch().toFixed(1)},\nbearing: ${map.getBearing().toFixed(1)}`;
+      navigator.clipboard.writeText(code);
+      alert("View config copied!");
     };
+
+    map.on('move', () => {
+      const c = map.getCenter();
+      document.getElementById('debug-coords').innerHTML = `L: ${c.lng.toFixed(5)} A: ${c.lat.toFixed(5)}<br>B: ${map.getBearing().toFixed(1)} Z: ${map.getZoom().toFixed(1)}`;
+    });
   </script>
 </body>
 </html>
