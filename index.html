@@ -55,10 +55,6 @@
     }
 
     map.on('load', async () => {
-      // Load markers
-      map.loadImage('start-flag.png', (error, image) => { if (!error) map.addImage('start-icon', image); });
-      map.loadImage('end-flag.png', (error, image) => { if (!error) map.addImage('end-icon', image); });
-
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
@@ -72,6 +68,14 @@
             'fill-extrusion-height':['coalesce',['get','height'],22],
             'fill-extrusion-opacity':0.96
           }
+        });
+      }
+
+      if(courtyards) {
+        map.addSource('courtyards', { type:'geojson', data: courtyards });
+        map.addLayer({
+          id:'courtyards-fill3d', type:'fill-extrusion', source:'courtyards',
+          paint:{ 'fill-extrusion-color':'#78BE20', 'fill-extrusion-height':22, 'fill-extrusion-opacity':0.96 }
         });
       }
 
@@ -89,17 +93,17 @@
           paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 1 }
         });
 
-        // ADD START/END FLAGS
-        const startPoint = brickData.features[0].geometry.coordinates;
-        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
+        // FLAG EMOJIS
+        const startCoord = brickData.features[0].geometry.coordinates;
+        const endCoord = brickData.features[brickData.features.length - 1].geometry.coordinates;
 
         map.addSource('flags', {
           type: 'geojson',
           data: {
             type: 'FeatureCollection',
             features: [
-              { type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { icon: 'start-icon' } },
-              { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { icon: 'end-icon' } }
+              { type: 'Feature', geometry: { type: 'Point', coordinates: startCoord }, properties: { symbol: '🏁' } },
+              { type: 'Feature', geometry: { type: 'Point', coordinates: endCoord }, properties: { symbol: '🏠' } }
             ]
           }
         });
@@ -108,7 +112,13 @@
           id: 'flag-layer',
           type: 'symbol',
           source: 'flags',
-          layout: { 'icon-image': ['get', 'icon'], 'icon-size': 0.08, 'icon-allow-overlap': true, 'icon-anchor': 'bottom' }
+          layout: {
+            'text-field': ['get', 'symbol'],
+            'text-size': 30,
+            'text-allow-overlap': true,
+            'text-ignore-placement': true,
+            'text-anchor': 'bottom'
+          }
         });
       }
     });
@@ -121,13 +131,13 @@
   <script>
     function updateDebug() {
       const c = map.getCenter();
-      document.getElementById('debug-coords').innerHTML = `L: ${c.lng.toFixed(5)}<br>A: ${c.lat.toFixed(5)}<br>Z: ${map.getZoom().toFixed(1)}<br>B: ${map.getBearing().toFixed(1)}`;
+      document.getElementById('debug-coords').innerHTML = `Lng: ${c.lng.toFixed(5)}<br>Lat: ${c.lat.toFixed(5)}<br>Zoom: ${map.getZoom().toFixed(1)}<br>Bear: ${map.getBearing().toFixed(1)}`;
     }
     map.on('move', updateDebug);
     window.copyViewCode = () => {
       const c = map.getCenter();
       navigator.clipboard.writeText(`center: [${c.lng.toFixed(5)}, ${c.lat.toFixed(5)}],\nzoom: ${map.getZoom().toFixed(2)},\npitch: ${map.getPitch().toFixed(1)},\nbearing: ${map.getBearing().toFixed(1)}`);
-      alert("Copied!");
+      alert("Config Copied!");
     };
   </script>
 </body>
