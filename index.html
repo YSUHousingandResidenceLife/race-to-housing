@@ -140,36 +140,37 @@ function liveLeaderboard() {
   if (!window.db || !window.query) { setTimeout(liveLeaderboard, 500); return; }
   const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
   
- window.onSnapshot(q, (snap) => {
+window.onSnapshot(q, (snap) => {
   const list = document.getElementById("leaderboard-list");
   const currentSearch = document.getElementById('username').value.trim();
   list.innerHTML = "";
-  let rank = 1; // FIX: Define rank here so it resets every time the data updates
   
-  const playerFeatures = [];
+  let rank = 1; // 1. Fix: Define rank here
+  const playerFeatures = []; // 2. Fix: Collection for all players
 
   snap.forEach(d => {
     const p = d.data();
     list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
-    rank++; // Increment rank correctly
     
     if (allBricks.length > 0) {
       const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
       
-      // Add point for the 2D penguin icons
+      // 3. Add to the list of 2D map icons
       playerFeatures.push({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: coords },
         properties: { name: d.id }
       });
 
-      // ONLY move the 3D model if it matches the name in the search box
+      // 4. Only move the 3D Penguin if it's the person searched
       if (d.id === currentSearch) {
         updatePlayerOnMap(d.id, coords);
       }
     }
+    rank++; 
   });
 
+  // 5. Update the map source to show everyone at once
   if (map.getSource('players')) {
     map.getSource('players').setData({ type: 'FeatureCollection', features: playerFeatures });
   }
