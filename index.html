@@ -104,7 +104,9 @@
     const totalPoints = 1000;
     const modelAltitude = 0;
     const modelRotate = [Math.PI / 2, Math.PI, 0];
-    let modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat([-80.64848, 41.10985], modelAltitude);
+    
+    // Track all player coordinates for the 3D layer
+    let playerPositions = [];
     
     const map = new mapboxgl.Map({
       container: 'map',
@@ -140,46 +142,29 @@ function liveLeaderboard() {
   if (!window.db || !window.query) { setTimeout(liveLeaderboard, 500); return; }
   const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
   
-window.onSnapshot(q, (snap) => {
-  const list = document.getElementById("leaderboard-list");
-  const currentSearch = document.getElementById('username').value.trim();
-  list.innerHTML = "";
-  
-  let rank = 1; // 1. Fix: Define rank here
-  const playerFeatures = []; // 2. Fix: Collection for all players
-
-  snap.forEach(d => {
-    const p = d.data();
-    list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
+  window.onSnapshot(q, (snap) => {
+    const list = document.getElementById("leaderboard-list");
+    list.innerHTML = "";
     
-    if (allBricks.length > 0) {
-      const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
+    let rank = 1; 
+    const newPositions = [];
+
+    snap.forEach(d => {
+      const p = d.data();
+      list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
       
-      // 3. Add to the list of 2D map icons
-      playerFeatures.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: coords },
-        properties: { name: d.id }
-      });
-
-      // 4. Only move the 3D Penguin if it's the person searched
-      if (d.id === currentSearch) {
-        updatePlayerOnMap(d.id, coords);
+      if (allBricks.length > 0) {
+        const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
+        // Convert to Mercator and add to global rendering array
+        const mercator = mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude);
+        newPositions.push(mercator);
       }
-    }
-    rank++; 
+      rank++; 
+    });
+
+    playerPositions = newPositions;
+    map.triggerRepaint();
   });
-
-  // 5. Update the map source to show everyone at once
-  if (map.getSource('players')) {
-    map.getSource('players').setData({ type: 'FeatureCollection', features: playerFeatures });
-  }
-});
-}
-
-   function updatePlayerOnMap(username, coords) {
-  modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude);
-  map.triggerRepaint();
 }
 
     const customLayer = {
@@ -203,17 +188,23 @@ window.onSnapshot(q, (snap) => {
         this.renderer.autoClear = false;
       },
       render: function (gl, matrix) {
+        const m = new THREE.Matrix4().fromArray(matrix);
         const rotationX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
         const rotationY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rotationZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
-        const m = new THREE.Matrix4().fromArray(matrix);
-        const l = new THREE.Matrix4()
-          .makeTranslation(modelAsMercatorCoordinate.x, modelAsMercatorCoordinate.y, modelAsMercatorCoordinate.z)
-          .scale(new THREE.Vector3(modelAsMercatorCoordinate.meterInMercatorCoordinateUnits(), -modelAsMercatorCoordinate.meterInMercatorCoordinateUnits(), modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()))
-          .multiply(rotationX).multiply(rotationY).multiply(rotationZ);
-        this.camera.projectionMatrix.copy(m).multiply(l);
-        this.renderer.resetState();
-        this.renderer.render(this.scene, this.camera);
+
+        // Draw a penguin for every player in the list
+        playerPositions.forEach(pos => {
+          const l = new THREE.Matrix4()
+            .makeTranslation(pos.x, pos.y, pos.z)
+            .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
+            .multiply(rotationX).multiply(rotationY).multiply(rotationZ);
+
+          this.camera.projectionMatrix.copy(m).multiply(l);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        });
+
         this.map.triggerRepaint();
       }
     };   
@@ -295,23 +286,6 @@ window.onSnapshot(q, (snap) => {
             'text-halo-width': 2
           }
         });
-
-        map.addSource('players', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] }
-        });
-
-        map.addLayer({
-          id: 'players-layer',
-          type: 'symbol',
-          source: 'players',
-          layout: {
-            'icon-image': 'penguin',
-            'icon-size': 0.2,
-            'icon-anchor': 'bottom',
-            'icon-allow-overlap': true
-          }
-        });
       }
     });
 
@@ -354,7 +328,6 @@ window.onSnapshot(q, (snap) => {
           });
 
           const nextCoords = allBricks[newIndex].geometry.coordinates;
-          updatePlayerOnMap(username, nextCoords);
           document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
           map.flyTo({ center: nextCoords, duration: 1000 });
         });
