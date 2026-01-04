@@ -34,37 +34,48 @@
     #score-display { font-weight: bold; color: #E4002B; margin-bottom: 10px; text-align: center; display: block; font-size: 14px; }
   </style>
 </head>
+
   <script type="module">
-import {
-  getFirestore,
-  doc,
-  collection,
-  query,
-  orderBy,
-  limit,
-  getDocs,
-  runTransaction,
-  serverTimestamp,
-  onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  // Core Firebase App import was missing
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  
+  // Firestore imports
+  import {
+    getFirestore,
+    doc,
+    collection,
+    query,
+    orderBy,
+    limit,
+    runTransaction,
+    serverTimestamp,
+    onSnapshot
+  } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
-  authDomain: "race-to-housing.firebaseapp.com",
-  projectId: "race-to-housing",
-  storageBucket: "race-to-housing.firebasestorage.app",
-  messagingSenderId: "569695954799",
-  appId: "1:569695954799:web:93f20901d27bebaeadaa9a",
-  measurementId: "G-VQKHZ1ZTWE"
-};
- const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-window.db = db;
-   
-window.doc = doc;
-window.runTransaction = runTransaction;
-window.serverTimestamp = serverTimestamp;
+  const firebaseConfig = {
+    apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
+    authDomain: "race-to-housing.firebaseapp.com",
+    projectId: "race-to-housing",
+    storageBucket: "race-to-housing.firebasestorage.app",
+    messagingSenderId: "569695954799",
+    appId: "1:569695954799:web:93f20901d27bebaeadaa9a",
+    measurementId: "G-VQKHZ1ZTWE"
+  };
 
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // Export to window so your Mapbox script can access them
+  window.db = db;
+  window.doc = doc;
+  window.collection = collection;
+  window.query = query;
+  window.orderBy = orderBy;
+  window.limit = limit;
+  window.runTransaction = runTransaction;
+  window.serverTimestamp = serverTimestamp;
+  window.onSnapshot = onSnapshot;
 </script>
 
 <body>
@@ -277,67 +288,32 @@ map.addLayer({
 }
        
 
-  window.validateCode = async () => {
+window.validateCode = async () => {
   const username = document.getElementById('username').value.trim();
   const code = document.getElementById('redeemCode').value.trim();
   if (!username || !code) return alert("Enter username and code!");
 
   try {
-    const playerRef = doc(db, "players", username);
-    const codeRef   = doc(db, "codes", code);
+    // USE window.db AND window.doc TO ENSURE THEY ARE FOUND
+    const playerRef = window.doc(window.db, "players", username);
+    const codeRef   = window.doc(window.db, "codes", code);
 
-    await runTransaction(db, async (tx) => {
+    await window.runTransaction(window.db, async (tx) => {
       const playerSnap = await tx.get(playerRef);
-      if (!playerSnap.exists()) throw "Username not found";
-
-      const codeSnap = await tx.get(codeRef);
-      if (!codeSnap.exists()) throw "Invalid code";
-      if (codeSnap.data().used) throw "Code already used";
-
-      const earned = codeSnap.data().points;
-      const player = playerSnap.data();
-
-      const newPoints = (player.points || 0) + earned;
-      const pointsPerBrick = totalPoints / allBricks.length;
-      const newBrickIndex = Math.min(
-        allBricks.length - 1,
-        Math.floor(newPoints / pointsPerBrick)
-      );
-
-      // update player
-      tx.update(playerRef, {
-        points: newPoints,
-        brickIndex: newBrickIndex
-      });
-
+      // ... rest of the code
+      
       // mark code used
       tx.update(codeRef, {
         used: true,
         usedBy: username,
-        usedAt: serverTimestamp()
+        usedAt: window.serverTimestamp() // USE window. here too
       });
-
-      // ---- MAP UPDATE (same behavior you had) ----
-      const nextCoords = allBricks[newBrickIndex].geometry.coordinates;
-
-      updatePlayerOnMap(username, nextCoords);
-
-      document.getElementById('score-display').innerText =
-        `Progress: ${Math.floor(newBrickIndex * pointsPerBrick)} / ${totalPoints} Points`;
-
-      let newBearing = map.getBearing();
-      if (newBrickIndex === 43) newBearing -= 90;
-
-      map.flyTo({ center: nextCoords, duration: 1000, bearing: newBearing });
+      // ...
     });
-
-    document.getElementById('redeemCode').value = "";
-
   } catch (err) {
     alert(err);
   }
 };
-        }  // <-- closes: if (brickData && brickData.features.length > 0)
 
 }); // <-- closes: map.on('load', async () => {
 
