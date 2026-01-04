@@ -1,82 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>Race to Housing — Path Viewer</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Race to Housing — Path Viewer</title>
 
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
 
-  <style>
-    html, body { height:100%; margin:0; }
-    #map { position:absolute; inset:0; }
+<style>
+html,body{height:100%;margin:0}
+#map{position:absolute;inset:0}
 
-    .debug-panel{
-      position:fixed;
-      bottom:12px;
-      right:12px;
-      background:rgba(255,255,255,0.95);
-      padding:15px;
-      border-radius:12px;
-      font:12px monospace;
-      z-index:9999;
-      border:1px solid #ccc;
-      width:260px;
-      box-shadow:0 4px 15px rgba(0,0,0,.2);
-    }
+/* ===== LOGO OVERLAY ===== */
+.logo-overlay{
+  position:fixed;
+  top:14px;
+  left:14px;
+  z-index:9998;
+  pointer-events:none;
+}
+.logo-overlay img{
+  height:42px;
+}
 
-    .debug-panel h2{
-      font-size:13px;
-      margin:0 0 10px;
-      border-bottom:1px solid #ddd;
-      padding-bottom:5px;
-    }
-
-    .row{
-      margin-bottom:10px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-    }
-
-    button{
-      cursor:pointer;
-      padding:5px;
-      font-weight:bold;
-    }
-
-    .active-btn{
-      background:#E4002B;
-      color:#fff;
-      border:none;
-      border-radius:4px;
-    }
-  </style>
+/* ===== DEBUG PANEL ===== */
+.debug-panel{
+  position:fixed;
+  bottom:12px;
+  right:12px;
+  background:rgba(255,255,255,.95);
+  padding:15px;
+  border-radius:12px;
+  font:12px monospace;
+  z-index:9999;
+  border:1px solid #ccc;
+  width:260px;
+  box-shadow:0 4px 15px rgba(0,0,0,.2);
+}
+.debug-panel h2{
+  font-size:13px;
+  margin:0 0 10px;
+  border-bottom:1px solid #ddd;
+  padding-bottom:5px;
+}
+.row{
+  margin-bottom:10px;
+  display:flex;
+  justify-content:space-between;
+}
+button{
+  cursor:pointer;
+  padding:5px;
+  font-weight:bold;
+}
+.active-btn{
+  background:#E4002B;
+  color:#fff;
+  border:none;
+  border-radius:4px;
+}
+</style>
 </head>
 
 <body>
+
 <div id="map"></div>
 
+<!-- LOGO -->
+<div class="logo-overlay">
+  <img src="hrl_logo.png" alt="HRL Logo">
+</div>
+
+<!-- DEBUG -->
 <div class="debug-panel">
   <h2>🚩 Flag Debugger</h2>
-
   <div class="row">
     <button id="btn-start" class="active-btn" onclick="setActive('start')">HRL START</button>
     <button id="btn-stop" onclick="setActive('stop')">HRL STOP</button>
   </div>
-
   <div style="color:#666;margin-bottom:10px;">Move: W A S D</div>
-
   <button onclick="saveAndExport()" style="width:100%;background:#111;color:#fff;border:none;padding:8px;border-radius:4px;">
     Save & Export Coordinates
-  </button>
-
-  <hr style="margin:15px 0;">
-
-  <h2>🎥 Viewport</h2>
-  <div id="debug-coords">Move map...</div>
-  <button onclick="copyViewCode()" style="width:100%;margin-top:5px;">
-    Copy View Config
   </button>
 </div>
 
@@ -86,17 +90,16 @@
 mapboxgl.accessToken =
 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
-const BRICKS_FILE_URL = 'race_bricks.geojson';
+const GEOJSON_URL='ysu_race_buildings_exact_final.geojson';
+const BRICKS_FILE_URL='race_bricks.geojson';
 
-let flagState = JSON.parse(localStorage.getItem('hrl_flag_state')) || {
-  start:{ coords:[-80.6458,41.1090] },
-  stop:{ coords:[-80.6460,41.1092] }
+let flagState=JSON.parse(localStorage.getItem('hrl_flag_state'))||{
+  start:{coords:[-80.6458,41.1090]},
+  stop:{coords:[-80.6460,41.1092]}
 };
+let activeKey='start';
 
-let activeKey = 'start';
-
-const map = new mapboxgl.Map({
+const map=new mapboxgl.Map({
   container:'map',
   style:'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
   center:[-80.6458,41.1090],
@@ -105,67 +108,82 @@ const map = new mapboxgl.Map({
   bearing:-133.6
 });
 
-async function loadJSON(url){
-  const r = await fetch(url);
-  return r.json();
+async function loadJSON(u){return (await fetch(u)).json()}
+
+/* ===== BRICKS ===== */
+function processBricks(data){
+  const sizeLng=0.00005,sizeLat=0.00009;
+  return{
+    type:'FeatureCollection',
+    features:data.features.map(f=>{
+      const [lng,lat]=f.geometry.coordinates;
+      const a=((f.properties.rotation||0)*-1)*(Math.PI/180);
+      const pts=[[-sizeLng,-sizeLat],[sizeLng,-sizeLat],[sizeLng,sizeLat],[-sizeLng,sizeLat]];
+      const r=pts.map(([dx,dy])=>[
+        lng+(dx*Math.cos(a)-dy*Math.sin(a)),
+        lat+(dx*Math.sin(a)+dy*Math.cos(a))
+      ]);
+      r.push(r[0]);
+      return{
+        type:'Feature',
+        properties:f.properties,
+        geometry:{type:'Polygon',coordinates:[r]}
+      };
+    })
+  };
 }
 
+/* ===== FLAGS (LOCKED 180° FIX) ===== */
 function generateFlagGeoJSON(){
-  return {
+  return{
     type:'FeatureCollection',
     features:[
       {
         type:'Feature',
-        properties:{ icon:'icon-start' },
-        geometry:{ type:'Point', coordinates:flagState.start.coords }
+        properties:{icon:'icon-start',rotate:180},
+        geometry:{type:'Point',coordinates:flagState.start.coords}
       },
       {
         type:'Feature',
-        properties:{ icon:'icon-stop' },
-        geometry:{ type:'Point', coordinates:flagState.stop.coords }
+        properties:{icon:'icon-stop',rotate:180},
+        geometry:{type:'Point',coordinates:flagState.stop.coords}
       }
     ]
   };
 }
 
-map.on('load', async ()=>{
+map.on('load',async()=>{
 
-  map.loadImage('hrlstart.png',(e,img)=>{
-    if(!e) map.addImage('icon-start',img);
-  });
+  map.loadImage('hrlstart.png',(e,i)=>!e&&map.addImage('icon-start',i));
+  map.loadImage('hrlstop.png',(e,i)=>!e&&map.addImage('icon-stop',i));
 
-  map.loadImage('hrlstop.png',(e,img)=>{
-    if(!e) map.addImage('icon-stop',img);
-  });
-
-  const race = await loadJSON(GEOJSON_URL).catch(()=>null);
+  const race=await loadJSON(GEOJSON_URL).catch(()=>null);
   if(race){
-    map.addSource('race',{ type:'geojson', data:race });
+    map.addSource('race',{type:'geojson',data:race});
     map.addLayer({
       id:'race-buildings',
       type:'fill-extrusion',
       source:'race',
       paint:{
-        'fill-extrusion-color':['match',['get','name'],
-          'Lyden House','#FF69B4',
-          'Cafaro House','#0072CE',
-          'Wick House (Art)','#FFFF00',
-          'Weller House','#582C83',
-          'Christman Dining','#FFDF00',
-          'Kilcawley House','#E4002B',
-          '#d6001c'
-        ],
+        'fill-extrusion-color':['get','color'],
         'fill-extrusion-height':22,
         'fill-extrusion-opacity':0.96
       }
     });
   }
 
-  map.addSource('flags',{
-    type:'geojson',
-    data:generateFlagGeoJSON()
-  });
+  const bricks=await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+  if(bricks){
+    map.addSource('dots',{type:'geojson',data:processBricks(bricks)});
+    map.addLayer({
+      id:'dots-layer',
+      type:'fill',
+      source:'dots',
+      paint:{'fill-color':['get','color']}
+    });
+  }
 
+  map.addSource('flags',{type:'geojson',data:generateFlagGeoJSON()});
   map.addLayer({
     id:'flag-layer',
     type:'symbol',
@@ -173,55 +191,35 @@ map.on('load', async ()=>{
     layout:{
       'icon-image':['get','icon'],
       'icon-size':0.1,
+      'icon-rotate':['get','rotate'],
       'icon-anchor':'bottom',
       'icon-allow-overlap':true
     }
   });
 });
 
-window.setActive = (key)=>{
-  activeKey = key;
-  document.getElementById('btn-start').className = key==='start'?'active-btn':'';
-  document.getElementById('btn-stop').className  = key==='stop'?'active-btn':'';
-  map.getSource('flags').setData(generateFlagGeoJSON());
+window.setActive=k=>{
+  activeKey=k;
+  btn-start.className=k==='start'?'active-btn':'';
+  btn-stop.className=k==='stop'?'active-btn':'';
 };
 
 window.addEventListener('keydown',e=>{
-  const STEP = 0.00001;
-  let [lng,lat] = flagState[activeKey].coords;
-
-  if(e.key==='w') lat+=STEP;
-  if(e.key==='s') lat-=STEP;
-  if(e.key==='a') lng-=STEP;
-  if(e.key==='d') lng+=STEP;
-
+  const STEP=0.00001;
+  let [lng,lat]=flagState[activeKey].coords;
+  if(e.key==='w')lat+=STEP;
+  if(e.key==='s')lat-=STEP;
+  if(e.key==='a')lng-=STEP;
+  if(e.key==='d')lng+=STEP;
   flagState[activeKey].coords=[lng,lat];
   map.getSource('flags').setData(generateFlagGeoJSON());
 });
 
-window.saveAndExport = ()=>{
+window.saveAndExport=()=>{
   localStorage.setItem('hrl_flag_state',JSON.stringify(flagState));
   console.log('FINAL FLAG CONFIG:',JSON.stringify(flagState,null,2));
-  alert('Flag data saved and logged to Console (F12)');
+  alert('Saved');
 };
-
-window.copyViewCode = ()=>{
-  const c = map.getCenter();
-  const code =
-`center:[${c.lng.toFixed(5)},${c.lat.toFixed(5)}],
-zoom:${map.getZoom().toFixed(2)},
-pitch:${map.getPitch().toFixed(1)},
-bearing:${map.getBearing().toFixed(1)}`;
-  navigator.clipboard.writeText(code);
-  alert('View config copied!');
-};
-
-map.on('move',()=>{
-  const c = map.getCenter();
-  document.getElementById('debug-coords').innerHTML =
-    `L:${c.lng.toFixed(5)} A:${c.lat.toFixed(5)}<br>
-     B:${map.getBearing().toFixed(1)} Z:${map.getZoom().toFixed(1)}`;
-});
 </script>
 </body>
 </html>
