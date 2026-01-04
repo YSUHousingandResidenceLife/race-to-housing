@@ -8,51 +8,16 @@
   <style>
     html, body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
-    .debug-panel {
-      position: fixed; bottom: 12px; right: 12px;
-      background: rgba(255,255,255,0.95); padding: 15px;
-      border-radius: 12px; font: 12px monospace; z-index: 9999;
-      border: 1px solid #ccc; width: 260px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    .debug-panel h2 { font-size: 13px; margin: 0 0 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-    .row { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
-    button { cursor: pointer; padding: 5px; font-weight: bold; }
-    .active-btn { background: #E4002B; color: white; border: none; border-radius: 4px; }
-    input[type="range"] { width: 100%; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-
-  <div class="debug-panel">
-    <h2>🚩 Flag Debugger</h2>
-    <div class="row">
-      <button id="btn-start" class="active-btn" onclick="setActive('start')">HRL START</button>
-      <button id="btn-stop" onclick="setActive('stop')">HRL STOP</button>
-    </div>
-    <div class="row">
-      <label>Rotation:</label>
-      <input type="range" id="flagRotate" min="0" max="360" value="180" oninput="updateFlagAttr()">
-    </div>
-    <div style="color:#666; margin-bottom:10px;">Move: W, A, S, D keys</div>
-    <button onclick="saveAndExport()" style="width:100%; background:#111; color:#fff; border:none; padding:8px; border-radius:4px;">Save & Export Coordinates</button>
-    <hr style="margin: 15px 0;">
-    <h2>🎥 Viewport</h2>
-    <div id="debug-coords">Move map...</div>
-    <button onclick="copyViewCode()" style="width:100%; margin-top:5px;">Copy View Config</button>
-  </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
     const BRICKS_FILE_URL = 'race_bricks.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-
-    let flagState = JSON.parse(localStorage.getItem('hrl_flag_state')) || {
-      start: { coords: [-80.6458, 41.1090], rotate: 180 },
-      stop: { coords: [-80.6460, 41.1092], rotate: 180 }
-    };
-    let activeKey = 'start';
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -84,13 +49,10 @@
     }
 
     map.on('load', async () => {
-      map.loadImage('hrlstart.png', (e, img) => { if(!e) map.addImage('icon-start', img); });
-      map.loadImage('hrlstop.png', (e, img) => { if(!e) map.addImage('icon-stop', img); });
-
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // Housing Overlay Fix
+      // 1. Housing Overlay
       map.addSource('housing-overlay', {
         type: 'image',
         url: 'housing-overlay.png',
@@ -101,8 +63,9 @@
           [-80.64580822770398, 41.10696291407212]
         ]
       });
-      map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay', paint: { 'raster-opacity': 1.0 } });
+      map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
+      // 2. Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
@@ -114,77 +77,46 @@
         });
       }
 
-      if(brickData) {
+      // 3. Bricks and Dynamic Signs
+      if(brickData && brickData.features.length > 0) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
+
+        // Identify Start (first index) and End (last index) from JSON
+        const startPoint = brickData.features[0].geometry.coordinates;
+        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
+
+        map.addSource('endpoints', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: [
+              { type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } },
+              { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }
+            ]
+          }
+        });
+
+        // Floating Labels
+        map.addLayer({
+          id: 'endpoint-labels',
+          type: 'symbol',
+          source: 'endpoints',
+          layout: {
+            'text-field': ['get', 'label'],
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+            'text-size': 14,
+            'text-letter-spacing': 0.1,
+            'text-offset': [0, -2], // Floats it above the point
+            'text-anchor': 'bottom'
+          },
+          paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': ['get', 'color'],
+            'text-halo-width': 3
+          }
+        });
       }
-
-      map.addSource('flags', { type: 'geojson', data: generateFlagGeoJSON() });
-      map.addLayer({
-        id: 'flag-layer', type: 'symbol', source: 'flags',
-        layout: { 
-          'icon-image': ['get', 'icon'], 
-          'icon-size': 0.12, 
-          'icon-rotate': ['get', 'rotate'],
-          'icon-allow-overlap': true, 
-          'icon-anchor': 'bottom',
-          'icon-rotation-alignment': 'map',
-          'icon-pitch-alignment': 'map'
-        }
-      });
-      
-      document.getElementById('flagRotate').value = flagState[activeKey].rotate;
-    });
-
-    function generateFlagGeoJSON() {
-      return {
-        type: 'FeatureCollection',
-        features: [
-          { type: 'Feature', properties: { id: 'start', icon: 'icon-start', rotate: flagState.start.rotate }, geometry: { type: 'Point', coordinates: flagState.start.coords } },
-          { type: 'Feature', properties: { id: 'stop', icon: 'icon-stop', rotate: flagState.stop.rotate }, geometry: { type: 'Point', coordinates: flagState.stop.coords } }
-        ]
-      };
-    }
-
-    window.setActive = (key) => {
-      activeKey = key;
-      document.getElementById('btn-start').className = key === 'start' ? 'active-btn' : '';
-      document.getElementById('btn-stop').className = key === 'stop' ? 'active-btn' : '';
-      document.getElementById('flagRotate').value = flagState[key].rotate;
-    };
-
-    window.updateFlagAttr = () => {
-      flagState[activeKey].rotate = parseInt(document.getElementById('flagRotate').value);
-      map.getSource('flags').setData(generateFlagGeoJSON());
-    };
-
-    window.addEventListener('keydown', e => {
-      const STEP = 0.000005;
-      let [lng, lat] = flagState[activeKey].coords;
-      if (e.key === 'w') lat += STEP;
-      if (e.key === 's') lat -= STEP;
-      if (e.key === 'a') lng -= STEP;
-      if (e.key === 'd') lng += STEP;
-      flagState[activeKey].coords = [lng, lat];
-      map.getSource('flags').setData(generateFlagGeoJSON());
-    });
-
-    window.saveAndExport = () => {
-      localStorage.setItem('hrl_flag_state', JSON.stringify(flagState));
-      console.log("FINAL FLAG CONFIG:", JSON.stringify(flagState, null, 2));
-      alert("Flag data saved!");
-    };
-
-    window.copyViewCode = () => {
-      const c = map.getCenter();
-      const code = `center: [${c.lng.toFixed(5)}, ${c.lat.toFixed(5)}],\nzoom: ${map.getZoom().toFixed(2)},\npitch: ${map.getPitch().toFixed(1)},\nbearing: ${map.getBearing().toFixed(1)}`;
-      navigator.clipboard.writeText(code);
-      alert("View config copied!");
-    };
-
-    map.on('move', () => {
-      const c = map.getCenter();
-      document.getElementById('debug-coords').innerHTML = `L: ${c.lng.toFixed(5)} A: ${c.lat.toFixed(5)}<br>B: ${map.getBearing().toFixed(1)} Z: ${map.getZoom().toFixed(1)}`;
     });
   </script>
 </body>
