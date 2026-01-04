@@ -62,7 +62,7 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // Export to window so your Mapbox script can access them
+  // Global Scope Exports for the standard script below
   window.db = db;
   window.doc = doc;
   window.collection = collection;
@@ -134,7 +134,7 @@
     function liveLeaderboard() {
       if (!window.db || !window.query) { setTimeout(liveLeaderboard, 500); return; }
       const q = window.query(
-        window.collection(window.db, "players"),
+        window.collection(window.db, "penguins"),
         window.orderBy("points", "desc"),
         window.limit(7)
       );
@@ -147,7 +147,7 @@
           const p = d.data();
           list.innerHTML += `
             <div class="leader-item">
-              <span>${rank}. ${p.username || 'Anon'}</span>
+              <span>${rank}. ${d.id}</span>
               <span>${p.points || 0}</span>
             </div>`;
           rank++;
@@ -180,6 +180,7 @@
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
+      // Housing Overlay
       map.addSource('housing-overlay', {
         type: 'image',
         url: 'housing-overlay.png',
@@ -192,6 +193,7 @@
       });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
+      // Race Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
@@ -203,6 +205,7 @@
         });
       }
 
+      // University Courtyards
       if(courtyards) {
         map.addSource('courtyards', { type: 'geojson', data: courtyards });
         map.addLayer({
@@ -211,6 +214,7 @@
         });
       }
 
+      // Bricks and Endpoints
       if(brickData && brickData.features.length > 0) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
@@ -250,6 +254,7 @@
           }
         });
 
+        // Player Symbol Layer
         map.addSource('players', {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] }
@@ -269,49 +274,52 @@
       }
     });
 
+    // Redemption Logic with Security Rules Compliance
     window.validateCode = async () => {
       const username = document.getElementById('username').value.trim();
       const code = document.getElementById('redeemCode').value.trim();
       if (!username || !code) return alert("Enter username and code!");
 
       try {
-        const playerRef = window.doc(window.db, "players", username);
+        const playerRef = window.doc(window.db, "penguins", username);
         const codeRef = window.doc(window.db, "codes", code);
+        const claimRef = window.doc(window.db, "globalClaims", code);
 
         await window.runTransaction(window.db, async (tx) => {
-          const playerSnap = await tx.get(playerRef);
-          if (!playerSnap.exists()) throw "Username not found";
-
           const codeSnap = await tx.get(codeRef);
           if (!codeSnap.exists()) throw "Invalid code";
-          if (codeSnap.data().used) throw "Code already used";
+          
+          const claimSnap = await tx.get(claimRef);
+          if (claimSnap.exists()) throw "Code already claimed!";
 
-          const earned = codeSnap.data().points;
+          const playerSnap = await tx.get(playerRef);
+          if (!playerSnap.exists()) throw "User not found";
+
+          const earned = codeSnap.data().points || 0;
           const player = playerSnap.data();
-
           const newPoints = (player.points || 0) + earned;
           const pointsPerBrick = totalPoints / allBricks.length;
-          const newBrickIndex = Math.min(
-            allBricks.length - 1,
-            Math.floor(newPoints / pointsPerBrick)
-          );
+          const newBrickIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
 
+          // Rule compliance: update player (points, visitedCategories, lastUpdated)
           tx.update(playerRef, {
             points: newPoints,
-            brickIndex: newBrickIndex
+            visitedCategories: player.visitedCategories || [],
+            lastUpdated: window.serverTimestamp()
           });
 
-          tx.update(codeRef, {
-            used: true,
-            usedBy: username,
-            usedAt: window.serverTimestamp()
+          // Rule compliance: create global claim to prevent code reuse
+          tx.set(claimRef, {
+            codeId: code,
+            claimedBy: username,
+            claimedAt: window.serverTimestamp()
           });
 
           const nextCoords = allBricks[newBrickIndex].geometry.coordinates;
           updatePlayerOnMap(username, nextCoords);
 
           document.getElementById('score-display').innerText =
-            `Progress: ${Math.floor(newBrickIndex * pointsPerBrick)} / ${totalPoints} Points`;
+            `Progress: ${Math.floor(newPoints)} / ${totalPoints} Points`;
 
           let newBearing = map.getBearing();
           if (newBrickIndex >= 43) newBearing -= 90;
@@ -320,6 +328,8 @@
         });
 
         document.getElementById('redeemCode').value = "";
+        alert("Code successfully redeemed!");
+
       } catch (err) {
         alert(err);
       }
