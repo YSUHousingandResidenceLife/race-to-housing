@@ -172,7 +172,7 @@
         directionalLight.position.set(0, -70, 100).normalize();
         this.scene.add(directionalLight);
         const loader = new THREE.GLTFLoader();
-        loader.load('penguin pete.glb', (gltf) => {
+        loader.load('penguinpete.glb', (gltf) => {
           this.scene.add(gltf.scene);
           penguinModel = gltf.scene;
         });
