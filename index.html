@@ -180,19 +180,28 @@
         // Toggle arrow visibility logic
         map.setLayoutProperty('marker-labels', 'text-allow-overlap', true);
 
-        map.addSource('player', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint } }] }
-        });
+  // REPLACEMENT: supports 350+ players (one penguin image, many points)
 
-        map.addLayer({
-          id: 'player-layer',
-          type: 'symbol',
-          source: 'player',
-          layout: { 'icon-image': 'penguin', 'icon-size': 0.2, 'icon-anchor': 'bottom', 'icon-allow-overlap': true }
-        });
-      }
-    });
+map.addSource('players', {
+  type: 'geojson',
+  data: {
+    type: 'FeatureCollection',
+    features: [] // filled dynamically with all players
+  }
+});
+
+map.addLayer({
+  id: 'players-layer',
+  type: 'symbol',
+  source: 'players',
+  layout: {
+    'icon-image': 'penguin',
+    'icon-size': 0.2,
+    'icon-anchor': 'bottom',
+    'icon-allow-overlap': true
+  }
+});
+
 
     window.validateCode = () => {
       const user = document.getElementById('username').value;
