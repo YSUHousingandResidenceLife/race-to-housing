@@ -131,29 +131,36 @@
       };
     }
 
-    function liveLeaderboard() {
-      if (!window.db || !window.query) { setTimeout(liveLeaderboard, 500); return; }
-      const q = window.query(
-        window.collection(window.db, "penguins"),
-        window.orderBy("points", "desc"),
-        window.limit(7)
-      );
+function liveLeaderboard() {
+  if (!window.db || !window.query) { 
+    setTimeout(liveLeaderboard, 500); 
+    return; 
+  }
+  
+  // Use window. to access Firebase functions from the module script
+  const q = window.query(
+    window.collection(window.db, "players"), 
+    window.orderBy("points", "desc"),
+    window.limit(7)
+  );
 
-      window.onSnapshot(q, (snap) => {
-        const list = document.getElementById("leaderboard-list");
-        list.innerHTML = "";
-        let rank = 1;
-        snap.forEach(d => {
-          const p = d.data();
-          list.innerHTML += `
-            <div class="leader-item">
-              <span>${rank}. ${d.id}</span>
-              <span>${p.points || 0}</span>
-            </div>`;
-          rank++;
-        });
-      });
-    }
+  window.onSnapshot(q, (snap) => {
+    const list = document.getElementById("leaderboard-list");
+    list.innerHTML = "";
+    let rank = 1;
+    
+    snap.forEach(d => {
+      const p = d.data();
+      // d.id is the username (the Document ID from your screenshot)
+      list.innerHTML += `
+        <div class="leader-item">
+          <span>${rank}. ${d.id}</span>
+          <span>${p.points || 0}</span>
+        </div>`;
+      rank++;
+    });
+  });
+}
 
     function updatePlayerOnMap(username, coords) {
       const src = map.getSource('players');
