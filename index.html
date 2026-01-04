@@ -3,72 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>Race to Housing — Brick Dots Editor</title>
+  <title>Race to Housing — Path Viewer</title>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
     html, body { height:100%; margin:0; }
     #map { position:absolute; inset:0; }
-
-    /* Top-left control panel */
-    .panel {
-      position: absolute;
-      top: 12px; left: 12px;
-      background: rgba(255,255,255,0.92);
-      backdrop-filter: blur(4px);
-      border-radius: 12px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
-      padding: 10px 12px;
-      font: 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      z-index: 10;
-      min-width: 260px;
-    }
-    .panel h1 { font-size: 14px; margin: 0 0 8px; font-weight: 700; }
-    .row { display:flex; gap:8px; align-items:center; margin:6px 0; flex-wrap: wrap; }
-    .row label { display:flex; align-items:center; gap:6px; }
-    .row input[type="text"]{ flex:1; padding:6px 8px; border-radius:8px; border:1px solid #ddd; }
-    .buttons { display:flex; gap:8px; flex-wrap: wrap; }
-    button {
-      appearance: none; border: none; cursor: pointer; padding: 8px 10px;
-      border-radius: 10px; background: #111; color: #fff; font-weight: 600;
-    }
-    button.secondary { background:#E4002B; }
-    button.ghost { background:#f2f2f2; color:#111; }
-    .hint { font-size:12px; color:#555; margin-top:4px; }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <div class="panel">
-    <h1>Brick Dots — Edit Mode</h1>
-    <div class="row">
-      <label><input type="checkbox" id="editToggle" /> Enable edit (click map to add)</label>
-    </div>
-    
-    <div class="row">
-      <label>Last Brick Rotation: <input type="range" id="brickRotate" min="0" max="360" value="123" /></label>
-      <span id="rotateVal">123°</span>
-    </div>
-
-    <div class="row">
-      <input id="defaultNote" type="text" placeholder="Optional note used if you don't type one on click…" />
-    </div>
-    <div class="buttons">
-      <button id="undoBtn" class="ghost" title="Remove the last dot">Undo</button>
-      <button id="clearBtn" class="ghost" title="Remove all dots">Clear</button>
-      <button id="downloadBtn" class="secondary" title="Download dots as GeoJSON">Download JSON</button>
-      <label for="fileInput" style="display:inline-block;">
-        <button class="ghost" title="Load a previously saved GeoJSON">Load JSON</button>
-        <input id="fileInput" type="file" accept="application/geo+json,.geojson,application/json,.json" style="display:none;" />
-      </label>
-    </div>
-    <div class="hint">Slider rotates only the <b>last</b> brick placed.</div>
-  </div>
-
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
+    // === Config ===
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
     const COURTYARDS_URL = 'university_courtyards.geojson';
+    const BRICKS_FILE_URL = 'race_bricks.geojson';
+    
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     const map = new mapboxgl.Map({
@@ -82,33 +33,31 @@
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
-    function download(filename, text) {
-      const blob = new Blob([text], {type: 'application/geo+json'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
 
-    let nextIsRed = true; 
-    const dots = { type:'FeatureCollection', features: [] };
-
-    function syncRectangles() {
+    /**
+     * Converts Point coordinates into Rectangle Polygons based on the saved rotation
+     */
+    function processBricks(data) {
       const sizeLng = 0.00005; 
       const sizeLat = 0.00009;
-      const sliderVal = document.getElementById('brickRotate').value;
-      document.getElementById('rotateVal').innerText = sliderVal + '°';
 
-      const polygonDots = {
+      return {
         type: 'FeatureCollection',
-        features: dots.features.map(f => {
+        features: data.features.map(f => {
+          if (!f.geometry || f.geometry.type !== 'Point') return null;
+          
           const [lng, lat] = f.geometry.coordinates;
-          const brickAngle = (f.properties.rotation !== undefined) ? f.properties.rotation : sliderVal;
+          // Use the specific rotation saved for this brick (fallback to 123)
+          const brickAngle = f.properties.rotation || 123;
           const angle = (brickAngle * -1) * (Math.PI / 180);
 
-          const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]];
+          const points = [
+            [-sizeLng, -sizeLat],
+            [sizeLng, -sizeLat],
+            [sizeLng, sizeLat],
+            [-sizeLng, sizeLat]
+          ];
+
           const rotated = points.map(([dx, dy]) => {
             const x = dx * Math.cos(angle) - dy * Math.sin(angle);
             const y = dx * Math.sin(angle) + dy * Math.cos(angle);
@@ -121,146 +70,71 @@
             properties: f.properties,
             geometry: { type: 'Polygon', coordinates: [rotated] }
           };
-        })
+        }).filter(f => f !== null)
       };
-
-      if (map.getSource('dots')) map.getSource('dots').setData(polygonDots);
-      saveLocal();
-    }
-
-    document.getElementById('brickRotate').addEventListener('input', (e) => {
-      if (dots.features.length > 0) {
-        dots.features[dots.features.length - 1].properties.rotation = e.target.value;
-      }
-      syncRectangles();
-    });
-
-    function addDot(lngLat, note) {
-      const color = nextIsRed ? '#E4002B' : '#111111';
-      nextIsRed = !nextIsRed;
-      const currentSlider = document.getElementById('brickRotate').value;
-      
-      dots.features.push({
-        type:'Feature',
-        geometry:{ type:'Point', coordinates:[lngLat.lng, lngLat.lat] },
-        properties:{ 
-          color, 
-          note: note || '', 
-          rotation: currentSlider 
-        }
-      });
-      syncRectangles();
-    }
-
-    function undoDot(){
-      if(dots.features.length === 0) return;
-      nextIsRed = !nextIsRed;
-      dots.features.pop();
-      syncRectangles();
-    }
-
-    function clearDots(){
-      dots.features = [];
-      nextIsRed = true;
-      syncRectangles();
-    }
-
-    function saveLocal(){
-      try { localStorage.setItem('rth_dots_v1', JSON.stringify({dots, nextIsRed})); } catch(e){}
-    }
-
-    function loadLocal(){
-      try {
-        const raw = localStorage.getItem('rth_dots_v1');
-        if(!raw) return;
-        const obj = JSON.parse(raw);
-        if(obj && obj.dots){
-          dots.features = obj.dots.features || [];
-          nextIsRed = obj.nextIsRed !== false;
-          syncRectangles();
-        }
-      } catch(e){}
     }
 
     map.on('load', async () => {
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
-      if(race) map.addSource('race', { type:'geojson', data: race });
-      if(courtyards) map.addSource('courtyards', { type:'geojson', data: courtyards });
+      const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      if(race) map.addLayer({
-        id:'race-buildings', type:'fill-extrusion', source:'race',
-        paint:{
-          'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96,
-          'fill-extrusion-vertical-gradient': false
-        }
-      });
+      // 1. Race Buildings
+      if(race) {
+        map.addSource('race', { type:'geojson', data: race });
+        map.addLayer({
+          id:'race-buildings', type:'fill-extrusion', source:'race',
+          paint:{
+            'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
+            'fill-extrusion-height':['coalesce',['get','height'],22],
+            'fill-extrusion-opacity':0.96,
+            'fill-extrusion-vertical-gradient': false
+          }
+        });
+      }
 
-      if(courtyards) map.addLayer({
-        id:'courtyards-fill3d', type:'fill-extrusion', source:'courtyards',
-        paint:{
-          'fill-extrusion-color':'#78BE20',
-          'fill-extrusion-height':['coalesce',['get','height'],22],
-          'fill-extrusion-opacity':0.96,
-          'fill-extrusion-vertical-gradient': false
-        }
-      });
+      // 2. Courtyards
+      if(courtyards) {
+        map.addSource('courtyards', { type:'geojson', data: courtyards });
+        map.addLayer({
+          id:'courtyards-fill3d', type:'fill-extrusion', source:'courtyards',
+          paint:{
+            'fill-extrusion-color':'#78BE20',
+            'fill-extrusion-height':['coalesce',['get','height'],22],
+            'fill-extrusion-opacity':0.96,
+            'fill-extrusion-vertical-gradient': false
+          }
+        });
+      }
 
+      // 3. Housing Overlay
       map.addSource('housing-overlay', {
-        type:'image', url:'housing-overlay.png',
-        coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]]
+        type:'image',
+        url:'housing-overlay.png',
+        coordinates: [
+          [-80.64760006745172, 41.10229501193964],
+          [-80.65320155001069, 41.10444521963691],
+          [-80.65140971026295, 41.10911312176939],
+          [-80.64580822770398, 41.10696291407212]
+        ]
       });
       map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay', paint:{ 'raster-opacity': 1.0 } });
 
-      map.addSource('dots', { type:'geojson', data: { type:'FeatureCollection', features: [] } });
-      map.addLayer({
-        id: 'dots-layer', type: 'fill', source: 'dots',
-        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 1 }
-      });
-
-      loadLocal();
-
-      map.on('click', (e) => {
-        if(!document.getElementById('editToggle').checked) return;
-        const def = (document.getElementById('defaultNote').value || '').trim();
-        const typed = prompt('Note?', def);
-        addDot(e.lngLat, typed === null ? def : typed);
-      });
-
-      document.getElementById('undoBtn').onclick = undoDot;
-      document.getElementById('clearBtn').onclick = () => confirm('Clear all?') && clearDots();
-      document.getElementById('downloadBtn').onclick = () => download('race_bricks.geojson', JSON.stringify(dots));
-      
-      document.getElementById('fileInput').onchange = (ev) => {
-        const file = ev.target.files[0];
-        if(!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const data = JSON.parse(reader.result);
-          dots.features = data.features || [];
-          syncRectangles();
-        };
-        reader.readAsText(file);
-      };
+      // 4. Bricks
+      if(brickData) {
+        const processed = processBricks(brickData);
+        map.addSource('dots', { type:'geojson', data: processed });
+        map.addLayer({
+          id: 'dots-layer',
+          type: 'fill',
+          source: 'dots',
+          paint: {
+            'fill-color': ['get', 'color'],
+            'fill-opacity': 1
+          }
+        });
+      }
     });
-  </script>
-
-  <script>
-  (() => {
-    const STEP = 0.00001;
-    function getOverlayCoords() { const src = map.getSource('housing-overlay'); return src && src.coordinates; }
-    function setOverlayCoords(coords) { map.getSource('housing-overlay').setCoordinates(coords); }
-    window.addEventListener('keydown', e => {
-      const coords = getOverlayCoords(); if (!coords) return;
-      let dx = 0, dy = 0;
-      if (e.key === 'w') dy += STEP; if (e.key === 's') dy -= STEP;
-      if (e.key === 'a') dx -= STEP; if (e.key === 'd') dx += STEP;
-      if (dx === 0 && dy === 0) return;
-      setOverlayCoords(coords.map(([lng, lat]) => [lng + dx, lat + dy]));
-    });
-  })();
   </script>
 </body>
 </html>
