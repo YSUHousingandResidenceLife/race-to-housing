@@ -140,38 +140,40 @@ function liveLeaderboard() {
   if (!window.db || !window.query) { setTimeout(liveLeaderboard, 500); return; }
   const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
   
-  window.onSnapshot(q, (snap) => {
-    const list = document.getElementById("leaderboard-list");
-    const currentSearch = document.getElementById('username').value.trim();
-    list.innerHTML = "";
+ window.onSnapshot(q, (snap) => {
+  const list = document.getElementById("leaderboard-list");
+  const currentSearch = document.getElementById('username').value.trim();
+  list.innerHTML = "";
+  let rank = 1; // FIX: Define rank here so it resets every time the data updates
+  
+  const playerFeatures = [];
+
+  snap.forEach(d => {
+    const p = d.data();
+    list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
+    rank++; // Increment rank correctly
     
-    const playerFeatures = []; // To store all penguin positions
-
-    snap.forEach(d => {
-      const p = d.data();
-      list.innerHTML += `<div class="leader-item"><span>${rank++}. ${d.id}</span><span>${p.points || 0}</span></div>`;
+    if (allBricks.length > 0) {
+      const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
       
-      if (allBricks.length > 0) {
-        const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
-        // Add a penguin point for every player
-        playerFeatures.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: coords },
-          properties: { name: d.id }
-        });
+      // Add point for the 2D penguin icons
+      playerFeatures.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: coords },
+        properties: { name: d.id }
+      });
 
-        // If this is the current user, move the 3D high-detail model
-        if (d.id === currentSearch) {
-          updatePlayerOnMap(d.id, coords);
-        }
+      // ONLY move the 3D model if it matches the name in the search box
+      if (d.id === currentSearch) {
+        updatePlayerOnMap(d.id, coords);
       }
-    });
-
-    // Sync all player positions to the map source
-    if (map.getSource('players')) {
-      map.getSource('players').setData({ type: 'FeatureCollection', features: playerFeatures });
     }
   });
+
+  if (map.getSource('players')) {
+    map.getSource('players').setData({ type: 'FeatureCollection', features: playerFeatures });
+  }
+});
 }
 
    function updatePlayerOnMap(username, coords) {
