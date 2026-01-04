@@ -10,26 +10,42 @@
     #map { position:absolute; inset:0; }
     .debug-panel {
       position: fixed; bottom: 12px; right: 12px;
-      background: rgba(255,255,255,0.9); padding: 12px;
-      border-radius: 8px; font: 12px monospace; z-index: 9999;
-      border: 1px solid #ccc; width: 240px;
+      background: rgba(255,255,255,0.95); padding: 15px;
+      border-radius: 12px; font: 12px monospace; z-index: 9999;
+      border: 1px solid #ccc; width: 260px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
-    .debug-panel b { display: block; margin-bottom: 5px; }
-    button { width: 100%; margin-top: 5px; cursor: pointer; padding: 5px; }
+    .debug-panel h2 { font-size: 13px; margin: 0 0 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+    .row { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+    button { cursor: pointer; padding: 5px; font-weight: bold; }
+    .active-btn { background: #E4002B; color: white; border: none; border-radius: 4px; }
+    input[type="range"] { width: 100%; }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
   <div class="debug-panel">
-    <b>🚩 Flag Controller</b>
-    <div id="active-flag">Active: None (Click a flag)</div>
-    <div style="margin-top:5px; color:#666;">Use W, A, S, D to move selected flag</div>
-    <button onclick="saveFlagLocs()">Save Flag Locations</button>
-    <hr>
-    <b>🎥 Viewport</b>
+    <h2>🚩 Flag Debugger</h2>
+    
+    <div class="row">
+      <button id="btn-start" class="active-btn" onclick="setActive('start')">HRL START</button>
+      <button id="btn-stop" onclick="setActive('stop')">HRL STOP</button>
+    </div>
+
+    <div class="row">
+      <label>Rotation:</label>
+      <input type="range" id="flagRotate" min="0" max="360" value="0" oninput="updateFlagAttr()">
+    </div>
+    
+    <div style="color:#666; margin-bottom:10px;">Move: W, A, S, D keys</div>
+    
+    <button onclick="saveAndExport()" style="width:100%; background:#111; color:#fff; border:none; padding:8px; border-radius:4px;">Save & Export Coordinates</button>
+    
+    <hr style="margin: 15px 0;">
+    
+    <h2>🎥 Viewport</h2>
     <div id="debug-coords">Move map...</div>
-    <button onclick="copyViewCode()">Copy View Config</button>
+    <button onclick="copyViewCode()" style="width:100%; margin-top:5px;">Copy View Config</button>
   </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
@@ -38,12 +54,12 @@
     const BRICKS_FILE_URL = 'race_bricks.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-    // Default or Saved positions
-    let flagPositions = JSON.parse(localStorage.getItem('hrl_flags')) || {
-      start: [-80.6458, 41.1090],
-      stop: [-80.6460, 41.1092]
+    // Load saved states or defaults
+    let flagState = JSON.parse(localStorage.getItem('hrl_flag_state')) || {
+      start: { coords: [-80.6458, 41.1090], rotate: 0 },
+      stop: { coords: [-80.6460, 41.1092], rotate: 0 }
     };
-    let activeFlag = null;
+    let activeKey = 'start';
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -75,7 +91,6 @@
     }
 
     map.on('load', async () => {
-      // Load Images
       map.loadImage('hrlstart.png', (e, img) => { if(!e) map.addImage('icon-start', img); });
       map.loadImage('hrlstop.png', (e, img) => { if(!e) map.addImage('icon-stop', img); });
 
@@ -93,61 +108,67 @@
         });
       }
 
-      // Bricks
       if(brickData) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
       }
 
-      // Flags Source
       map.addSource('flags', {
         type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: [
-            { type: 'Feature', properties: { id: 'start', icon: 'icon-start' }, geometry: { type: 'Point', coordinates: flagPositions.start } },
-            { type: 'Feature', properties: { id: 'stop', icon: 'icon-stop' }, geometry: { type: 'Point', coordinates: flagPositions.stop } }
-          ]
-        }
+        data: generateFlagGeoJSON()
       });
 
       map.addLayer({
         id: 'flag-layer', type: 'symbol', source: 'flags',
-        layout: { 'icon-image': ['get', 'icon'], 'icon-size': 0.1, 'icon-allow-overlap': true, 'icon-anchor': 'bottom' }
+        layout: { 
+          'icon-image': ['get', 'icon'], 
+          'icon-size': 0.1, 
+          'icon-rotate': ['get', 'rotate'],
+          'icon-allow-overlap': true, 
+          'icon-anchor': 'bottom' 
+        }
       });
-
-      // Selection logic
-      map.on('click', 'flag-layer', (e) => {
-        activeFlag = e.features[0].properties.id;
-        document.getElementById('active-flag').innerText = "Active: " + activeFlag.toUpperCase();
-      });
+      
+      document.getElementById('flagRotate').value = flagState[activeKey].rotate;
     });
 
-    // Keyboard Movement (W,A,S,D)
+    function generateFlagGeoJSON() {
+      return {
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', properties: { id: 'start', icon: 'icon-start', rotate: flagState.start.rotate }, geometry: { type: 'Point', coordinates: flagState.start.coords } },
+          { type: 'Feature', properties: { id: 'stop', icon: 'icon-stop', rotate: flagState.stop.rotate }, geometry: { type: 'Point', coordinates: flagState.stop.coords } }
+        ]
+      };
+    }
+
+    window.setActive = (key) => {
+      activeKey = key;
+      document.getElementById('btn-start').className = key === 'start' ? 'active-btn' : '';
+      document.getElementById('btn-stop').className = key === 'stop' ? 'active-btn' : '';
+      document.getElementById('flagRotate').value = flagState[key].rotate;
+    };
+
+    window.updateFlagAttr = () => {
+      flagState[activeKey].rotate = parseInt(document.getElementById('flagRotate').value);
+      map.getSource('flags').setData(generateFlagGeoJSON());
+    };
+
     window.addEventListener('keydown', e => {
-      if (!activeFlag) return;
       const STEP = 0.00001;
-      let [lng, lat] = flagPositions[activeFlag];
+      let [lng, lat] = flagState[activeKey].coords;
       if (e.key === 'w') lat += STEP;
       if (e.key === 's') lat -= STEP;
       if (e.key === 'a') lng -= STEP;
       if (e.key === 'd') lng += STEP;
-      
-      flagPositions[activeFlag] = [lng, lat];
-      
-      map.getSource('flags').setData({
-        type: 'FeatureCollection',
-        features: [
-          { type: 'Feature', properties: { id: 'start', icon: 'icon-start' }, geometry: { type: 'Point', coordinates: flagPositions.start } },
-          { type: 'Feature', properties: { id: 'stop', icon: 'icon-stop' }, geometry: { type: 'Point', coordinates: flagPositions.stop } }
-        ]
-      });
+      flagState[activeKey].coords = [lng, lat];
+      map.getSource('flags').setData(generateFlagGeoJSON());
     });
 
-    window.saveFlagLocs = () => {
-      localStorage.setItem('hrl_flags', JSON.stringify(flagPositions));
-      console.log("SAVED FLAG POSITIONS:", flagPositions);
-      alert("Flag positions saved locally!");
+    window.saveAndExport = () => {
+      localStorage.setItem('hrl_flag_state', JSON.stringify(flagState));
+      console.log("FINAL FLAG CONFIG:", JSON.stringify(flagState, null, 2));
+      alert("Flag data saved and logged to Console (F12)!");
     };
 
     window.copyViewCode = () => {
