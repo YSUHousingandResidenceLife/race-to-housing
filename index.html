@@ -222,6 +222,24 @@ map.addLayer({
   }
 });
 
+ function updatePlayerOnMap(username, coords) {
+  const src = map.getSource('players');
+  const data = src._data || { type: 'FeatureCollection', features: [] };
+
+  const i = data.features.findIndex(f => f.properties?.username === username);
+
+  const feature = {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: coords },
+    properties: { username }
+  };
+
+  if (i >= 0) data.features[i] = feature;
+  else data.features.push(feature);
+
+  src.setData(data);
+}
+       
 
   window.validateCode = async () => {
   const username = document.getElementById('username').value.trim();
