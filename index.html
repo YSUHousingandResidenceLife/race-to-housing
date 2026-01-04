@@ -6,18 +6,71 @@
   <title>Race to Housing — Path Viewer</title>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
   <style>
-    html, body { height:100%; margin:0; }
+    html, body { height:100%; margin:0; overflow: hidden; }
     #map { position:absolute; inset:0; }
+
+    /* Left Console: Leaderboard */
+    .console-left {
+      position: absolute; bottom: 20px; left: 20px;
+      width: 220px; background: rgba(17, 17, 17, 0.9);
+      color: white; padding: 15px; border-radius: 12px;
+      font-family: system-ui, sans-serif; z-index: 10;
+      border: 2px solid #E4002B; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
+    .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 4px 0; }
+
+    /* Right Console: Redeem */
+    .console-right {
+      position: absolute; bottom: 20px; right: 20px;
+      width: 260px; background: rgba(255, 255, 255, 0.95);
+      padding: 15px; border-radius: 12px;
+      font-family: system-ui, sans-serif; z-index: 10;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .console-right input { width: 90%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; }
+    .console-right button { width: 100%; padding: 10px; cursor: pointer; border-radius: 6px; border: none; font-weight: bold; transition: 0.2s; }
+    .btn-redeem { background: #E4002B; color: white; margin-bottom: 5px; }
+    .btn-help { background: #eee; color: #333; }
+    .btn-redeem:hover { background: #b30022; }
+
+    #score-display { font-weight: bold; color: #E4002B; margin-bottom: 10px; text-align: center; display: block; }
   </style>
 </head>
 <body>
   <div id="map"></div>
+
+  <div class="console-left">
+    <h2>Top 7 Players</h2>
+    <div id="leaderboard-list">
+      <div class="leader-item"><span>1. Pete_G</span><span>850</span></div>
+      <div class="leader-item"><span>2. Guinevere</span><span>720</span></div>
+      <div class="leader-item"><span>3. YSU_Fan</span><span>610</span></div>
+      <div class="leader-item"><span>4. Penguin1</span><span>450</span></div>
+      <div class="leader-item"><span>5. Bricker</span><span>300</span></div>
+      <div class="leader-item"><span>6. Housing_H</span><span>150</span></div>
+      <div class="leader-item"><span>7. Newbie</span><span>25</span></div>
+    </div>
+  </div>
+
+  <div class="console-right">
+    <span id="score-display">Progress: 0 / 850 Points</span>
+    <input type="text" id="username" placeholder="Enter Username..." />
+    <input type="text" id="redeemCode" placeholder="Enter Redemption Code..." />
+    <button class="btn-redeem" onclick="validateCode()">Redeem Code</button>
+    <button class="btn-help" onclick="window.location.href='instructions.html'">Instructions</button>
+  </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
     const BRICKS_FILE_URL = 'race_bricks.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+
+    let brickPoints = 0;
+    let currentBrickIndex = 0;
+    let totalPoints = 850;
+    let allBricks = [];
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -32,6 +85,10 @@
 
     function processBricks(data) {
       const sizeLng = 0.00005, sizeLat = 0.00009;
+      allBricks = data.features;
+      // Calculate value of each brick
+      brickPoints = totalPoints / allBricks.length;
+
       return {
         type: 'FeatureCollection',
         features: data.features.map(f => {
@@ -52,20 +109,13 @@
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // 1. Housing Overlay
-      map.addSource('housing-overlay', {
-        type: 'image',
-        url: 'housing-overlay.png',
-        coordinates: [
-          [-80.64760006745172, 41.10229501193964],
-          [-80.65320155001069, 41.10444521963691],
-          [-80.65140971026295, 41.10911312176939],
-          [-80.64580822770398, 41.10696291407212]
-        ]
+      // Player Penguin Image
+      map.loadImage('https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Emperor_Penguin_Manchot_empereur.png/100px-Emperor_Penguin_Manchot_empereur.png', (error, image) => {
+          if (error) throw error;
+          map.addImage('penguin', image);
       });
-      map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
-      // 2. Buildings
+      // Buildings & Path
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
@@ -77,47 +127,69 @@
         });
       }
 
-      // 3. Bricks and Dynamic Signs
       if(brickData && brickData.features.length > 0) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
 
-        // Identify Start (first index) and End (last index) from JSON
-        const startPoint = brickData.features[0].geometry.coordinates;
-        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
-
-        map.addSource('endpoints', {
+        // Add Player Source
+        map.addSource('player', {
           type: 'geojson',
           data: {
             type: 'FeatureCollection',
-            features: [
-              { type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } },
-              { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }
-            ]
+            features: [{
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: allBricks[0].geometry.coordinates }
+            }]
           }
         });
 
-        // Floating Labels
         map.addLayer({
-          id: 'endpoint-labels',
+          id: 'player-layer',
           type: 'symbol',
-          source: 'endpoints',
-          layout: {
-            'text-field': ['get', 'label'],
-            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-            'text-size': 14,
-            'text-letter-spacing': 0.1,
-            'text-offset': [0, -2], // Floats it above the point
-            'text-anchor': 'bottom'
-          },
-          paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': ['get', 'color'],
-            'text-halo-width': 3
-          }
+          source: 'player',
+          layout: { 'icon-image': 'penguin', 'icon-size': 0.2, 'icon-allow-overlap': true, 'icon-anchor': 'bottom' }
         });
       }
     });
+
+    // GAME LOGIC
+    window.validateCode = () => {
+      const user = document.getElementById('username').value;
+      const code = document.getElementById('redeemCode').value;
+
+      if (!user) { alert("Please enter a username first."); return; }
+      
+      // Simple validation: if code is not empty, move penguin one brick forward
+      if (code.length > 2) {
+        if (currentBrickIndex < allBricks.length - 1) {
+          currentBrickIndex++;
+          const nextCoords = allBricks[currentBrickIndex].geometry.coordinates;
+          
+          // Move Player
+          map.getSource('player').setData({
+            type: 'FeatureCollection',
+            features: [{
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: nextCoords }
+            }]
+          });
+
+          // Update Score
+          const currentScore = Math.floor(currentBrickIndex * brickPoints);
+          document.getElementById('score-display').innerText = `Progress: ${currentScore} / 850 Points`;
+          
+          // Clear code field
+          document.getElementById('redeemCode').value = "";
+          
+          // Center camera on player
+          map.flyTo({ center: nextCoords, speed: 0.5 });
+        } else {
+          alert("Path Complete! You reached Housing!");
+        }
+      } else {
+        alert("Invalid Code. Please try again.");
+      }
+    };
   </script>
 </body>
 </html>
