@@ -61,6 +61,7 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
+    const COURTYARDS_URL = 'university_courtyards.geojson';
     const BRICKS_FILE_URL = 'race_bricks.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
@@ -105,6 +106,7 @@
       });
 
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
+      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
       // 1. Housing Overlay
@@ -128,6 +130,19 @@
           paint:{
             'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
             'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96
+          }
+        });
+      }
+
+      // NEW: University Courtyards
+      if(courtyards) {
+        map.addSource('courtyards', { type: 'geojson', data: courtyards });
+        map.addLayer({
+          id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards',
+          paint: {
+            'fill-extrusion-color': '#78BE20',
+            'fill-extrusion-height': 22,
+            'fill-extrusion-opacity': 0.96
           }
         });
       }
@@ -203,7 +218,17 @@
         const currentScore = Math.floor(currentBrickIndex * pointsPerBrick);
         document.getElementById('score-display').innerText = `Progress: ${currentScore} / 850 Points`;
         
-        map.flyTo({ center: nextCoords, duration: 1000 });
+        // POINT LEFT AT BRICK 43: Rotate bearing by -90 degrees
+        let newBearing = map.getBearing();
+        if (currentBrickIndex === 43) {
+            newBearing -= 90;
+        }
+
+        map.flyTo({ 
+            center: nextCoords, 
+            duration: 1000,
+            bearing: newBearing
+        });
         document.getElementById('redeemCode').value = "";
       } else {
         alert("You have reached the finish line!");
