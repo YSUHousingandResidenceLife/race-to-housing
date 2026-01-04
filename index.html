@@ -42,6 +42,7 @@
     doc,
     collection,
     query,
+    where,
     orderBy,
     limit,
     runTransaction,
@@ -67,6 +68,7 @@
   window.doc = doc;
   window.collection = collection;
   window.query = query;
+  window.where = where;
   window.orderBy = orderBy;
   window.limit = limit;
   window.runTransaction = runTransaction;
@@ -137,9 +139,10 @@ function liveLeaderboard() {
     return; 
   }
   
-  // Use window. to access Firebase functions from the module script
+// Use window. to access Firebase functions from the module script
   const q = window.query(
     window.collection(window.db, "players"), 
+    window.where("points", ">", 0), // Only show active players with more than 0 points
     window.orderBy("points", "desc"),
     window.limit(7)
   );
