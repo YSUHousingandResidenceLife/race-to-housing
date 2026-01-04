@@ -102,7 +102,9 @@
 
     let allBricks = [];
     const totalPoints = 1000;
-    let penguinModel; 
+    const modelAltitude = 0;
+    const modelRotate = [Math.PI / 2, 0, 0];
+    let modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat([-80.64848, 41.10985], modelAltitude);
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -155,12 +157,6 @@
       });
     }
 
-    // 3D Model Configuration
-    const modelOrigin = [-80.64848, 41.10985];
-    const modelAltitude = 0;
-    const modelRotate = [Math.PI / 2, 0, 0];
-    let modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(modelOrigin, modelAltitude);
-
     const customLayer = {
       id: '3d-model',
       type: 'custom',
@@ -173,8 +169,8 @@
         this.scene.add(directionalLight);
         const loader = new THREE.GLTFLoader();
         loader.load('penguinpete.glb', (gltf) => {
+          gltf.scene.scale.set(25, 25, 25); 
           this.scene.add(gltf.scene);
-          penguinModel = gltf.scene;
         });
         this.map = map;
         this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
@@ -249,7 +245,7 @@
           const codeSnap = await tx.get(codeRef);
           if (!codeSnap.exists()) throw "Invalid code";
           const claimSnap = await tx.get(claimRef);
-          if (claimSnap.exists()) throw "Code already claimed!";
+          if (claimSnap.exists()) throw "Code already used!";
           const playerSnap = await tx.get(playerRef);
           if (!playerSnap.exists()) throw "User not found!";
           const earned = codeSnap.data().points || 0;
