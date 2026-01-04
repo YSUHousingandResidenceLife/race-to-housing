@@ -25,10 +25,10 @@
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
-      center: [-80.6458, 41.1090],
-      zoom: 16.8,
-      pitch: 60,
-      bearing: -143.6
+      center: [-80.64848, 41.10985],
+      zoom: 16.72,
+      pitch: 60.0,
+      bearing: -172.0
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
@@ -135,50 +135,6 @@
         });
       }
     });
-  </script>
-<div id="view-debug" style="position:fixed; bottom:12px; right:12px; background:rgba(255,255,255,0.9); padding:10px; border-radius:8px; font:11px monospace; z-index:9999; box-shadow:0 2px 10px rgba(0,0,0,0.2); border:1px solid #ccc; width:220px;">
-  <div style="font-weight:bold; margin-bottom:5px; border-bottom:1px solid #ddd;">Viewport Debugger</div>
-  <div id="debug-coords">Move map to see data...</div>
-  <button onclick="copyViewCode()" style="margin-top:8px; width:100%; cursor:pointer; padding:4px; background:#111; color:#fff; border-radius:4px; border:none; font-weight:bold;">Copy Config Code</button>
-</div>
-
-<script>
-(() => {
-  const debugEl = document.getElementById('debug-coords');
-  
-  function updateDebug() {
-    const center = map.getCenter();
-    const zoom = map.getZoom().toFixed(2);
-    const bearing = map.getBearing().toFixed(1);
-    const pitch = map.getPitch().toFixed(1);
-    
-    debugEl.innerHTML = `
-      <b>Center:</b> [${center.lng.toFixed(5)}, ${center.lat.toFixed(5)}]<br>
-      <b>Zoom:</b> ${zoom}<br>
-      <b>Bearing:</b> ${bearing}<br>
-      <b>Pitch:</b> ${pitch}
-    `;
-  }
-
-  // Update on every movement
-  map.on('move', updateDebug);
-  updateDebug();
-
-  // Function to export code for your Map config
-  window.copyViewCode = () => {
-    const center = map.getCenter();
-    const code = `
-      center: [${center.lng.toFixed(5)}, ${center.lat.toFixed(5)}],
-      zoom: ${map.getZoom().toFixed(2)},
-      pitch: ${map.getPitch().toFixed(1)},
-      bearing: ${map.getBearing().toFixed(1)}
-    `;
-    
-    navigator.clipboard.writeText(code).then(() => {
-      alert("Coordinates copied! Paste them into your 'const map = new mapboxgl.Map' section.");
-    });
-  };
-})();
 </script>
 
   
