@@ -152,6 +152,7 @@
               updatePlayerOnMap(d.id, coords);
           }
           rank++;
+          updatePlayerOnMap(d.id, allBricks[p.brickIndex || 0].geometry.coordinates);
         });
       });
     }
@@ -174,7 +175,7 @@
         this.scene.add(directionalLight);
         const loader = new THREE.GLTFLoader();
         loader.load('penguinpete.glb', (gltf) => {
-          gltf.scene.scale.set(35, 35, 35);
+          gltf.scene.scale.set(10, 10, 10);
           this.scene.add(gltf.scene);
         });
         this.map = map;
@@ -190,7 +191,7 @@
           .makeTranslation(modelAsMercatorCoordinate.x, modelAsMercatorCoordinate.y, modelAsMercatorCoordinate.z)
           .scale(new THREE.Vector3(modelAsMercatorCoordinate.meterInMercatorCoordinateUnits(), -modelAsMercatorCoordinate.meterInMercatorCoordinateUnits(), modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()))
           .multiply(rotationX).multiply(rotationY).multiply(rotationZ);
-        this.camera.projectionMatrix = m.multiply(l);
+        this.camera.projectionMatrix.copy(m).multiply(l);
         this.renderer.resetState();
         this.renderer.render(this.scene, this.camera);
         this.map.triggerRepaint();
