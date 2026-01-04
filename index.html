@@ -292,96 +292,45 @@
       });
     });
   </script>
-// --- SIMPLE LOGO DRAG TOOL ---
-let isDragging = false;
-let startCoords = [];
-let overlayCoords = [
-  [-80.64825006745193, 41.102595011939734], 
-  [-80.6538515500109, 41.104745219637], 
-  [-80.65205971026316, 41.109413121769485], 
-  [-80.64645822770419, 41.107262914072216]
-];
 
-map.on('mousedown', 'housing-overlay-layer', (e) => {
-  isDragging = true;
-  startCoords = [e.lngLat.lng, e.lngLat.lat];
-  map.getCanvas().style.cursor = 'grabbing';
-  // Disable map panning while dragging logo
-  map.dragPan.disable();
-});
-
-map.on('mousemove', (e) => {
-  if (!isDragging) return;
-
-  const currentCoords = [e.lngLat.lng, e.lngLat.lat];
-  const lngDiff = currentCoords[0] - startCoords[0];
-  const latDiff = currentCoords[1] - startCoords[1];
-
-  // Update all four corners by the movement difference
-  overlayCoords = overlayCoords.map(c => [c[0] + lngDiff, c[1] + latDiff]);
-  
-  const source = map.getSource('housing-overlay');
-  if (source) source.setCoordinates(overlayCoords);
-  
-  // Reset start point for next frame
-  startCoords = currentCoords;
-});
-
-map.on('mouseup', () => {
-  if (isDragging) {
-    console.log("FINAL LOGO COORDS:", JSON.stringify(overlayCoords));
-    isDragging = false;
-    map.getCanvas().style.cursor = '';
-    map.dragPan.enable();
-  }
-});
-  <!-- === FLOATING LOGO CONTROLLER (DROP-IN) === -->
-<style>
-  #floating-logo{
-    position: fixed;
-    left: 20px;
-    top: 20px;
-    z-index: 9999;
-    pointer-events: none;
-  }
-  #floating-logo img{
-    height: 48px;
-    width: auto;
-    display: block;
-  }
-</style>
-
-<div id="floating-logo">
-  <img src="logo.png" alt="Logo">
-</div>
-
+  <!-- === HOUSING OVERLAY KEYBOARD CONTROLLER (DROP-IN) === -->
 <script>
 (() => {
-  const logo = document.getElementById('floating-logo');
-  let x = 20;
-  let y = 20;
-  const step = 5;
+  const STEP = 0.00001; // movement amount (adjust if needed)
 
-  function update(){
-    logo.style.left = x + 'px';
-    logo.style.top  = y + 'px';
-    console.clear();
-    console.log('LOGO POSITION →');
-    console.log('left:', x + 'px');
-    console.log('top :', y + 'px');
+  function getOverlayCoords() {
+    const src = map.getSource('housing-overlay');
+    return src && src.coordinates;
   }
 
-  update();
+  function setOverlayCoords(coords) {
+    map.getSource('housing-overlay').setCoordinates(coords);
+    console.clear();
+    console.log('HOUSING OVERLAY COORDINATES:');
+    coords.forEach((c, i) => {
+      console.log(`corner ${i}:`, c);
+    });
+  }
 
   window.addEventListener('keydown', e => {
-    if (e.key === 'w') y -= step;
-    if (e.key === 's') y += step;
-    if (e.key === 'a') x -= step;
-    if (e.key === 'd') x += step;
-    update();
+    const coords = getOverlayCoords();
+    if (!coords) return;
+
+    let dx = 0, dy = 0;
+
+    if (e.key === 'w') dy += STEP;
+    if (e.key === 's') dy -= STEP;
+    if (e.key === 'a') dx -= STEP;
+    if (e.key === 'd') dx += STEP;
+
+    if (dx === 0 && dy === 0) return;
+
+    const moved = coords.map(([lng, lat]) => [lng + dx, lat + dy]);
+    setOverlayCoords(moved);
   });
 })();
 </script>
+
 
 </body>
 </html>
