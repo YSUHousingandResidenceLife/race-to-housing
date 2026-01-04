@@ -26,23 +26,17 @@
 
   <div class="debug-panel">
     <h2>🚩 Flag Debugger</h2>
-    
     <div class="row">
       <button id="btn-start" class="active-btn" onclick="setActive('start')">HRL START</button>
       <button id="btn-stop" onclick="setActive('stop')">HRL STOP</button>
     </div>
-
     <div class="row">
       <label>Rotation:</label>
-      <input type="range" id="flagRotate" min="0" max="360" value="0" oninput="updateFlagAttr()">
+      <input type="range" id="flagRotate" min="0" max="360" value="180" oninput="updateFlagAttr()">
     </div>
-    
     <div style="color:#666; margin-bottom:10px;">Move: W, A, S, D keys</div>
-    
     <button onclick="saveAndExport()" style="width:100%; background:#111; color:#fff; border:none; padding:8px; border-radius:4px;">Save & Export Coordinates</button>
-    
     <hr style="margin: 15px 0;">
-    
     <h2>🎥 Viewport</h2>
     <div id="debug-coords">Move map...</div>
     <button onclick="copyViewCode()" style="width:100%; margin-top:5px;">Copy View Config</button>
@@ -54,10 +48,9 @@
     const BRICKS_FILE_URL = 'race_bricks.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-    // Load saved states or defaults
     let flagState = JSON.parse(localStorage.getItem('hrl_flag_state')) || {
-      start: { coords: [-80.6458, 41.1090], rotate: 0 },
-      stop: { coords: [-80.6460, 41.1092], rotate: 0 }
+      start: { coords: [-80.6458, 41.1090], rotate: 180 },
+      stop: { coords: [-80.6460, 41.1092], rotate: 180 }
     };
     let activeKey = 'start';
 
@@ -97,6 +90,19 @@
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
+      // Housing Overlay Fix
+      map.addSource('housing-overlay', {
+        type: 'image',
+        url: 'housing-overlay.png',
+        coordinates: [
+          [-80.64760006745172, 41.10229501193964],
+          [-80.65320155001069, 41.10444521963691],
+          [-80.65140971026295, 41.10911312176939],
+          [-80.64580822770398, 41.10696291407212]
+        ]
+      });
+      map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay', paint: { 'raster-opacity': 1.0 } });
+
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
@@ -113,19 +119,17 @@
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
       }
 
-      map.addSource('flags', {
-        type: 'geojson',
-        data: generateFlagGeoJSON()
-      });
-
+      map.addSource('flags', { type: 'geojson', data: generateFlagGeoJSON() });
       map.addLayer({
         id: 'flag-layer', type: 'symbol', source: 'flags',
         layout: { 
           'icon-image': ['get', 'icon'], 
-          'icon-size': 0.1, 
+          'icon-size': 0.12, 
           'icon-rotate': ['get', 'rotate'],
           'icon-allow-overlap': true, 
-          'icon-anchor': 'bottom' 
+          'icon-anchor': 'bottom',
+          'icon-rotation-alignment': 'map',
+          'icon-pitch-alignment': 'map'
         }
       });
       
@@ -155,7 +159,7 @@
     };
 
     window.addEventListener('keydown', e => {
-      const STEP = 0.00001;
+      const STEP = 0.000005;
       let [lng, lat] = flagState[activeKey].coords;
       if (e.key === 'w') lat += STEP;
       if (e.key === 's') lat -= STEP;
@@ -168,7 +172,7 @@
     window.saveAndExport = () => {
       localStorage.setItem('hrl_flag_state', JSON.stringify(flagState));
       console.log("FINAL FLAG CONFIG:", JSON.stringify(flagState, null, 2));
-      alert("Flag data saved and logged to Console (F12)!");
+      alert("Flag data saved!");
     };
 
     window.copyViewCode = () => {
