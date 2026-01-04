@@ -335,5 +335,53 @@ map.on('mouseup', () => {
     map.dragPan.enable();
   }
 });
+  <!-- === FLOATING LOGO CONTROLLER (DROP-IN) === -->
+<style>
+  #floating-logo{
+    position: fixed;
+    left: 20px;
+    top: 20px;
+    z-index: 9999;
+    pointer-events: none;
+  }
+  #floating-logo img{
+    height: 48px;
+    width: auto;
+    display: block;
+  }
+</style>
+
+<div id="floating-logo">
+  <img src="logo.png" alt="Logo">
+</div>
+
+<script>
+(() => {
+  const logo = document.getElementById('floating-logo');
+  let x = 20;
+  let y = 20;
+  const step = 5;
+
+  function update(){
+    logo.style.left = x + 'px';
+    logo.style.top  = y + 'px';
+    console.clear();
+    console.log('LOGO POSITION →');
+    console.log('left:', x + 'px');
+    console.log('top :', y + 'px');
+  }
+
+  update();
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'w') y -= step;
+    if (e.key === 's') y += step;
+    if (e.key === 'a') x -= step;
+    if (e.key === 'd') x += step;
+    update();
+  });
+})();
+</script>
+
 </body>
 </html>
