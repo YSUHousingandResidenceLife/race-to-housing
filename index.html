@@ -97,7 +97,7 @@
     let allBricks = [];
     const totalPoints = 1000;
     const modelAltitude = 0;
-    const modelRotate = [Math.PI / 2, 0, Math.PI];
+    const modelRotate = [Math.PI / 2, Math.PI, 0];
     let modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat([-80.64848, 41.10985], modelAltitude);
 
     const map = new mapboxgl.Map({
