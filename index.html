@@ -275,65 +275,53 @@
     });
 
     // Redemption Logic with Security Rules Compliance
-    window.validateCode = async () => {
-      const username = document.getElementById('username').value.trim();
-      const code = document.getElementById('redeemCode').value.trim();
-      if (!username || !code) return alert("Enter username and code!");
+window.validateCode = async () => {
+  const username = document.getElementById('username').value.trim();
+  const code = document.getElementById('redeemCode').value.trim();
+  if (!username || !code) return alert("Enter username and code!");
 
-      try {
-        const playerRef = window.doc(window.db, "penguins", username);
-        const codeRef = window.doc(window.db, "codes", code);
-        const claimRef = window.doc(window.db, "globalClaims", code);
+  try {
+    // Changing "penguins" back to "players" to match your screenshot
+    const playerRef = window.doc(window.db, "players", username);
+    const codeRef = window.doc(window.db, "codes", code);
+    const claimRef = window.doc(window.db, "globalClaims", code);
 
-        await window.runTransaction(window.db, async (tx) => {
-          const codeSnap = await tx.get(codeRef);
-          if (!codeSnap.exists()) throw "Invalid code";
-          
-          const claimSnap = await tx.get(claimRef);
-          if (claimSnap.exists()) throw "Code already claimed!";
+    await window.runTransaction(window.db, async (tx) => {
+      const codeSnap = await tx.get(codeRef);
+      if (!codeSnap.exists()) throw "Invalid code";
+      
+      const claimSnap = await tx.get(claimRef);
+      if (claimSnap.exists()) throw "Code already claimed!";
 
-          const playerSnap = await tx.get(playerRef);
-          if (!playerSnap.exists()) throw "User not found";
+      const playerSnap = await tx.get(playerRef);
+      if (!playerSnap.exists()) throw "User not found! (Check if username matches Firebase ID)";
 
-          const earned = codeSnap.data().points || 0;
-          const player = playerSnap.data();
-          const newPoints = (player.points || 0) + earned;
-          const pointsPerBrick = totalPoints / allBricks.length;
-          const newBrickIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
+      const earned = codeSnap.data().points || 0;
+      const player = playerSnap.data();
+      const newPoints = (player.points || 0) + earned;
+      const pointsPerBrick = totalPoints / allBricks.length;
+      const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
 
-          // Rule compliance: update player (points, visitedCategories, lastUpdated)
-          tx.update(playerRef, {
-            points: newPoints,
-            visitedCategories: player.visitedCategories || [],
-            lastUpdated: window.serverTimestamp()
-          });
+      tx.update(playerRef, {
+        points: newPoints,
+        brickIndex: newIndex,
+        lastUpdated: window.serverTimestamp()
+      });
 
-          // Rule compliance: create global claim to prevent code reuse
-          tx.set(claimRef, {
-            codeId: code,
-            claimedBy: username,
-            claimedAt: window.serverTimestamp()
-          });
+      tx.set(claimRef, {
+        codeId: code,
+        claimedBy: username,
+        claimedAt: window.serverTimestamp()
+      });
 
-          const nextCoords = allBricks[newBrickIndex].geometry.coordinates;
-          updatePlayerOnMap(username, nextCoords);
-
-          document.getElementById('score-display').innerText =
-            `Progress: ${Math.floor(newPoints)} / ${totalPoints} Points`;
-
-          let newBearing = map.getBearing();
-          if (newBrickIndex >= 43) newBearing -= 90;
-
-          map.flyTo({ center: nextCoords, duration: 1000, bearing: newBearing });
-        });
-
-        document.getElementById('redeemCode').value = "";
-        alert("Code successfully redeemed!");
-
-      } catch (err) {
-        alert(err);
-      }
-    };
+      const nextCoords = allBricks[newIndex].geometry.coordinates;
+      updatePlayerOnMap(username, nextCoords);
+      document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 850 Points`;
+      map.flyTo({ center: nextCoords, duration: 1000 });
+    });
+    document.getElementById('redeemCode').value = "";
+  } catch (err) { alert(err); }
+};
   </script>
 </body>
 </html>
