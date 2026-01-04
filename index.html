@@ -8,6 +8,8 @@
   <style>
     html, body { height:100%; margin:0; overflow: hidden; }
     #map { position:absolute; inset:0; }
+
+    /* Left Console: Leaderboard */
     .console-left {
       position: absolute; bottom: 20px; left: 20px;
       width: 220px; background: rgba(17, 17, 17, 0.9);
@@ -17,6 +19,8 @@
     }
     .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
     .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; }
+
+    /* Right Console: Redeem */
     .console-right {
       position: absolute; bottom: 20px; right: 20px;
       width: 260px; background: rgba(255, 255, 255, 0.95);
@@ -36,6 +40,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import { getFirestore, doc, collection, query, where, orderBy, limit, runTransaction, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
   const firebaseConfig = {
     apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
     authDomain: "race-to-housing.firebaseapp.com",
@@ -45,17 +50,30 @@
     appId: "1:569695954799:web:93f20901d27bebaeadaa9a",
     measurementId: "G-VQKHZ1ZTWE"
   };
+
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  window.db = db; window.doc = doc; window.collection = collection; window.query = query; window.where = where; window.orderBy = orderBy; window.limit = limit; window.runTransaction = runTransaction; window.serverTimestamp = serverTimestamp; window.onSnapshot = onSnapshot;
+
+  window.db = db;
+  window.doc = doc;
+  window.collection = collection;
+  window.query = query;
+  window.where = where;
+  window.orderBy = orderBy;
+  window.limit = limit;
+  window.runTransaction = runTransaction;
+  window.serverTimestamp = serverTimestamp;
+  window.onSnapshot = onSnapshot;
 </script>
 
 <body>
   <div id="map"></div>
+
   <div class="console-left">
     <h2>Top 7 Players</h2>
     <div id="leaderboard-list"></div>
   </div>
+
   <div class="console-right">
     <span id="score-display">Progress: 0 / 1000 Points</span>
     <input type="text" id="username" placeholder="Username" />
@@ -115,7 +133,6 @@
         let rank = 1; 
         const labelFeatures = [];
         
-        // Reset every placeholder to avoid ghosting
         p1_pos=null; p2_pos=null; p3_pos=null; p4_pos=null; p5_pos=null; p6_pos=null; p7_pos=null;
 
         snap.forEach(d => {
@@ -125,12 +142,12 @@
           const merc = mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude);
           
           if(rank===1) p1_pos = merc;
-          if(rank===2) p2_pos = merc;
-          if(rank===3) p3_pos = merc;
-          if(rank===4) p4_pos = merc;
-          if(rank===5) p5_pos = merc;
-          if(rank===6) p6_pos = merc;
-          if(rank===7) p7_pos = merc;
+          else if(rank===2) p2_pos = merc;
+          else if(rank===3) p3_pos = merc;
+          else if(rank===4) p4_pos = merc;
+          else if(rank===5) p5_pos = merc;
+          else if(rank===6) p6_pos = merc;
+          else if(rank===7) p7_pos = merc;
 
           labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords }, properties: { name: d.id } });
           rank++; 
@@ -151,13 +168,20 @@
         
         const loader = new THREE.GLTFLoader();
         loader.load('penguinpete.glb', (gltf) => { 
-          // 7 Distinct Independent Model Objects
-          this.p1 = gltf.scene.clone(); this.p2 = gltf.scene.clone(); this.p3 = gltf.scene.clone();
-          this.p4 = gltf.scene.clone(); this.p5 = gltf.scene.clone(); this.p6 = gltf.scene.clone();
+          // Independent Model Instances
+          this.p1 = gltf.scene.clone(); 
+          this.p2 = gltf.scene.clone(); 
+          this.p3 = gltf.scene.clone();
+          this.p4 = gltf.scene.clone(); 
+          this.p5 = gltf.scene.clone(); 
+          this.p6 = gltf.scene.clone();
           this.p7 = gltf.scene.clone();
           
-          [this.p1, this.p2, this.p3, this.p4, this.p5, this.p6, this.p7].forEach(p => {
-            p.scale.set(10, 10, 10); p.visible = false; this.scene.add(p);
+          const models = [this.p1, this.p2, this.p3, this.p4, this.p5, this.p6, this.p7];
+          models.forEach(m => {
+            m.scale.set(10, 10, 10); 
+            m.visible = false; 
+            this.scene.add(m);
           });
         });
         this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
@@ -170,21 +194,84 @@
         const rY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
 
-        const drawPlayer = (pos, model) => {
-          if(!pos) { model.visible = false; return; }
-          model.visible = true;
-          const l = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z)
-            .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
-            .multiply(rX).multiply(rY).multiply(rZ);
-          this.camera.projectionMatrix.copy(m).multiply(l);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        };
+        // Independent Logic Block for Rank 1
+        if(p1_pos) {
+            this.p1.visible = true;
+            const l1 = new THREE.Matrix4().makeTranslation(p1_pos.x, p1_pos.y, p1_pos.z)
+              .scale(new THREE.Vector3(p1_pos.meterInMercatorCoordinateUnits(), -p1_pos.meterInMercatorCoordinateUnits(), p1_pos.meterInMercatorCoordinateUnits()))
+              .multiply(rX).multiply(rY).multiply(rZ);
+            this.camera.projectionMatrix.copy(m).multiply(l1);
+            this.renderer.resetState();
+            this.renderer.render(this.scene, this.camera);
+        } else { this.p1.visible = false; }
 
-        drawPlayer(p1_pos, this.p1); drawPlayer(p2_pos, this.p2); drawPlayer(p3_pos, this.p3);
-        drawPlayer(p4_pos, this.p4); drawPlayer(p5_pos, this.p5); drawPlayer(p6_pos, this.p6);
-        drawPlayer(p7_pos, this.p7);
-        map.triggerRepaint();
+        // Independent Logic Block for Rank 2
+        if(p2_pos) {
+            this.p2.visible = true;
+            const l2 = new THREE.Matrix4().makeTranslation(p2_pos.x, p2_pos.y, p2_pos.z)
+              .scale(new THREE.Vector3(p2_pos.meterInMercatorCoordinateUnits(), -p2_pos.meterInMercatorCoordinateUnits(), p2_pos.meterInMercatorCoordinateUnits()))
+              .multiply(rX).multiply(rY).multiply(rZ);
+            this.camera.projectionMatrix.copy(m).multiply(l2);
+            this.renderer.resetState();
+            this.renderer.render(this.scene, this.camera);
+        } else { this.p2.visible = false; }
+
+        // Independent Logic Block for Rank 3
+        if(p3_pos) {
+            this.p3.visible = true;
+            const l3 = new THREE.Matrix4().makeTranslation(p3_pos.x, p3_pos.y, p3_pos.z)
+              .scale(new THREE.Vector3(p3_pos.meterInMercatorCoordinateUnits(), -p3_pos.meterInMercatorCoordinateUnits(), p3_pos.meterInMercatorCoordinateUnits()))
+              .multiply(rX).multiply(rY).multiply(rZ);
+            this.camera.projectionMatrix.copy(m).multiply(l3);
+            this.renderer.resetState();
+            this.renderer.render(this.scene, this.camera);
+        } else { this.p3.visible = false; }
+
+        // Independent Logic Block for Rank 4
+        if(p4_pos) {
+            this.p4.visible = true;
+            const l4 = new THREE.Matrix4().makeTranslation(p4_pos.x, p4_pos.y, p4_pos.z)
+              .scale(new THREE.Vector3(p4_pos.meterInMercatorCoordinateUnits(), -p4_pos.meterInMercatorCoordinateUnits(), p4_pos.meterInMercatorCoordinateUnits()))
+              .multiply(rX).multiply(rY).multiply(rZ);
+            this.camera.projectionMatrix.copy(m).multiply(l4);
+            this.renderer.resetState();
+            this.renderer.render(this.scene, this.camera);
+        } else { this.p4.visible = false; }
+
+        // Independent Logic Block for Rank 5
+        if(p5_pos) {
+            this.p5.visible = true;
+            const l5 = new THREE.Matrix4().makeTranslation(p5_pos.x, p5_pos.y, p5_pos.z)
+              .scale(new THREE.Vector3(p5_pos.meterInMercatorCoordinateUnits(), -p5_pos.meterInMercatorCoordinateUnits(), p5_pos.meterInMercatorCoordinateUnits()))
+              .multiply(rX).multiply(rY).multiply(rZ);
+            this.camera.projectionMatrix.copy(m).multiply(l5);
+            this.renderer.resetState();
+            this.renderer.render(this.scene, this.camera);
+        } else { this.p5.visible = false; }
+
+        // Independent Logic Block for Rank 6
+        if(p6_pos) {
+            this.p6.visible = true;
+            const l6 = new THREE.Matrix4().makeTranslation(p6_pos.x, p6_pos.y, p6_pos.z)
+              .scale(new THREE.Vector3(p6_pos.meterInMercatorCoordinateUnits(), -p6_pos.meterInMercatorCoordinateUnits(), p6_pos.meterInMercatorCoordinateUnits()))
+              .multiply(rX).multiply(rY).multiply(rZ);
+            this.camera.projectionMatrix.copy(m).multiply(l6);
+            this.renderer.resetState();
+            this.renderer.render(this.scene, this.camera);
+        } else { this.p6.visible = false; }
+
+        // Independent Logic Block for Rank 7
+        if(p7_pos) {
+            this.p7.visible = true;
+            const l7 = new THREE.Matrix4().makeTranslation(p7_pos.x, p7_pos.y, p7_pos.z)
+              .scale(new THREE.Vector3(p7_pos.meterInMercatorCoordinateUnits(), -p7_pos.meterInMercatorCoordinateUnits(), p7_pos.meterInMercatorCoordinateUnits()))
+              .multiply(rX).multiply(rY).multiply(rZ);
+            this.camera.projectionMatrix.copy(m).multiply(l7);
+            this.renderer.resetState();
+            this.renderer.render(this.scene, this.camera);
+        } else { this.p7.visible = false; }
+
+        this.map.triggerRepaint();
       }
     };   
 
@@ -193,28 +280,23 @@
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // Layer 1: Rasters
       map.addSource('housing-overlay', { type: 'image', url: 'housing-overlay.png', coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]] });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
-      // Layer 2: Bricks
       if(brickData) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
         
-        // Layer 3: Static Markers
         const startPoint = brickData.features[0].geometry.coordinates;
         const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
         const turnPoint = brickData.features[41].geometry.coordinates;
         map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: turnPoint }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }] } });
         map.addLayer({ id: 'marker-labels', type: 'symbol', source: 'markers', layout: { 'text-field': ['get', 'label'], 'text-size': 14, 'text-offset': [0, -0.5], 'text-anchor': 'bottom', 'text-allow-overlap': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 } });
         
-        // Layer 4: Player Labels
         map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, -1.8], 'text-anchor': 'bottom' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 } });
       }
 
-      // Layer 5: Building Extrusions
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
@@ -224,7 +306,6 @@
         map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
       }
       
-      // Layer 6: 3D Penguins (Final Layer)
       map.addLayer(customLayer);
       liveLeaderboard();
     });
@@ -239,11 +320,10 @@
         const clRef = window.doc(window.db, "globalClaims", code);
         await window.runTransaction(window.db, async (tx) => {
           const cS = await tx.get(cRef); if(!cS.exists()) throw "Invalid Code";
-          const clS = await tx.get(clRef); if(clS.exists()) throw "Code already claimed!";
-          const pS = await tx.get(pRef); if(!pS.exists()) throw "User not found!";
+          const clS = await tx.get(clRef); if(clS.exists()) throw "Already Claimed";
+          const pS = await tx.get(pRef); if(!pS.exists()) throw "User not found";
           const earned = cS.data().points || 0;
-          const curPoints = pS.data().points || 0;
-          const newPoints = curPoints + earned;
+          const newPoints = (pS.data().points || 0) + earned;
           const newIndex = Math.min(allBricks.length-1, Math.floor(newPoints / (totalPoints/allBricks.length)));
           tx.update(pRef, { points: newPoints, brickIndex: newIndex, lastUpdated: window.serverTimestamp() });
           tx.set(clRef, { codeId: code, claimedBy: username, claimedAt: window.serverTimestamp() });
