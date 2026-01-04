@@ -9,41 +9,53 @@
     html, body { height:100%; margin:0; overflow: hidden; }
     #map { position:absolute; inset:0; }
 
-    /* Floating Logo */
-    .logo-container {
-      position: absolute; top: 20px; left: 20px;
-      z-index: 15; pointer-events: none;
+    /* Left Console: Leaderboard */
+    .console-left {
+      position: absolute; bottom: 20px; left: 20px;
+      width: 220px; background: rgba(17, 17, 17, 0.9);
+      color: white; padding: 15px; border-radius: 12px;
+      font-family: system-ui, sans-serif; z-index: 10;
+      border: 2px solid #E4002B; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
-    .logo-container img { height: 60px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
-
-    /* Consoles */
-    .console-left { position: absolute; bottom: 20px; left: 20px; width: 220px; background: rgba(17, 17, 17, 0.9); color: white; padding: 15px; border-radius: 12px; font-family: system-ui, sans-serif; z-index: 10; border: 2px solid #E4002B; }
-    .console-right { position: absolute; bottom: 20px; right: 20px; width: 260px; background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 12px; font-family: system-ui, sans-serif; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+    .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
     .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; }
-    input { width: calc(100% - 20px); padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; }
-    .btn-redeem { width: 100%; padding: 10px; background: #E4002B; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-    #score-display { font-weight: bold; color: #E4002B; margin-bottom: 10px; text-align: center; display: block; }
+
+    /* Right Console: Redeem */
+    .console-right {
+      position: absolute; bottom: 20px; right: 20px;
+      width: 260px; background: rgba(255, 255, 255, 0.95);
+      padding: 15px; border-radius: 12px;
+      font-family: system-ui, sans-serif; z-index: 10;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .console-right input { width: calc(100% - 20px); padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; }
+    .btn-redeem { width: 100%; padding: 10px; background: #E4002B; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
+    .btn-help { width: 100%; padding: 8px; background: #f2f2f2; color: #333; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
+    #score-display { font-weight: bold; color: #E4002B; margin-bottom: 10px; text-align: center; display: block; font-size: 14px; }
   </style>
 </head>
 <body>
-  <div class="logo-container">
-    <img src="logo.png" alt="Race to Housing Logo" onerror="this.style.display='none'">
-  </div>
-
   <div id="map"></div>
 
   <div class="console-left">
     <h2>Top 7 Players</h2>
     <div id="leaderboard-list">
-      <div class="leader-item"><span>Loading Players...</span></div>
+      <div class="leader-item"><span>1. Pete_G</span><span>850</span></div>
+      <div class="leader-item"><span>2. Guinevere</span><span>720</span></div>
+      <div class="leader-item"><span>3. YSU_Fan</span><span>610</span></div>
+      <div class="leader-item"><span>4. Penguin1</span><span>450</span></div>
+      <div class="leader-item"><span>5. Bricker</span><span>300</span></div>
+      <div class="leader-item"><span>6. Housing_H</span><span>150</span></div>
+      <div class="leader-item"><span>7. Newbie</span><span>25</span></div>
     </div>
   </div>
 
   <div class="console-right">
     <span id="score-display">Progress: 0 / 850 Points</span>
     <input type="text" id="username" placeholder="Username" />
-    <input type="text" id="redeemCode" placeholder="Code" />
+    <input type="text" id="redeemCode" placeholder="Redemption Code" />
     <button class="btn-redeem" onclick="validateCode()">Redeem Code</button>
+    <button class="btn-help" onclick="window.location.href='instructions.html'">Instructions</button>
   </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
@@ -53,7 +65,8 @@
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
     let allBricks = [];
-    let currentPos = 0;
+    let currentBrickIndex = 0;
+    const totalPoints = 850;
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -66,65 +79,134 @@
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
-    map.on('load', async () => {
-      // 1. Load All Game Icons
-      const images = [
-        { id: 'icon-start', url: 'hrlstart.png' },
-        { id: 'icon-stop', url: 'hrlstop.png' },
-        { id: 'penguin', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Emperor_Penguin_Manchot_empereur.png/100px-Emperor_Penguin_Manchot_empereur.png' }
-      ];
+    function processBricks(data) {
+      const sizeLng = 0.00005, sizeLat = 0.00009;
+      allBricks = data.features;
+      return {
+        type: 'FeatureCollection',
+        features: data.features.map(f => {
+          const [lng, lat] = f.geometry.coordinates;
+          const angle = ((f.properties.rotation || 123) * -1) * (Math.PI / 180);
+          const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]];
+          const rotated = points.map(([dx, dy]) => [
+            lng + (dx * Math.cos(angle) - dy * Math.sin(angle)),
+            lat + (dx * Math.sin(angle) + dy * Math.cos(angle))
+          ]);
+          rotated.push(rotated[0]);
+          return { type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: [rotated] } };
+        })
+      };
+    }
 
-      images.forEach(img => {
-        map.loadImage(img.url, (err, image) => {
-          if (!err) map.addImage(img.id, image);
-        });
+    map.on('load', async () => {
+      // Load Penguin Player Icon
+      map.loadImage('https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Emperor_Penguin_Manchot_empereur.png/100px-Emperor_Penguin_Manchot_empereur.png', (error, image) => {
+          if (!error) map.addImage('penguin', image);
       });
 
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // 2. Add Sources & Layers
+      // 1. Housing Overlay
+      map.addSource('housing-overlay', {
+        type: 'image',
+        url: 'housing-overlay.png',
+        coordinates: [
+          [-80.64760006745172, 41.10229501193964],
+          [-80.65320155001069, 41.10444521963691],
+          [-80.65140971026295, 41.10911312176939],
+          [-80.64580822770398, 41.10696291407212]
+        ]
+      });
+      map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
+
+      // 2. Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
           id:'race-buildings', type:'fill-extrusion', source:'race',
-          paint:{ 'fill-extrusion-color': '#d6001c', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.9 }
+          paint:{
+            'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
+            'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96
+          }
         });
       }
 
+      // 3. Bricks and Dynamic Signs
       if(brickData && brickData.features.length > 0) {
-        allBricks = brickData.features;
-        map.addSource('dots', { type: 'geojson', data: brickData });
-        
-        // Start Flag
-        map.addSource('start-point', {
-          type: 'geojson',
-          data: { type: 'Feature', geometry: { type: 'Point', coordinates: allBricks[0].geometry.coordinates } }
-        });
-        map.addLayer({ id: 'start-layer', type: 'symbol', source: 'start-point', layout: { 'icon-image': 'icon-start', 'icon-size': 0.15, 'icon-anchor': 'bottom' } });
+        map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
+        map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
 
-        // End Flag
-        map.addSource('stop-point', {
-          type: 'geojson',
-          data: { type: 'Feature', geometry: { type: 'Point', coordinates: allBricks[allBricks.length-1].geometry.coordinates } }
-        });
-        map.addLayer({ id: 'stop-layer', type: 'symbol', source: 'stop-point', layout: { 'icon-image': 'icon-stop', 'icon-size': 0.15, 'icon-anchor': 'bottom' } });
+        const startPoint = brickData.features[0].geometry.coordinates;
+        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
 
-        // Penguin Player
+        map.addSource('endpoints', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: [
+              { type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } },
+              { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }
+            ]
+          }
+        });
+
+        map.addLayer({
+          id: 'endpoint-labels',
+          type: 'symbol',
+          source: 'endpoints',
+          layout: {
+            'text-field': ['get', 'label'],
+            'text-size': 14,
+            'text-offset': [0, -2],
+            'text-anchor': 'bottom'
+          },
+          paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': ['get', 'color'],
+            'text-halo-width': 3
+          }
+        });
+
+        // 4. Penguin Player Layer
         map.addSource('player', {
           type: 'geojson',
-          data: { type: 'Feature', geometry: { type: 'Point', coordinates: allBricks[0].geometry.coordinates } }
+          data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint } }] }
         });
-        map.addLayer({ id: 'player-layer', type: 'symbol', source: 'player', layout: { 'icon-image': 'penguin', 'icon-size': 0.15, 'icon-anchor': 'bottom' } });
+
+        map.addLayer({
+          id: 'player-layer',
+          type: 'symbol',
+          source: 'player',
+          layout: { 'icon-image': 'penguin', 'icon-size': 0.2, 'icon-anchor': 'bottom', 'icon-allow-overlap': true }
+        });
       }
     });
 
+    // Redemption Logic
     window.validateCode = () => {
-      if (currentPos < allBricks.length - 1) {
-        currentPos++;
-        const next = allBricks[currentPos].geometry.coordinates;
-        map.getSource('player').setData({ type: 'Feature', geometry: { type: 'Point', coordinates: next } });
-        map.flyTo({ center: next, duration: 1000 });
+      const user = document.getElementById('username').value;
+      const code = document.getElementById('redeemCode').value;
+
+      if (!user || !code) return alert("Enter username and code!");
+
+      if (currentBrickIndex < allBricks.length - 1) {
+        currentBrickIndex++;
+        const nextCoords = allBricks[currentBrickIndex].geometry.coordinates;
+        
+        map.getSource('player').setData({
+          type: 'FeatureCollection',
+          features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: nextCoords } }]
+        });
+
+        const pointsPerBrick = totalPoints / allBricks.length;
+        const currentScore = Math.floor(currentBrickIndex * pointsPerBrick);
+        document.getElementById('score-display').innerText = `Progress: ${currentScore} / 850 Points`;
+        
+        map.flyTo({ center: nextCoords, duration: 1000 });
+        document.getElementById('redeemCode').value = "";
+      } else {
+        alert("You have reached the finish line!");
       }
     };
   </script>
