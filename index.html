@@ -14,10 +14,9 @@
       border-radius: 12px; font: 12px monospace; z-index: 9999;
       border: 1px solid #ccc; width: 260px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
-    .debug-panel h2 { font-size: 13px; margin: 0 0 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
     .row { margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
-    button { cursor: pointer; padding: 5px; font-weight: bold; }
-    .active-btn { background: #E4002B; color: white; border: none; border-radius: 4px; }
+    button { cursor: pointer; padding: 6px; font-weight: bold; border: 1px solid #ccc; background: #eee; }
+    .active-btn { background: #E4002B; color: white; border: none; }
     input[type="range"] { width: 100%; }
   </style>
 </head>
@@ -25,27 +24,18 @@
   <div id="map"></div>
 
   <div class="debug-panel">
-    <h2>🚩 Flag Debugger</h2>
-    
     <div class="row">
       <button id="btn-start" class="active-btn" onclick="setActive('start')">HRL START</button>
       <button id="btn-stop" onclick="setActive('stop')">HRL STOP</button>
     </div>
 
     <div class="row">
-      <label>Rotation:</label>
-      <input type="range" id="flagRotate" min="0" max="360" value="0" oninput="updateFlagAttr()">
+      <label>Rotate (Upright Fix):</label>
+      <input type="range" id="flagRotate" min="0" max="360" value="0">
     </div>
     
-    <div style="color:#666; margin-bottom:10px;">Move: W, A, S, D keys</div>
-    
-    <button onclick="saveAndExport()" style="width:100%; background:#111; color:#fff; border:none; padding:8px; border-radius:4px;">Save & Export Coordinates</button>
-    
-    <hr style="margin: 15px 0;">
-    
-    <h2>🎥 Viewport</h2>
-    <div id="debug-coords">Move map...</div>
-    <button onclick="copyViewCode()" style="width:100%; margin-top:5px;">Copy View Config</button>
+    <div style="color:#666; margin-bottom:10px;">Move: W, A, S, D</div>
+    <button onclick="saveAndExport()" style="width:100%; background:#111; color:#fff;">Save Positions</button>
   </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
@@ -54,10 +44,9 @@
     const BRICKS_FILE_URL = 'race_bricks.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-    // Load saved states or defaults
     let flagState = JSON.parse(localStorage.getItem('hrl_flag_state')) || {
-      start: { coords: [-80.6458, 41.1090], rotate: 0 },
-      stop: { coords: [-80.6460, 41.1092], rotate: 0 }
+      start: { coords: [-80.6458, 41.1090], rotate: 180 }, // Defaulting to 180 to flip it upright
+      stop: { coords: [-80.6460, 41.1092], rotate: 180 }
     };
     let activeKey = 'start';
 
@@ -70,68 +59,6 @@
       bearing: -133.6
     });
 
-    async function loadJSON(url){ const r = await fetch(url); return r.json(); }
-
-    function processBricks(data) {
-      const sizeLng = 0.00005, sizeLat = 0.00009;
-      return {
-        type: 'FeatureCollection',
-        features: data.features.map(f => {
-          const [lng, lat] = f.geometry.coordinates;
-          const angle = ((f.properties.rotation || 123) * -1) * (Math.PI / 180);
-          const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]];
-          const rotated = points.map(([dx, dy]) => [
-            lng + (dx * Math.cos(angle) - dy * Math.sin(angle)),
-            lat + (dx * Math.sin(angle) + dy * Math.cos(angle))
-          ]);
-          rotated.push(rotated[0]);
-          return { type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: [rotated] } };
-        })
-      };
-    }
-
-    map.on('load', async () => {
-      map.loadImage('hrlstart.png', (e, img) => { if(!e) map.addImage('icon-start', img); });
-      map.loadImage('hrlstop.png', (e, img) => { if(!e) map.addImage('icon-stop', img); });
-
-      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-      const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
-
-      if(race) {
-        map.addSource('race', { type:'geojson', data: race });
-        map.addLayer({
-          id:'race-buildings', type:'fill-extrusion', source:'race',
-          paint:{
-            'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
-            'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96
-          }
-        });
-      }
-
-      if(brickData) {
-        map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
-        map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
-      }
-
-      map.addSource('flags', {
-        type: 'geojson',
-        data: generateFlagGeoJSON()
-      });
-
-      map.addLayer({
-        id: 'flag-layer', type: 'symbol', source: 'flags',
-        layout: { 
-          'icon-image': ['get', 'icon'], 
-          'icon-size': 0.1, 
-          'icon-rotate': ['get', 'rotate'],
-          'icon-allow-overlap': true, 
-          'icon-anchor': 'bottom' 
-        }
-      });
-      
-      document.getElementById('flagRotate').value = flagState[activeKey].rotate;
-    });
-
     function generateFlagGeoJSON() {
       return {
         type: 'FeatureCollection',
@@ -142,6 +69,34 @@
       };
     }
 
+    map.on('load', async () => {
+      map.loadImage('hrlstart.png', (e, img) => { if(!e) map.addImage('icon-start', img); });
+      map.loadImage('hrlstop.png', (e, img) => { if(!e) map.addImage('icon-stop', img); });
+
+      const race = await fetch(GEOJSON_URL).then(r => r.json()).catch(()=>null);
+      if(race) {
+        map.addSource('race', { type:'geojson', data: race });
+        map.addLayer({
+          id:'race-buildings', type:'fill-extrusion', source:'race',
+          paint:{ 'fill-extrusion-color': '#d6001c', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.9 }
+        });
+      }
+
+      map.addSource('flags', { type: 'geojson', data: generateFlagGeoJSON() });
+      map.addLayer({
+        id: 'flag-layer', type: 'symbol', source: 'flags',
+        layout: { 
+          'icon-image': ['get', 'icon'], 
+          'icon-size': 0.12, 
+          'icon-rotate': ['get', 'rotate'],
+          'icon-allow-overlap': true,
+          'icon-rotation-alignment': 'map' // Keeps it relative to the ground
+        }
+      });
+
+      document.getElementById('flagRotate').value = flagState[activeKey].rotate;
+    });
+
     window.setActive = (key) => {
       activeKey = key;
       document.getElementById('btn-start').className = key === 'start' ? 'active-btn' : '';
@@ -149,13 +104,13 @@
       document.getElementById('flagRotate').value = flagState[key].rotate;
     };
 
-    window.updateFlagAttr = () => {
-      flagState[activeKey].rotate = parseInt(document.getElementById('flagRotate').value);
+    document.getElementById('flagRotate').addEventListener('input', (e) => {
+      flagState[activeKey].rotate = parseInt(e.target.value);
       map.getSource('flags').setData(generateFlagGeoJSON());
-    };
+    });
 
     window.addEventListener('keydown', e => {
-      const STEP = 0.00001;
+      const STEP = 0.000005;
       let [lng, lat] = flagState[activeKey].coords;
       if (e.key === 'w') lat += STEP;
       if (e.key === 's') lat -= STEP;
@@ -167,21 +122,9 @@
 
     window.saveAndExport = () => {
       localStorage.setItem('hrl_flag_state', JSON.stringify(flagState));
-      console.log("FINAL FLAG CONFIG:", JSON.stringify(flagState, null, 2));
-      alert("Flag data saved and logged to Console (F12)!");
+      console.log("UPDATED FLAG CONFIG:", JSON.stringify(flagState, null, 2));
+      alert("Saved! Check Console (F12) for coordinates.");
     };
-
-    window.copyViewCode = () => {
-      const c = map.getCenter();
-      const code = `center: [${c.lng.toFixed(5)}, ${c.lat.toFixed(5)}],\nzoom: ${map.getZoom().toFixed(2)},\npitch: ${map.getPitch().toFixed(1)},\nbearing: ${map.getBearing().toFixed(1)}`;
-      navigator.clipboard.writeText(code);
-      alert("View config copied!");
-    };
-
-    map.on('move', () => {
-      const c = map.getCenter();
-      document.getElementById('debug-coords').innerHTML = `L: ${c.lng.toFixed(5)} A: ${c.lat.toFixed(5)}<br>B: ${map.getBearing().toFixed(1)} Z: ${map.getZoom().toFixed(1)}`;
-    });
   </script>
 </body>
 </html>
