@@ -45,6 +45,10 @@
       <label><input type="checkbox" id="editToggle" /> Enable edit (click map to add)</label>
     </div>
     <div class="row">
+      <label>Brick Rotation: <input type="range" id="brickRotate" min="0" max="360" value="123" /></label>
+      <span id="rotateVal">123°</span>
+    </div>
+    <div class="row">
       <input id="defaultNote" type="text" placeholder="Optional note used if you don't type one on click…" />
     </div>
     <div class="buttons">
@@ -96,51 +100,52 @@
     /**
      * Converts Point coordinates into Rectangle Polygons based on the mapfix logic
      */
-function syncRectangles() {
-  // Use these values to control the physical size (bigger = larger brick)
-  const sizeLng = 0.00005; 
-  const sizeLat = 0.00009;
-  
-  // This is the angle of your map (converted to math radians)
-  const angle = -123.6 * (Math.PI / 180);
+    function syncRectangles() {
+      const sizeLng = 0.00005; 
+      const sizeLat = 0.00009;
+      
+      // Get angle from the slider
+      const sliderVal = document.getElementById('brickRotate').value;
+      document.getElementById('rotateVal').innerText = sliderVal + '°';
+      const angle = (sliderVal * -1) * (Math.PI / 180);
 
-  const polygonDots = {
-    type: 'FeatureCollection',
-    features: dots.features.map(f => {
-      const [lng, lat] = f.geometry.coordinates;
+      const polygonDots = {
+        type: 'FeatureCollection',
+        features: dots.features.map(f => {
+          const [lng, lat] = f.geometry.coordinates;
 
-      // The 4 corners of your brick
-      const points = [
-        [-sizeLng, -sizeLat],
-        [sizeLng, -sizeLat],
-        [sizeLng, sizeLat],
-        [-sizeLng, sizeLat]
-      ];
+          const points = [
+            [-sizeLng, -sizeLat],
+            [sizeLng, -sizeLat],
+            [sizeLng, sizeLat],
+            [-sizeLng, sizeLat]
+          ];
 
-      // This math "spins" the brick so it isn't slanted
-      const rotated = points.map(([dx, dy]) => {
-        const x = dx * Math.cos(angle) - dy * Math.sin(angle);
-        const y = dx * Math.sin(angle) + dy * Math.cos(angle);
-        return [lng + x, lat + y];
-      });
+          const rotated = points.map(([dx, dy]) => {
+            const x = dx * Math.cos(angle) - dy * Math.sin(angle);
+            const y = dx * Math.sin(angle) + dy * Math.cos(angle);
+            return [lng + x, lat + y];
+          });
 
-      // Close the shape by repeating the first point
-      rotated.push(rotated[0]);
+          rotated.push(rotated[0]);
 
-      return {
-        type: 'Feature',
-        properties: f.properties,
-        geometry: {
-          type: 'Polygon',
-          coordinates: [rotated]
-        }
+          return {
+            type: 'Feature',
+            properties: f.properties,
+            geometry: {
+              type: 'Polygon',
+              coordinates: [rotated]
+            }
+          };
+        })
       };
-    })
-  };
 
-  map.getSource('dots').setData(polygonDots);
-  saveLocal();
-}
+      map.getSource('dots').setData(polygonDots);
+      saveLocal();
+    }
+
+    // Listener for the slider
+    document.getElementById('brickRotate').addEventListener('input', syncRectangles);
 
     function addDot(lngLat, note) {
       const color = nextIsRed ? '#E4002B' : '#111111';
@@ -168,7 +173,10 @@ function syncRectangles() {
     }
 
     function saveLocal(){
-      try { localStorage.setItem('rth_dots_v1', JSON.stringify({dots, nextIsRed})); } catch(e){}
+      try { 
+        const rotateVal = document.getElementById('brickRotate').value;
+        localStorage.setItem('rth_dots_v1', JSON.stringify({dots, nextIsRed, rotateVal})); 
+      } catch(e){}
     }
 
     function loadLocal(){
@@ -179,6 +187,9 @@ function syncRectangles() {
         if(obj && obj.dots && obj.dots.type === 'FeatureCollection'){
           dots.features = obj.dots.features || [];
           nextIsRed = obj.nextIsRed === false ? false : true;
+          if(obj.rotateVal) {
+            document.getElementById('brickRotate').value = obj.rotateVal;
+          }
           syncRectangles();
         }
       } catch(e){}
@@ -225,10 +236,10 @@ function syncRectangles() {
         type:'image',
         url:'housing-overlay.png',
         coordinates: [
-         [-80.64760006745172, 41.10229501193964],
-  [-80.65320155001069, 41.10444521963691],
-  [-80.65140971026295, 41.10911312176939],
-  [-80.64580822770398, 41.10696291407212]
+          [-80.64760006745172, 41.10229501193964],
+          [-80.65320155001069, 41.10444521963691],
+          [-80.65140971026295, 41.10911312176939],
+          [-80.64580822770398, 41.10696291407212]
         ]
       });
       map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay', paint:{ 'raster-opacity': 1.0 } });
@@ -310,8 +321,7 @@ function syncRectangles() {
     });
   </script>
 
-  <!-- === HOUSING OVERLAY KEYBOARD CONTROLLER (DROP-IN) === -->
-<script>
+  <script>
 (() => {
   const STEP = 0.00001; // movement amount (adjust if needed)
 
