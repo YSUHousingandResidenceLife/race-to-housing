@@ -225,8 +225,24 @@ function liveLeaderboard() {
       }
 
       map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, -3], 'text-anchor': 'bottom' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 } });
-
+map.addLayer({ 
+  id: 'player-name-tags', 
+  type: 'symbol', 
+  source: 'player-labels', 
+  layout: { 
+    'text-field': ['get', 'name'], 
+    'text-size': 14, 
+    'text-offset': [0, -3.5], // Moves label UP (negative Y is up in Mapbox)
+    'text-anchor': 'bottom',   // Anchors the bottom of the text to the offset point
+    'text-allow-overlap': true,
+    'text-ignore-placement': true
+  }, 
+  paint: { 
+    'text-color': '#ffffff', 
+    'text-halo-color': '#000000', 
+    'text-halo-width': 2 
+  } 
+});
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
