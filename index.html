@@ -87,67 +87,79 @@
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
-    function liveLeaderboard() {
-      if (!window.db || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
-      const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
+function liveLeaderboard() {
+  if (!window.db || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
+  const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
+  
+  window.onSnapshot(q, (snap) => {
+    const list = document.getElementById("leaderboard-list");
+    list.innerHTML = "";
+    let rank = 1;
+    const newPositions = [];
+    const labelFeatures = [];
+    const pointsToBrickRatio = totalPoints / (allBricks.length - 1);
+
+    // Track players at the same progress level
+    const overlapTracker = {};
+
+    snap.forEach(d => {
+      const p = d.data();
+      const pts = p.points || 0;
+      list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${Math.floor(pts)}</span></div>`;
+
+      let brickIndex = Math.floor(pts / pointsToBrickRatio);
+      let remainder = (pts % pointsToBrickRatio) / pointsToBrickRatio;
       
-      window.onSnapshot(q, (snap) => {
-        const list = document.getElementById("leaderboard-list");
-        list.innerHTML = "";
-        let rank = 1;
-        const newPositions = [];
-        const labelFeatures = [];
-        const pointsToBrickRatio = totalPoints / (allBricks.length - 1);
+      brickIndex = Math.min(brickIndex, allBricks.length - 1);
+      let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
 
-        // Track how many players land on the exact same point/segment
-        const pointTracker = {};
+      const start = allBricks[brickIndex].geometry.coordinates;
+      const end = allBricks[nextIndex].geometry.coordinates;
 
-        snap.forEach(d => {
-          const p = d.data();
-          const pts = p.points || 0;
-          list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${Math.floor(pts)}</span></div>`;
+      // Base Interpolated Position
+      let lng = start[0] + (end[0] - start[0]) * remainder;
+      let lat = start[1] + (end[1] - start[1]) * remainder;
 
-          // CALCULATION LOGIC:
-          // Find the current brick and the next brick for interpolation
-          let brickIndex = Math.floor(pts / pointsToBrickRatio);
-          let remainder = (pts % pointsToBrickRatio) / pointsToBrickRatio;
-          
-          brickIndex = Math.min(brickIndex, allBricks.length - 1);
-          let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
+      // Calculate direction of path (Bearing)
+      const dx = end[0] - start[0];
+      const dy = end[1] - start[1];
+      const angle = Math.atan2(dy, dx); 
 
-          const start = allBricks[brickIndex].geometry.coordinates;
-          const end = allBricks[nextIndex].geometry.coordinates;
+      // SIDE-BY-SIDE LOGIC
+      // Create a key for this specific progress spot
+      const spotKey = Math.floor(pts); 
+      overlapTracker[spotKey] = (overlapTracker[spotKey] || 0) + 1;
+      
+      if (overlapTracker[spotKey] > 1) {
+        // Shift penguin PERPENDICULAR to the path angle
+        // We use (angle + PI/2) to find the "Right side" of the path
+        const laneWidth = 0.00004; // Adjust this to change spacing between penguins
+        const sideShift = (overlapTracker[spotKey] - 1) * laneWidth;
+        
+        lng += Math.cos(angle + Math.PI / 2) * sideShift;
+        lat += Math.sin(angle + Math.PI / 2) * sideShift;
+      }
 
-          // Interpolate Lng/Lat between current and next brick
-          let lng = start[0] + (end[0] - start[0]) * remainder;
-          let lat = start[1] + (end[1] - start[1]) * remainder;
-
-          // SIDE-BY-SIDE LOGIC:
-          // Use a key based on rounded coordinates to detect stacking
-          const key = `${lng.toFixed(6)}-${lat.toFixed(6)}`;
-          pointTracker[key] = (pointTracker[key] || 0) + 1;
-          
-          // Offset players horizontally if they are stacked
-          if (pointTracker[key] > 1) {
-             const offsetVal = (pointTracker[key] - 1) * 0.00002;
-             lng += offsetVal; 
-             lat += offsetVal;
-          }
-
-          newPositions.push({
-            coord: mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], 0),
-            rank: rank
-          });
-
-          labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name: d.id } });
-          rank++;
-        });
-
-        playerPositions = newPositions;
-        if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
-        map.triggerRepaint();
+      newPositions.push({
+        coord: mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], 0),
+        rank: rank
       });
+
+      labelFeatures.push({ 
+        type: 'Feature', 
+        geometry: { type: 'Point', coordinates: [lng, lat] }, 
+        properties: { name: d.id } 
+      });
+      rank++;
+    });
+
+    playerPositions = newPositions;
+    if(map.getSource('player-labels')) {
+      map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
     }
+    map.triggerRepaint();
+  });
+}
 
     const customLayer = {
       id: '3d-model', type: 'custom', renderingMode: '3d',
