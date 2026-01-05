@@ -73,7 +73,7 @@
 
     let allBricks = [];
     const totalPoints = 1000;
-    const modelAltitude = 0.5; 
+    const modelAltitude = 0; 
     const modelRotate = [Math.PI / 2, Math.PI, 0];
     let playerPositions = [];
     
@@ -119,7 +119,11 @@
           const bIndex = p.brickIndex || 0;
           if (allBricks[bIndex]) {
             const coords = allBricks[bIndex].geometry.coordinates;
-            newPositions.push(mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude));
+            // Store coordinates and the rank for the custom layer
+            newPositions.push({
+              coord: mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude),
+              rank: rank
+            });
             labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords }, properties: { name: d.id } });
           }
           rank++; 
@@ -139,20 +143,41 @@
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
         directionalLight.position.set(0, -70, 100).normalize();
         this.scene.add(directionalLight);
+        
         const loader = new THREE.GLTFLoader();
-        loader.load('penguinpete.glb', (gltf) => { gltf.scene.scale.set(10, 10, 10); this.scene.add(gltf.scene); });
+        loader.load('penguinpete.glb', (gltf) => {
+          this.model = gltf.scene;
+          this.model.scale.set(10, 10, 10);
+        });
+
         this.map = map;
         this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
         this.renderer.autoClear = false;
       },
       render: function (gl, matrix) {
+        if (!this.model) return;
+
         const m = new THREE.Matrix4().fromArray(matrix);
         const rotationX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
         const rotationY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rotationZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
-        playerPositions.forEach(pos => {
-          const l = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z).scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits())).multiply(rotationX).multiply(rotationY).multiply(rotationZ);
+
+        playerPositions.forEach(player => {
+          const pos = player.coord;
+          const l = new THREE.Matrix4()
+            .makeTranslation(pos.x, pos.y, pos.z)
+            .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
+            .multiply(rotationX)
+            .multiply(rotationY)
+            .multiply(rotationZ);
+
           this.camera.projectionMatrix.copy(m).multiply(l);
+          
+          // Force the scene to use this specific player's transform
+          this.scene.clear();
+          this.scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+          this.scene.add(this.model);
+
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
         });
@@ -172,14 +197,9 @@
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
         
-        const startPoint = brickData.features[0].geometry.coordinates;
-        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
-        const turnPoint = brickData.features[41].geometry.coordinates;
-        map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: turnPoint }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }] } });
-        map.addLayer({ id: 'marker-labels', type: 'symbol', source: 'markers', layout: { 'text-field': ['get', 'label'], 'text-size': 14, 'text-offset': [0, -0.5], 'text-anchor': 'bottom', 'text-allow-overlap': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 } });
-        
+        map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }); // Placeholder
         map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, 1.5], 'text-anchor': 'top' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1 } });
+        map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, -2.5], 'text-anchor': 'bottom' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1 } });
       }
 
       if(race) {
