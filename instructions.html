@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Race to Housing — How to Play</title>
+<title>Race to Housing</title>
 
 <style>
 :root{
@@ -23,99 +23,93 @@ body{
 }
 
 .wrapper{
-  max-width:950px;
+  max-width:1200px;
   margin:0 auto;
   padding:28px 20px 64px;
 }
 
 h1{
-  font-size:2.3rem;
-  margin:0 0 10px;
+  font-size:2.6rem;
+  margin:0;
 }
 h2{
-  margin:28px 0 12px;
-  font-size:1.45rem;
+  font-size:1.4rem;
+  margin:0 0 10px;
 }
 p{
-  line-height:1.6;
   color:var(--muted);
+  line-height:1.5;
 }
 
-.card{
-  background:var(--card);
-  border:1px solid rgba(148,163,184,.15);
-  border-radius:14px;
-  padding:20px;
-  margin-top:18px;
-}
-
+/* ACTION BAR */
 .actions{
   display:flex;
   gap:14px;
   flex-wrap:wrap;
   margin-bottom:26px;
 }
-
 a.btn{
-  text-decoration:none;
-  color:#021018;
   background:var(--accent);
-  padding:12px 18px;
-  border-radius:12px;
-  font-weight:700;
+  color:#021018;
+  padding:14px 22px;
+  border-radius:14px;
+  font-weight:800;
+  text-decoration:none;
 }
 
-.step{
-  display:flex;
-  gap:14px;
-  margin-top:14px;
+/* GRID */
+.grid{
+  display:grid;
+  grid-template-columns:1.2fr .8fr;
+  gap:22px;
 }
-.step-num{
-  flex:0 0 34px;
-  height:34px;
-  border-radius:50%;
-  background:rgba(56,189,248,.15);
-  color:var(--accent);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-weight:700;
+@media(max-width:900px){
+  .grid{grid-template-columns:1fr}
 }
 
-ul{
-  margin:8px 0 0 18px;
+/* CARDS */
+.card{
+  background:var(--card);
+  border:1px solid rgba(148,163,184,.15);
+  border-radius:18px;
+  padding:22px;
 }
 
-.badge{
-  display:inline-block;
-  padding:6px 12px;
-  border-radius:999px;
-  background:rgba(56,189,248,.15);
-  color:var(--accent);
-  font-weight:600;
-  font-size:.85rem;
-  margin-top:10px;
-}
-
+/* EVENTS */
 .event{
   padding:14px 0;
   border-bottom:1px solid rgba(148,163,184,.12);
 }
 .event:last-child{border-bottom:none}
 .event-title{
-  font-weight:700;
-  color:#e6eef7;
+  font-weight:800;
 }
 .event-meta{
-  color:var(--muted);
   font-size:.9rem;
+  color:var(--muted);
+}
+
+/* INFO BLOCKS */
+.info{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+@media(max-width:700px){
+  .info{grid-template-columns:1fr}
+}
+
+.info-box{
+  background:rgba(56,189,248,.08);
+  border-radius:14px;
+  padding:16px;
 }
 
 .footer{
-  margin-top:52px;
-  font-size:.85rem;
-  color:var(--muted);
+  margin-top:60px;
   text-align:center;
+  color:var(--muted);
+  font-size:.85rem;
 }
 </style>
 </head>
@@ -123,114 +117,97 @@ ul{
 <body>
 <div class="wrapper">
 
-  <!-- TOP ACTION BUTTONS -->
+  <!-- ACTIONS -->
   <div class="actions">
     <a class="btn" href="https://forms.gle/W9TXztpTm9NX1o4r9" target="_blank">Register</a>
     <a class="btn" href="https://ysuhousingandresidencelife.github.io/race-to-housing/" target="_blank">Redeem Code</a>
-    <a class="btn" href="https://ysuhousingandresidencelife.github.io/race-to-housing/" target="_blank">View Live Map</a>
+    <a class="btn" href="https://ysuhousingandresidencelife.github.io/race-to-housing/" target="_blank">Live Map</a>
   </div>
 
-  <h1>🐧 Race to Housing — How to Play</h1>
+  <!-- HEADER -->
+  <h1>🐧 Race to Housing</h1>
+  <p>
+    A live Housing & Residence Life competition where students earn points,
+    move their penguin across campus, and compete on a real-time map.
+  </p>
 
-  <div class="card">
-    <p style="color:#e6eef7">
-      <strong>Race to Housing</strong> is a live campus competition where students earn points
-      by participating in <strong>Housing & Residence Life</strong> events and activities.
-      Points move your penguin forward on the live race map.
-    </p>
-  </div>
+  <!-- MAIN GRID -->
+  <div class="grid">
 
-  <!-- STEP 1 -->
-  <div class="card">
-    <h2>1️⃣ Register for the Race (One Time)</h2>
-    <div class="step">
-      <div class="step-num">1</div>
-      <div>
-        <ul>
-          <li>Select a <strong>pre-assigned Penguin Name</strong></li>
-          <li>You cannot type your own name</li>
-          <li>Once chosen, the name is <strong>locked and removed</strong></li>
-          <li>Your penguin name is permanent</li>
-        </ul>
-        <span class="badge">This name appears on the leaderboard & map</span>
+    <!-- LEFT: EVENTS -->
+    <div class="card">
+      <h2>📅 Upcoming Events (Earn Points)</h2>
+
+      <div class="event">
+        <div class="event-title">House Bingo</div>
+        <div class="event-meta">Feb 4 • 6–8 PM • Kilcawley Center, Chestnut Room</div>
+      </div>
+
+      <div class="event">
+        <div class="event-title">Roommate Night at the Rec</div>
+        <div class="event-meta">Jan 14 • 5–7 PM • Campus Recreation Center</div>
+      </div>
+
+      <div class="event">
+        <div class="event-title">HRL Service Day</div>
+        <div class="event-meta">Jan 19 • 2–5 PM • Cafaro House</div>
+      </div>
+
+      <div class="event">
+        <div class="event-title">House Feud</div>
+        <div class="event-meta">Mar 11 • 6–8 PM • Kilcawley Center, Chestnut Room</div>
+      </div>
+
+      <div class="event">
+        <div class="event-title">Appreciation Week</div>
+        <div class="event-meta">Apr 6–10 • 5–7 PM • Residence Halls</div>
+      </div>
+
+      <div class="event">
+        <div class="event-title">HRL Banquet</div>
+        <div class="event-meta">Apr 13 • Time & Location TBA</div>
       </div>
     </div>
-  </div>
 
-  <!-- STEP 2 -->
-  <div class="card">
-    <h2>2️⃣ How You Earn Points</h2>
-    <ul>
-      <li>Attending Housing & Residence Life events</li>
-      <li>Participating in social media campaigns</li>
-      <li>Using Housing resources and programs</li>
-    </ul>
-    <p>Points are awarded using <strong>codes</strong> distributed at events.</p>
-  </div>
+    <!-- RIGHT: HOW IT WORKS -->
+    <div class="card">
+      <h2>🎮 How the Game Works</h2>
 
-  <!-- EVENTS -->
-  <div class="card">
-    <h2>📅 Upcoming Events to Earn Points</h2>
+      <div class="info">
+        <div class="info-box">
+          <strong>Register Once</strong>
+          <p>
+            Choose a pre-assigned penguin name.
+            Once selected, it is locked and removed.
+          </p>
+        </div>
 
-    <div class="event">
-      <div class="event-title">House Bingo</div>
-      <div class="event-meta">Feb 4 • 6–8 PM • Kilcawley Center, Chestnut Room</div>
+        <div class="info-box">
+          <strong>Attend Events</strong>
+          <p>
+            Show up to Housing events and activities
+            to earn point codes.
+          </p>
+        </div>
+
+        <div class="info-box">
+          <strong>Scan QR Codes</strong>
+          <p>
+            Check in at events using QR codes
+            to receive your points.
+          </p>
+        </div>
+
+        <div class="info-box">
+          <strong>Watch Your Penguin Move</strong>
+          <p>
+            Redeem codes to move live on the race map
+            and climb the leaderboard.
+          </p>
+        </div>
+      </div>
     </div>
 
-    <div class="event">
-      <div class="event-title">Roommate Night at the Rec</div>
-      <div class="event-meta">Jan 14 • 5–7 PM • Campus Recreation Center</div>
-    </div>
-
-    <div class="event">
-      <div class="event-title">HRL Service Day</div>
-      <div class="event-meta">Jan 19 • 2–5 PM • Cafaro House</div>
-    </div>
-
-    <div class="event">
-      <div class="event-title">House Feud</div>
-      <div class="event-meta">Mar 11 • 6–8 PM • Kilcawley Center, Chestnut Room</div>
-    </div>
-
-    <div class="event">
-      <div class="event-title">Appreciation Week</div>
-      <div class="event-meta">Apr 6–10 • 5–7 PM • Residence Halls</div>
-    </div>
-
-    <div class="event">
-      <div class="event-title">HRL Banquet</div>
-      <div class="event-meta">Apr 13 • Time & Location TBA</div>
-    </div>
-  </div>
-
-  <!-- STEP 3 -->
-  <div class="card">
-    <h2>3️⃣ Event Check-In (QR Codes)</h2>
-    <ul>
-      <li>Scan the QR code at the event</li>
-      <li>Enter your Penguin Name</li>
-      <li>Receive a point redemption code</li>
-    </ul>
-  </div>
-
-  <!-- STEP 4 -->
-  <div class="card">
-    <h2>4️⃣ Redeem Your Code</h2>
-    <ul>
-      <li>Go to the Redeem Code page</li>
-      <li>Enter your Penguin Name and code</li>
-      <li>Points apply instantly</li>
-    </ul>
-  </div>
-
-  <!-- MAP -->
-  <div class="card">
-    <h2>5️⃣ Live Map & Leaderboard</h2>
-    <ul>
-      <li>Top players appear live on the map</li>
-      <li>Penguins move as points are earned</li>
-      <li>Only active players are shown</li>
-    </ul>
   </div>
 
   <div class="footer">
