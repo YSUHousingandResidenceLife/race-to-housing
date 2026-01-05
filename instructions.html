@@ -28,20 +28,10 @@ body{
   padding:28px 20px 64px;
 }
 
-h1{
-  font-size:2.6rem;
-  margin:0;
-}
-h2{
-  font-size:1.4rem;
-  margin:0 0 10px;
-}
-p{
-  color:var(--muted);
-  line-height:1.5;
-}
+h1{font-size:2.6rem;margin:0}
+h2{font-size:1.4rem;margin:0 0 10px}
+p{color:var(--muted);line-height:1.5}
 
-/* ACTION BAR */
 .actions{
   display:flex;
   gap:14px;
@@ -57,7 +47,6 @@ a.btn{
   text-decoration:none;
 }
 
-/* GRID */
 .grid{
   display:grid;
   grid-template-columns:1.2fr .8fr;
@@ -67,7 +56,6 @@ a.btn{
   .grid{grid-template-columns:1fr}
 }
 
-/* CARDS */
 .card{
   background:var(--card);
   border:1px solid rgba(148,163,184,.15);
@@ -81,15 +69,10 @@ a.btn{
   border-bottom:1px solid rgba(148,163,184,.12);
 }
 .event:last-child{border-bottom:none}
-.event-title{
-  font-weight:800;
-}
-.event-meta{
-  font-size:.9rem;
-  color:var(--muted);
-}
+.event-title{font-weight:800}
+.event-meta{font-size:.9rem;color:var(--muted)}
 
-/* INFO BLOCKS */
+/* INFO */
 .info{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -103,6 +86,12 @@ a.btn{
   background:rgba(56,189,248,.08);
   border-radius:14px;
   padding:16px;
+}
+
+.info-box strong{
+  display:block;
+  margin-bottom:4px;
+  color:#e6eef7;
 }
 
 .footer{
@@ -124,14 +113,13 @@ a.btn{
     <a class="btn" href="https://ysuhousingandresidencelife.github.io/race-to-housing/" target="_blank">Live Map</a>
   </div>
 
-  <!-- HEADER -->
   <h1>🐧 Race to Housing</h1>
   <p>
-    A live Housing & Residence Life competition where students earn points,
-    move their penguin across campus, and compete on a real-time map.
+    A live Housing & Residence Life competition where students earn points
+    by participating in events and activities. Points move your penguin
+    forward on a real-time campus race map.
   </p>
 
-  <!-- MAIN GRID -->
   <div class="grid">
 
     <!-- LEFT: EVENTS -->
@@ -169,41 +157,47 @@ a.btn{
       </div>
     </div>
 
-    <!-- RIGHT: HOW IT WORKS -->
+    <!-- RIGHT: HOW TO PLAY -->
     <div class="card">
-      <h2>🎮 How the Game Works</h2>
+      <h2>🎮 How to Play</h2>
 
       <div class="info">
         <div class="info-box">
-          <strong>Register Once</strong>
-          <p>
-            Choose a pre-assigned penguin name.
-            Once selected, it is locked and removed.
-          </p>
+          <strong>1. Register Once</strong>
+          Choose a <b>pre-assigned penguin name</b>.
+          Names cannot be typed or changed.
+          Once selected, the name is locked and removed.
         </div>
 
         <div class="info-box">
-          <strong>Attend Events</strong>
-          <p>
-            Show up to Housing events and activities
-            to earn point codes.
-          </p>
+          <strong>2. Attend Events</strong>
+          Go to Housing & Residence Life events,
+          programs, and activities to earn points.
         </div>
 
         <div class="info-box">
-          <strong>Scan QR Codes</strong>
-          <p>
-            Check in at events using QR codes
-            to receive your points.
-          </p>
+          <strong>3. Check In with QR Codes</strong>
+          Scan the QR code at the event and enter
+          your penguin name to confirm attendance.
         </div>
 
         <div class="info-box">
-          <strong>Watch Your Penguin Move</strong>
-          <p>
-            Redeem codes to move live on the race map
-            and climb the leaderboard.
-          </p>
+          <strong>4. Redeem Your Code</strong>
+          Use the Redeem Code page to enter your
+          penguin name and event code.
+          Points apply instantly.
+        </div>
+
+        <div class="info-box">
+          <strong>Live Map Movement</strong>
+          Each redeemed code moves your penguin
+          forward on the race map in real time.
+        </div>
+
+        <div class="info-box">
+          <strong>Leaderboard & Prizes</strong>
+          Top players appear on the map and leaderboard.
+          Weekly leaders and final prizes are announced TBA.
         </div>
       </div>
     </div>
