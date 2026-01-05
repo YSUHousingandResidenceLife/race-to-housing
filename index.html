@@ -5,45 +5,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Race to Housing — Path Viewer</title>
 
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
 
 <style>
-html, body { height:100%; margin:0; overflow:hidden; }
-#map { position:absolute; inset:0; }
+html,body{height:100%;margin:0;overflow:hidden}
+#map{position:absolute;inset:0}
 
-.console-left {
-  position:absolute; bottom:20px; left:20px;
-  width:220px; background:rgba(17,17,17,.9);
-  color:white; padding:15px; border-radius:12px;
-  font-family:system-ui; z-index:10;
-  border:2px solid #E4002B;
+.console-left{
+  position:absolute;bottom:20px;left:20px;
+  width:220px;background:rgba(17,17,17,.9);
+  color:#fff;padding:15px;border-radius:12px;
+  font-family:system-ui;z-index:10;
+  border:2px solid #E4002B
 }
-.console-left h2 {
-  font-size:14px; margin:0 0 10px;
-  color:#E4002B; text-transform:uppercase;
+.console-left h2{
+  font-size:14px;margin:0 0 10px;
+  color:#E4002B;text-transform:uppercase
 }
-
-.leader-item {
-  display:flex; justify-content:space-between;
-  font-size:13px; margin:6px 0;
-  border-bottom:1px solid #222;
+.leader-item{
+  display:flex;justify-content:space-between;
+  font-size:13px;margin:6px 0;
+  border-bottom:1px solid #222
 }
-
-.console-right {
-  position:absolute; bottom:20px; right:20px;
-  width:260px; background:rgba(255,255,255,.95);
-  padding:15px; border-radius:12px;
-  font-family:system-ui; z-index:10;
+.console-right{
+  position:absolute;bottom:20px;right:20px;
+  width:260px;background:rgba(255,255,255,.95);
+  padding:15px;border-radius:12px;
+  font-family:system-ui;z-index:10
 }
-.console-right input {
+.console-right input{
   width:calc(100% - 20px);
-  padding:8px; margin-bottom:10px;
+  padding:8px;margin-bottom:10px
 }
-.btn-redeem {
-  width:100%; padding:10px;
-  background:#E4002B; color:white;
-  border:none; border-radius:6px;
-  font-weight:bold; cursor:pointer;
+.btn-redeem{
+  width:100%;padding:10px;
+  background:#E4002B;color:white;
+  border:none;border-radius:6px;
+  font-weight:bold;cursor:pointer
 }
 </style>
 
@@ -51,28 +49,30 @@ html, body { height:100%; margin:0; overflow:hidden; }
 <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 
+<!-- FIREBASE -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, doc, collection, query, orderBy, limit, runTransaction, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+  getFirestore, doc, collection, query, orderBy, limit,
+  runTransaction, serverTimestamp, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
-  authDomain: "race-to-housing.firebaseapp.com",
-  projectId: "race-to-housing",
-  storageBucket: "race-to-housing.firebasestorage.app",
-  messagingSenderId: "569695954799",
-  appId: "1:569695954799:web:93f20901d27bebaeadaa9a"
+const firebaseConfig={
+  apiKey:"AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
+  authDomain:"race-to-housing.firebaseapp.com",
+  projectId:"race-to-housing",
+  storageBucket:"race-to-housing.firebasestorage.app",
+  messagingSenderId:"569695954799",
+  appId:"1:569695954799:web:93f20901d27bebaeadaa9a"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const app=initializeApp(firebaseConfig);
+const db=getFirestore(app);
 
-window.db=db; window.doc=doc;
-window.collection=collection; window.query=query;
-window.orderBy=orderBy; window.limit=limit;
-window.runTransaction=runTransaction;
-window.serverTimestamp=serverTimestamp;
-window.onSnapshot=onSnapshot;
+Object.assign(window,{
+  db,doc,collection,query,orderBy,limit,
+  runTransaction,serverTimestamp,onSnapshot
+});
 </script>
 </head>
 
@@ -85,142 +85,129 @@ window.onSnapshot=onSnapshot;
 </div>
 
 <div class="console-right">
-  <input id="username" placeholder="Username" />
-  <input id="redeemCode" placeholder="Code" />
+  <input id="username" placeholder="Username"/>
+  <input id="redeemCode" placeholder="Code"/>
   <button class="btn-redeem" onclick="validateCode()">Redeem</button>
 </div>
 
 <script>
-mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+mapboxgl.accessToken='pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
-const COURTYARDS_URL = 'university_courtyards.geojson';
-const BRICKS_FILE_URL = 'race_bricks.geojson';
+const GEOJSON_URL='ysu_race_buildings_exact_final.geojson';
+const COURTYARDS_URL='university_courtyards.geojson';
+const BRICKS_URL='race_bricks.geojson';
 
-const totalPoints = 1000;
-const modelAltitude = 0.5;
-const modelRotate = [Math.PI/2, Math.PI, 0];
+const totalPoints=1000;
+const modelAltitude=0.5;
+const modelRotate=[Math.PI/2,Math.PI,0];
 
-let allBricks = [];
-let playerPositions = [];
+let allBricks=[];
+let playerPositions=[];
 
-const map = new mapboxgl.Map({
+const map=new mapboxgl.Map({
   container:'map',
   style:'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
   center:[-80.64848,41.10985],
-  zoom:16.72, pitch:60, bearing:-172
+  zoom:16.72,pitch:60,bearing:-172
 });
 
-async function loadJSON(url){
-  const r = await fetch(url);
-  return r.json();
-}
+async function loadJSON(u){return(await fetch(u)).json()}
 
 function processBricks(data){
-  allBricks = data.features;
-  return {
+  allBricks=data.features;
+  const sizeLng=.00005,sizeLat=.00009;
+  return{
     type:'FeatureCollection',
     features:data.features.map(f=>{
-      const [lng,lat] = f.geometry.coordinates;
-      const sizeLng=.00005, sizeLat=.00009;
-      const a=((f.properties.rotation||123)*-1)*(Math.PI/180);
+      const [lng,lat]=f.geometry.coordinates;
+      const a=((f.properties.rotation||0)*-1)*(Math.PI/180);
       const pts=[[-sizeLng,-sizeLat],[sizeLng,-sizeLat],[sizeLng,sizeLat],[-sizeLng,sizeLat]];
-      const rpts=pts.map(([dx,dy])=>[
+      const r=pts.map(([dx,dy])=>[
         lng+(dx*Math.cos(a)-dy*Math.sin(a)),
         lat+(dx*Math.sin(a)+dy*Math.cos(a))
       ]);
-      rpts.push(rpts[0]);
-      return { type:'Feature', properties:f.properties, geometry:{ type:'Polygon', coordinates:[rpts] }};
+      r.push(r[0]);
+      return{type:'Feature',properties:f.properties,geometry:{type:'Polygon',coordinates:[r]}};
     })
   };
 }
 
 function liveLeaderboard(){
-  const q = query(collection(db,"players"), orderBy("points","desc"), limit(7));
-
+  const q=query(collection(db,"players"),orderBy("points","desc"),limit(7));
   onSnapshot(q,snap=>{
     const list=document.getElementById("leaderboard-list");
     list.innerHTML="";
     playerPositions=[];
-
+    const labelFeatures=[];
     const players=[];
     snap.forEach(d=>players.push({id:d.id,...d.data()}));
-
-    const startCoords = allBricks[0].geometry.coordinates;
+    const startCoords=allBricks[0].geometry.coordinates;
 
     for(let i=0;i<7;i++){
       const p=players[i];
       if(p){
         list.innerHTML+=`<div class="leader-item"><span>${i+1}. ${p.id}</span><span>${p.points}</span></div>`;
-        const idx = Number.isInteger(p.brickIndex)?p.brickIndex:0;
-        const coords = allBricks[idx].geometry.coordinates;
+        const idx=Number.isInteger(p.brickIndex)?p.brickIndex:0;
+        const coords=allBricks[idx].geometry.coordinates;
         playerPositions.push(mapboxgl.MercatorCoordinate.fromLngLat(coords,modelAltitude));
+        labelFeatures.push({type:'Feature',geometry:{type:'Point',coordinates:coords},properties:{name:p.id}});
       }else{
         list.innerHTML+=`<div class="leader-item" style="opacity:.3"><span>${i+1}. —</span><span>0</span></div>`;
         playerPositions.push(mapboxgl.MercatorCoordinate.fromLngLat(startCoords,modelAltitude));
       }
     }
+
+    map.getSource('player-labels')?.setData({type:'FeatureCollection',features:labelFeatures});
   });
 }
 
-/* ---------- THREE.JS CUSTOM LAYER ---------- */
-const customLayer = {
-  id:'penguins',
-  type:'custom',
-  renderingMode:'3d',
-
+/* ---------- PENGUIN LAYER ---------- */
+const penguinLayer={
+  id:'penguins',type:'custom',renderingMode:'3d',
   onAdd(map,gl){
     this.camera=new THREE.Camera();
     this.scene=new THREE.Scene();
-    this.map=map;
-
+    this.renderer=new THREE.WebGLRenderer({canvas:map.getCanvas(),context:gl,antialias:true});
+    this.renderer.autoClear=false;
     this.scene.add(new THREE.AmbientLight(0xffffff,1.2));
     const d=new THREE.DirectionalLight(0xffffff,1);
     d.position.set(0,-70,100).normalize();
     this.scene.add(d);
-
-    this.renderer=new THREE.WebGLRenderer({
-      canvas:map.getCanvas(), context:gl, antialias:true
-    });
-    this.renderer.autoClear=false;
-
     this.penguins=[];
-    const loader=new THREE.GLTFLoader();
-    loader.load('penguinpete.glb',g=>{
+    new THREE.GLTFLoader().load('penguinpete.glb',g=>{
       for(let i=0;i<7;i++){
-        const p=g.scene.clone(true);
-        this.scene.add(p);
-        this.penguins.push(p);
+        const c=g.scene.clone(true);
+        this.scene.add(c);
+        this.penguins.push(c);
       }
     });
   },
-
   render(gl,matrix){
-    if(!this.penguins.length) return;
-    this.camera.projectionMatrix.fromArray(matrix);
-
-    playerPositions.forEach((pos,i)=>{
-      const p=this.penguins[i];
-      if(!p) return;
-      const s=pos.meterInMercatorCoordinateUnits()*10;
-      p.position.set(pos.x,pos.y,pos.z);
-      p.rotation.set(...modelRotate);
-      p.scale.set(s,s,s);
-    });
-
+    if(!this.penguins.length||!playerPositions.length)return;
+    const m=new THREE.Matrix4().fromArray(matrix);
     this.renderer.resetState();
-    this.renderer.render(this.scene,this.camera);
+    playerPositions.forEach((pos,i)=>{
+      const p=this.penguins[i]; if(!p)return;
+      const s=pos.meterInMercatorCoordinateUnits()*10;
+      const t=new THREE.Matrix4()
+        .makeTranslation(pos.x,pos.y,pos.z)
+        .scale(new THREE.Vector3(s,-s,s))
+        .multiply(new THREE.Matrix4().makeRotationX(modelRotate[0]))
+        .multiply(new THREE.Matrix4().makeRotationY(modelRotate[1]))
+        .multiply(new THREE.Matrix4().makeRotationZ(modelRotate[2]));
+      this.camera.projectionMatrix.copy(m).multiply(t);
+      this.renderer.render(p,this.camera);
+    });
   }
 };
 
-map.on('load', async()=>{
-  const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-  const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
-  const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+map.on('load',async()=>{
+  const race=await loadJSON(GEOJSON_URL).catch(()=>null);
+  const courts=await loadJSON(COURTYARDS_URL).catch(()=>null);
+  const bricks=await loadJSON(BRICKS_URL).catch(()=>null);
 
   map.addSource('housing-overlay',{
-    type:'image',
-    url:'housing-overlay.png',
+    type:'image',url:'housing-overlay.png',
     coordinates:[
       [-80.64760006745172,41.10229501193964],
       [-80.65320155001069,41.10444521963691],
@@ -228,63 +215,61 @@ map.on('load', async()=>{
       [-80.64580822770398,41.10696291407212]
     ]
   });
-  map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay' });
+  map.addLayer({id:'housing-overlay-layer',type:'raster',source:'housing-overlay'});
 
-  if(brickData){
-    map.addSource('dots',{ type:'geojson', data:processBricks(brickData) });
-    map.addLayer({ id:'dots-layer', type:'fill', source:'dots',
-      paint:{ 'fill-color':['get','color'] } });
-
+  if(bricks){
+    map.addSource('dots',{type:'geojson',data:processBricks(bricks)});
+    map.addLayer({id:'dots-layer',type:'fill',source:'dots',paint:{'fill-color':['get','color']}});
+    map.addSource('player-labels',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addLayer({
+      id:'player-name-tags',type:'symbol',source:'player-labels',
+      layout:{'text-field':['get','name'],'text-size':12,'text-offset':[0,-1.8],'text-anchor':'bottom'},
+      paint:{'text-color':'#fff','text-halo-color':'#000','text-halo-width':1.5}
+    });
     liveLeaderboard();
   }
 
   if(race){
-    map.addSource('race',{ type:'geojson', data:race });
+    map.addSource('race',{type:'geojson',data:race});
     map.addLayer({
-      id:'race-buildings', type:'fill-extrusion', source:'race',
+      id:'race-buildings',type:'fill-extrusion',source:'race',
       paint:{
         'fill-extrusion-color':['match',['get','name'],
           'Lyden House','#FF69B4','Cafaro House','#0072CE',
           'Wick House (Art)','#FFFF00','Weller House','#582C83',
           'Christman Dining','#FFDF00','Kilcawley House','#E4002B',
           '#d6001c'],
-        'fill-extrusion-height':22,
-        'fill-extrusion-opacity':0.96
+        'fill-extrusion-height':22,'fill-extrusion-opacity':0.96
       }
     });
   }
 
-  if(courtyards){
-    map.addSource('courtyards',{ type:'geojson', data:courtyards });
+  if(courts){
+    map.addSource('courtyards',{type:'geojson',data:courts});
     map.addLayer({
-      id:'courtyards-fill3d', type:'fill-extrusion', source:'courtyards',
-      paint:{ 'fill-extrusion-color':'#78BE20','fill-extrusion-height':22,'fill-extrusion-opacity':0.96 }
+      id:'courtyards-fill3d',type:'fill-extrusion',source:'courtyards',
+      paint:{'fill-extrusion-color':'#78BE20','fill-extrusion-height':22,'fill-extrusion-opacity':0.96}
     });
   }
 
-  map.addLayer(customLayer);
+  map.addLayer(penguinLayer);
 });
 
-/* ---------- FIREBASE REDEEM ---------- */
-window.validateCode = async ()=>{
+/* ---------- REDEEM ---------- */
+window.validateCode=async()=>{
   const u=username.value.trim();
   const c=redeemCode.value.trim();
-  if(!u||!c) return;
-
+  if(!u||!c)return;
   const pRef=doc(db,"players",u);
   const cRef=doc(db,"codes",c);
   const clRef=doc(db,"globalClaims",c);
-
   await runTransaction(db,async tx=>{
-    const cs=await tx.get(cRef);
-    if(!cs.exists()) throw "Invalid";
-    if((await tx.get(clRef)).exists()) throw "Claimed";
-
+    const cs=await tx.get(cRef); if(!cs.exists())throw"Invalid";
+    if((await tx.get(clRef)).exists())throw"Claimed";
     const ps=await tx.get(pRef);
     const earned=cs.data().points||0;
     const newPts=(ps.data().points||0)+earned;
     const idx=Math.min(allBricks.length-1,Math.floor(newPts/(totalPoints/allBricks.length)));
-
     tx.update(pRef,{points:newPts,brickIndex:idx,lastUpdated:serverTimestamp()});
     tx.set(clRef,{codeId:c,claimedBy:u,claimedAt:serverTimestamp()});
   });
