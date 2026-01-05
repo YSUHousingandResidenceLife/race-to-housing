@@ -28,6 +28,7 @@
     .btn-redeem { width: 100%; padding: 10px; background: #E4002B; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
     .btn-help { width: 100%; padding: 8px; background: #f2f2f2; color: #333; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
     #score-display { font-weight: bold; color: #E4002B; margin-bottom: 10px; text-align: center; display: block; font-size: 14px; }
+    #status-msg { font-size: 11px; color: #aaa; text-align: center; margin-top: 5px; }
   </style>
   <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
   <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -54,7 +55,7 @@
   <div id="map"></div>
   <div class="console-left">
     <h2>Top 7 Players</h2>
-    <div id="leaderboard-list"></div>
+    <div id="leaderboard-list">Waiting for players...</div>
   </div>
   <div class="console-right">
     <span id="score-display">Progress: 0 / 1000 Points</span>
@@ -62,6 +63,7 @@
     <input type="text" id="redeemCode" placeholder="Redemption Code" />
     <button class="btn-redeem" onclick="validateCode()">Redeem Code</button>
     <button class="btn-help" onclick="window.location.href='instructions.html'">Instructions</button>
+    <div id="status-msg">Map Loading...</div>
   </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
@@ -73,7 +75,6 @@
 
     let allBricks = [];
     const totalPoints = 1000;
-    const modelRotate = [Math.PI / 2, Math.PI, 0];
     let playerPositions = [];
     
     const map = new mapboxgl.Map({
@@ -88,12 +89,19 @@
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
     function liveLeaderboard() {
-      if (!window.db || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
+      if (!window.db || allBricks.length === 0) { 
+        setTimeout(liveLeaderboard, 500); 
+        return; 
+      }
+      
       const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
       
       window.onSnapshot(q, (snap) => {
         const list = document.getElementById("leaderboard-list");
+        const status = document.getElementById("status-msg");
         list.innerHTML = "";
+        status.innerText = "Syncing Players...";
+        
         const playersAtPoints = {};
         const activePlayers = [];
 
@@ -140,7 +148,6 @@
             const playerIndex = peers.findIndex(peer => peer.id === p.id);
             const offsetMultiplier = playerIndex - (count - 1) / 2;
             const sideShift = offsetMultiplier * laneWidth;
-            
             lng += Math.cos(pathAngle + Math.PI / 2) * sideShift;
             lat += Math.sin(pathAngle + Math.PI / 2) * sideShift;
           }
@@ -156,7 +163,10 @@
         });
 
         playerPositions = newPositions;
-        if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
+        if(map.getSource('player-labels')) {
+            map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
+        }
+        status.innerText = "Players Live";
         map.triggerRepaint();
       });
     }
@@ -187,7 +197,6 @@
           const scale = new THREE.Matrix4().makeScale(s, -s, s);
           const rotationZ = new THREE.Matrix4().makeRotationZ(-player.angle + Math.PI);
           const rotationX = new THREE.Matrix4().makeRotationX(Math.PI / 2);
-
           const l = translate.multiply(scale).multiply(rotationZ).multiply(rotationX);
 
           this.camera.projectionMatrix.copy(m).multiply(l);
@@ -202,11 +211,14 @@
     };
 
     map.on('load', async () => {
+      // 1. Setup Data Sources first
+      map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
 
-      // --- 1. Housing Overlay (Logo) ---
+      // 2. Housing Overlay
       map.addSource('housing-overlay', { 
         type: 'image', 
         url: 'housing-overlay.png', 
@@ -214,7 +226,7 @@
       });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
-      // --- 2. Bricks and Standard Markers ---
+      // 3. Bricks
       if(brickData) {
         allBricks = brickData.features;
         map.addSource('dots', { type: 'geojson', data: { type: 'FeatureCollection', features: brickData.features.map(f => {
@@ -229,57 +241,21 @@
           return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [points] }, properties: f.properties };
         })}});
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
-
-        const startCoords = brickData.features[0].geometry.coordinates;
-        const endCoords = brickData.features[brickData.features.length - 1].geometry.coordinates;
-        const turnCoords = brickData.features[41].geometry.coordinates;
-
-        map.addSource('markers', { 
-          type: 'geojson', 
-          data: { 
-            type: 'FeatureCollection', 
-            features: [
-              { type: 'Feature', geometry: { type: 'Point', coordinates: startCoords }, properties: { label: 'START', color: '#E4002B' } }, 
-              { type: 'Feature', geometry: { type: 'Point', coordinates: endCoords }, properties: { label: 'FINISH', color: '#111111' } }, 
-              { type: 'Feature', geometry: { type: 'Point', coordinates: turnCoords }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }
-            ] 
-          } 
-        });
-
-        map.addLayer({ 
-          id: 'marker-labels', 
-          type: 'symbol', 
-          source: 'markers', 
-          layout: { 
-            'text-field': ['get', 'label'], 
-            'text-size': 14, 
-            'text-offset': [0, -0.5], 
-            'text-anchor': 'bottom', 
-            'text-allow-overlap': true 
-          }, 
-          paint: { 
-            'text-color': '#ffffff', 
-            'text-halo-color': ['get', 'color'], 
-            'text-halo-width': 2 
-          } 
-        });
       }
 
-      // --- 3. Player Labels (Jumble Fix) ---
-      map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      // 4. Player Labels Layer (CRITICAL FIX: Ensure this is added before models)
       map.addLayer({ 
         id: 'player-name-tags', 
         type: 'symbol', 
         source: 'player-labels', 
         layout: { 
           'text-field': ['get', 'name'], 
-          'text-size': 14, 
-          'text-offset': [0, -4.0], // Increased offset to clear penguin head
-          'text-variable-anchor': ['bottom', 'top', 'left', 'right'], // Prevents clumping by allowing names to shift
-          'text-radial-offset': 0.5,
-          'text-justify': 'auto',
-          'text-allow-overlap': false, // Changed to false so they spread out rather than stack
-          'text-ignore-placement': false
+          'text-size': ['interpolate', ['linear'], ['zoom'], 15, 12, 22, 20], 
+          'text-offset': [0, -2.5], 
+          'text-anchor': 'bottom',
+          'text-allow-overlap': true, 
+          'text-ignore-placement': true,
+          'text-pitch-alignment': 'viewport'
         }, 
         paint: { 
           'text-color': '#ffffff', 
@@ -288,15 +264,10 @@
         } 
       });
 
-      // --- 4. Buildings & Courtyards ---
+      // 5. Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.9 } });
-      }
-
-      if(courtyards) {
-        map.addSource('courtyards', { type: 'geojson', data: courtyards });
-        map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
       }
 
       map.addLayer(customLayer);
