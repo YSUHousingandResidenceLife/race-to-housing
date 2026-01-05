@@ -38,16 +38,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import {
-    getFirestore,
-    doc,
-    collection,
-    query,
-    where,
-    orderBy,
-    limit,
-    runTransaction,
-    serverTimestamp,
-    onSnapshot
+    getFirestore, doc, collection, query, where, orderBy, limit, runTransaction, serverTimestamp, onSnapshot
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -107,15 +98,14 @@
       center: [-80.64848, 41.10985],
       zoom: 16.72,
       pitch: 60.0,
-      bearing: -172.0,
-      antialias: true
+      bearing: -172.0
     });
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
     function processBricks(data) {
-      const sizeLng = 0.00005, sizeLat = 0.00009;
       allBricks = data.features;
+      const sizeLng = 0.00005, sizeLat = 0.00009;
       return {
         type: 'FeatureCollection',
         features: data.features.map(f => {
@@ -133,6 +123,11 @@
     }
 
     function liveLeaderboard() {
+      if (!window.db || allBricks.length === 0) {
+        setTimeout(liveLeaderboard, 500);
+        return;
+      }
+      
       const q = window.query(
         window.collection(window.db, "players"), 
         window.where("points", ">", 0), 
@@ -144,58 +139,66 @@
         const list = document.getElementById("leaderboard-list");
         list.innerHTML = "";
         const playerFeatures = [];
-        let rankCounter = 1;
+        let rank = 1;
         
         snap.forEach(d => {
           const p = d.data();
-          list.innerHTML += `<div class="leader-item"><span>${rankCounter}. ${d.id}</span><span>${Math.floor(p.points || 0)}</span></div>`;
+          list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${Math.floor(p.points || 0)}</span></div>`;
           
+          // MAP POSITIONING: Get coords from Firebase brickIndex
           const bIdx = p.brickIndex || 0;
           if (allBricks[bIdx]) {
             playerFeatures.push({
               type: 'Feature',
               geometry: { type: 'Point', coordinates: allBricks[bIdx].geometry.coordinates },
-              properties: { 
-                rank: rankCounter,
-                username: d.id 
-              }
+              properties: { rank: rank }
             });
           }
-          rankCounter++;
+          rank++;
         });
 
         const src = map.getSource('players');
-        if (src) {
-            src.setData({ type: 'FeatureCollection', features: playerFeatures });
-        }
+        if (src) src.setData({ type: 'FeatureCollection', features: playerFeatures });
       });
     }
 
     map.on('load', async () => {
-      // 1. GUARANTEED IMAGE LOADING
-      const loadImg = (id, url) => {
+      // 1. Wait for Map to be "Done" loading basic style
+      const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+      if(brickData) {
+        map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
+        map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
+      }
+
+      // 2. Add Player Source and Layer (Blank initially)
+      map.addSource('players', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'players-layer',
+        type: 'symbol',
+        source: 'players',
+        layout: {
+          'icon-image': ['concat', 'top-', ['get', 'rank']],
+          'icon-size': 0.4,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
+        }
+      });
+
+      // 3. Load Images AFTER the map and layer exist
+      const imagePromises = [1,2,3,4,5,6,7].map(i => {
         return new Promise((resolve) => {
-          map.loadImage(url, (error, image) => {
-            if (!error) map.addImage(id, image);
+          map.loadImage(`topplayer${i}.png`, (err, img) => {
+            if (!err) map.addImage(`top-${i}`, img);
             resolve();
           });
         });
-      };
+      });
 
-      // Create a list of promises for all 7 images
-      const promises = [];
-      for (let i = 1; i <= 7; i++) {
-        promises.push(loadImg(`rank-${i}`, `topplayer${i}.png`));
-      }
-
-      // 2. LOAD DATA
-      const [race, courtyards, brickData] = await Promise.all([
-        loadJSON(GEOJSON_URL).catch(()=>null),
-        loadJSON(COURTYARDS_URL).catch(()=>null),
-        loadJSON(BRICKS_FILE_URL).catch(()=>null)
-      ]);
-
-      // 3. MAP LAYERS (Overlay, Buildings, Bricks)
+      // 4. Load other map geometry
+      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
+      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
+      
       map.addSource('housing-overlay', {
         type: 'image', url: 'housing-overlay.png',
         coordinates: [[-80.6476, 41.1022], [-80.6532, 41.1044], [-80.6514, 41.1091], [-80.6458, 41.1069]]
@@ -212,60 +215,34 @@
         map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
       }
 
-      if(brickData) {
-        map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
-        map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
-      }
-
-      // 4. PLAYER SOURCE & LAYER
-      map.addSource('players', { 
-        type: 'geojson', 
-        data: { type: 'FeatureCollection', features: [] } 
-      });
-
-      map.addLayer({
-        id: 'players-layer',
-        type: 'symbol',
-        source: 'players',
-        layout: {
-          // This line dynamically looks for rank-1, rank-2, etc.
-          'icon-image': ['concat', 'rank-', ['to-string', ['get', 'rank']]],
-          'icon-size': 0.4,
-          'icon-anchor': 'bottom',
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true
-        }
-      });
-
-      // 5. THE FINAL LOCK
-      // This ensures nothing starts until ALL images are loaded
-      Promise.all(promises).then(() => {
+      // 5. START FIREBASE ONLY AFTER EVERYTHING IS LOADED
+      Promise.all(imagePromises).then(() => {
         liveLeaderboard();
       });
     });
 
     window.validateCode = async () => {
-      const username = document.getElementById('username').value.trim();
-      const code = document.getElementById('redeemCode').value.trim();
-      if (!username || !code) return alert("Missing Info");
+      const u = document.getElementById('username').value.trim();
+      const c = document.getElementById('redeemCode').value.trim();
+      if (!u || !c) return alert("Enter Info");
       try {
-        const playerRef = window.doc(window.db, "players", username);
-        const codeRef = window.doc(window.db, "codes", code);
-        const claimRef = window.doc(window.db, "globalClaims", code);
+        const pRef = window.doc(window.db, "players", u);
+        const cRef = window.doc(window.db, "codes", c);
+        const clRef = window.doc(window.db, "globalClaims", c);
         await window.runTransaction(window.db, async (tx) => {
-          const codeSnap = await tx.get(codeRef);
-          if (!codeSnap.exists()) throw "Invalid code";
-          const claimSnap = await tx.get(claimRef);
-          if (claimSnap.exists()) throw "Claimed!";
-          const playerSnap = await tx.get(playerRef);
-          if (!playerSnap.exists()) throw "User Not Found";
-          const earned = codeSnap.data().points || 0;
-          const player = playerSnap.data();
+          const cSnap = await tx.get(cRef);
+          if (!cSnap.exists()) throw "Invalid code";
+          const clSnap = await tx.get(clRef);
+          if (clSnap.exists()) throw "Claimed!";
+          const pSnap = await tx.get(pRef);
+          if (!pSnap.exists()) throw "User Not Found";
+          const earned = cSnap.data().points || 0;
+          const player = pSnap.data();
           const newPoints = (player.points || 0) + earned;
-          const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / (totalPoints / allBricks.length)));
-          tx.update(playerRef, { points: newPoints, brickIndex: newIndex, lastUpdated: window.serverTimestamp() });
-          tx.set(claimRef, { codeId: code, claimedBy: username, claimedAt: window.serverTimestamp() });
-          const nextCoords = allBricks[newIndex].geometry.coordinates;
+          const nIdx = Math.min(allBricks.length - 1, Math.floor(newPoints / (totalPoints / allBricks.length)));
+          tx.update(pRef, { points: newPoints, brickIndex: nIdx, lastUpdated: window.serverTimestamp() });
+          tx.set(clRef, { codeId: c, claimedBy: u, claimedAt: window.serverTimestamp() });
+          const nextCoords = allBricks[nIdx].geometry.coordinates;
           document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000`;
           map.flyTo({ center: nextCoords, duration: 1000 });
         });
