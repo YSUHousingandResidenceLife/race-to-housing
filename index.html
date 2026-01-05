@@ -134,7 +134,7 @@
       });
     }
 
-    const customLayer = {
+  const customLayer = {
       id: '3d-model', type: 'custom', renderingMode: '3d',
       onAdd: function (map, gl) {
         this.camera = new THREE.Camera();
@@ -144,10 +144,16 @@
         directionalLight.position.set(0, -70, 100).normalize();
         this.scene.add(directionalLight);
         
+        this.penguins = []; // Array to hold our 7 clones
         const loader = new THREE.GLTFLoader();
         loader.load('penguinpete.glb', (gltf) => {
-          this.model = gltf.scene;
-          this.model.scale.set(10, 10, 10);
+          for (let i = 0; i < 7; i++) {
+            const clone = gltf.scene.clone(); // Create a unique copy
+            clone.scale.set(10, 10, 10);
+            clone.visible = false; // Hide until a player is active
+            this.scene.add(clone);
+            this.penguins.push(clone);
+          }
         });
 
         this.map = map;
@@ -155,35 +161,42 @@
         this.renderer.autoClear = false;
       },
       render: function (gl, matrix) {
-        if (!this.model) return;
+        if (this.penguins.length === 0) return;
 
         const m = new THREE.Matrix4().fromArray(matrix);
         const rotationX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
         const rotationY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rotationZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
 
-        playerPositions.forEach(player => {
-          const pos = player.coord;
-          const l = new THREE.Matrix4()
-            .makeTranslation(pos.x, pos.y, pos.z)
-            .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
-            .multiply(rotationX)
-            .multiply(rotationY)
-            .multiply(rotationZ);
+        // Reset all penguins to invisible first
+        this.penguins.forEach(p => p.visible = false);
 
-          this.camera.projectionMatrix.copy(m).multiply(l);
-          
-          // Force the scene to use this specific player's transform
-          this.scene.clear();
-          this.scene.add(new THREE.AmbientLight(0xffffff, 1.2));
-          this.scene.add(this.model);
+        // Position each active player
+        playerPositions.forEach((player, index) => {
+          if (index < this.penguins.length) {
+            const penguin = this.penguins[index];
+            const pos = player.coord;
+            
+            // Create the individual transform for this penguin
+            const l = new THREE.Matrix4()
+              .makeTranslation(pos.x, pos.y, pos.z)
+              .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
+              .multiply(rotationX)
+              .multiply(rotationY)
+              .multiply(rotationZ);
 
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
+            penguin.visible = true;
+            
+            // Render this specific penguin
+            this.camera.projectionMatrix.copy(m).multiply(l);
+            this.renderer.resetState();
+            this.renderer.render(this.scene, this.camera);
+          }
         });
         this.map.triggerRepaint();
       }
-    };   
+    };
+    
 
     map.on('load', async () => {
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
