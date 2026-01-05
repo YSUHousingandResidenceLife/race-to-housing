@@ -51,6 +51,7 @@
 </script>
 
 <body>
+  <div id="loading-msg" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(228, 0, 43, 0.9); color: white; padding: 20px; border-radius: 10px; font-family: sans-serif; z-index: 100;">Top Players Loading...</div>
   <div id="map"></div>
   <div class="console-left">
     <h2>Top 7 Players</h2>
@@ -150,7 +151,9 @@ function liveLeaderboard() {
 
     playerPositions = newPositions;
     const labelSource = map.getSource('player-labels');
-    if(labelSource) labelSource.setData({ type: 'FeatureCollection', features: labelFeatures });
+    if(labelSource) {
+        labelSource.setData({ type: 'FeatureCollection', features: labelFeatures });
+    }
     map.triggerRepaint();
   });
 }
@@ -301,6 +304,7 @@ map.addLayer({
 
       map.addLayer(customLayer);
       liveLeaderboard();
+      document.getElementById('loading-msg').style.display = 'none';
     });
 
     window.validateCode = async () => {
