@@ -1,250 +1,294 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>Race to Housing — Path Viewer</title>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
-  <style>
-    html, body { height:100%; margin:0; overflow: hidden; }
-    #map { position:absolute; inset:0; }
-    .console-left {
-      position: absolute; bottom: 20px; left: 20px;
-      width: 220px; background: rgba(17, 17, 17, 0.9);
-      color: white; padding: 15px; border-radius: 12px;
-      font-family: system-ui, sans-serif; z-index: 10;
-      border: 2px solid #E4002B; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    }
-    .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
-    .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; }
-    .console-right {
-      position: absolute; bottom: 20px; right: 20px;
-      width: 260px; background: rgba(255, 255, 255, 0.95);
-      padding: 15px; border-radius: 12px;
-      font-family: system-ui, sans-serif; z-index: 10;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    }
-    .console-right input { width: calc(100% - 20px); padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; }
-    .btn-redeem { width: 100%; padding: 10px; background: #E4002B; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
-    .btn-help { width: 100%; padding: 8px; background: #f2f2f2; color: #333; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
-    #score-display { font-weight: bold; color: #E4002B; margin-bottom: 10px; text-align: center; display: block; font-size: 14px; }
-  </style>
-  <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
-</head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Race to Housing — Path Viewer</title>
+
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+
+<style>
+html, body { height:100%; margin:0; overflow:hidden; }
+#map { position:absolute; inset:0; }
+
+.console-left {
+  position:absolute; bottom:20px; left:20px;
+  width:220px; background:rgba(17,17,17,.9);
+  color:white; padding:15px; border-radius:12px;
+  font-family:system-ui; z-index:10;
+  border:2px solid #E4002B;
+}
+.console-left h2 {
+  font-size:14px; margin:0 0 10px;
+  color:#E4002B; text-transform:uppercase;
+}
+
+.leader-item {
+  display:flex; justify-content:space-between;
+  font-size:13px; margin:6px 0;
+  border-bottom:1px solid #222;
+}
+
+.console-right {
+  position:absolute; bottom:20px; right:20px;
+  width:260px; background:rgba(255,255,255,.95);
+  padding:15px; border-radius:12px;
+  font-family:system-ui; z-index:10;
+}
+.console-right input {
+  width:calc(100% - 20px);
+  padding:8px; margin-bottom:10px;
+}
+.btn-redeem {
+  width:100%; padding:10px;
+  background:#E4002B; color:white;
+  border:none; border-radius:6px;
+  font-weight:bold; cursor:pointer;
+}
+</style>
+
+<script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import { getFirestore, doc, collection, query, where, orderBy, limit, runTransaction, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-  const firebaseConfig = {
-    apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
-    authDomain: "race-to-housing.firebaseapp.com",
-    projectId: "race-to-housing",
-    storageBucket: "race-to-housing.firebasestorage.app",
-    messagingSenderId: "569695954799",
-    appId: "1:569695954799:web:93f20901d27bebaeadaa9a",
-    measurementId: "G-VQKHZ1ZTWE"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  window.db = db; window.doc = doc; window.collection = collection; window.query = query; window.where = where; window.orderBy = orderBy; window.limit = limit; window.runTransaction = runTransaction; window.serverTimestamp = serverTimestamp; window.onSnapshot = onSnapshot;
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, collection, query, orderBy, limit, runTransaction, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
+  authDomain: "race-to-housing.firebaseapp.com",
+  projectId: "race-to-housing",
+  storageBucket: "race-to-housing.firebasestorage.app",
+  messagingSenderId: "569695954799",
+  appId: "1:569695954799:web:93f20901d27bebaeadaa9a"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+window.db=db; window.doc=doc;
+window.collection=collection; window.query=query;
+window.orderBy=orderBy; window.limit=limit;
+window.runTransaction=runTransaction;
+window.serverTimestamp=serverTimestamp;
+window.onSnapshot=onSnapshot;
 </script>
+</head>
 
 <body>
-  <div id="map"></div>
-  <div class="console-left">
-    <h2>Top 7 Players</h2>
-    <div id="leaderboard-list"></div>
-  </div>
-  <div class="console-right">
-    <span id="score-display">Progress: 0 / 1000 Points</span>
-    <input type="text" id="username" placeholder="Username" />
-    <input type="text" id="redeemCode" placeholder="Redemption Code" />
-    <button class="btn-redeem" onclick="validateCode()">Redeem Code</button>
-    <button class="btn-help" onclick="window.location.href='instructions.html'">Instructions</button>
-  </div>
+<div id="map"></div>
 
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-  <script>
-    const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
-    const COURTYARDS_URL = 'university_courtyards.geojson';
-    const BRICKS_FILE_URL = 'race_bricks.geojson';
-    mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+<div class="console-left">
+  <h2>Top 7 Players</h2>
+  <div id="leaderboard-list"></div>
+</div>
 
-    let allBricks = [];
-    const totalPoints = 1000;
-    const modelAltitude = 0.5; 
-    const modelRotate = [Math.PI / 2, Math.PI, 0];
-    
-    // 7 FULLY INDEPENDENT GLOBAL COORDINATES
-    let p1_pos=null; let p2_pos=null; let p3_pos=null; let p4_pos=null; let p5_pos=null; let p6_pos=null; let p7_pos=null;
+<div class="console-right">
+  <input id="username" placeholder="Username" />
+  <input id="redeemCode" placeholder="Code" />
+  <button class="btn-redeem" onclick="validateCode()">Redeem</button>
+</div>
 
-    const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
-      center: [-80.64848, 41.10985],
-      zoom: 16.72,
-      pitch: 60.0,
-      bearing: -172.0
-    });
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
-    async function loadJSON(url){ const r = await fetch(url); return r.json(); }
+const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
+const COURTYARDS_URL = 'university_courtyards.geojson';
+const BRICKS_FILE_URL = 'race_bricks.geojson';
 
-    function processBricks(data) {
-      allBricks = data.features;
-      const sizeLng = 0.00005, sizeLat = 0.00009;
-      return {
-        type: 'FeatureCollection',
-        features: data.features.map(f => {
-          const [lng, lat] = f.geometry.coordinates;
-          const angle = ((f.properties.rotation || 123) * -1) * (Math.PI / 180);
-          const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]];
-          const rotated = points.map(([dx, dy]) => [lng + (dx * Math.cos(angle) - dy * Math.sin(angle)), lat + (dx * Math.sin(angle) + dy * Math.cos(angle))]);
-          rotated.push(rotated[0]);
-          return { type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: [rotated] } };
-        })
-      };
-    }
+const totalPoints = 1000;
+const modelAltitude = 0.5;
+const modelRotate = [Math.PI/2, Math.PI, 0];
 
-   function liveLeaderboard() {
-  if (!window.db || !window.query || allBricks.length === 0) {
-    setTimeout(liveLeaderboard, 500);
-    return;
-  }
+let allBricks = [];
+let playerPositions = [];
 
-  const q = window.query(
-    window.collection(window.db, "players"),
-    window.where("points", ">", 0),
-    window.orderBy("points", "desc"),
-    window.limit(7)
-  );
+const map = new mapboxgl.Map({
+  container:'map',
+  style:'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
+  center:[-80.64848,41.10985],
+  zoom:16.72, pitch:60, bearing:-172
+});
 
-  window.onSnapshot(q, (snap) => {
-    const list = document.getElementById("leaderboard-list");
-    list.innerHTML = "";
+async function loadJSON(url){
+  const r = await fetch(url);
+  return r.json();
+}
 
-    const newPositions = [];
-    const labelFeatures = [];
+function processBricks(data){
+  allBricks = data.features;
+  return {
+    type:'FeatureCollection',
+    features:data.features.map(f=>{
+      const [lng,lat] = f.geometry.coordinates;
+      const sizeLng=.00005, sizeLat=.00009;
+      const a=((f.properties.rotation||123)*-1)*(Math.PI/180);
+      const pts=[[-sizeLng,-sizeLat],[sizeLng,-sizeLat],[sizeLng,sizeLat],[-sizeLng,sizeLat]];
+      const rpts=pts.map(([dx,dy])=>[
+        lng+(dx*Math.cos(a)-dy*Math.sin(a)),
+        lat+(dx*Math.sin(a)+dy*Math.cos(a))
+      ]);
+      rpts.push(rpts[0]);
+      return { type:'Feature', properties:f.properties, geometry:{ type:'Polygon', coordinates:[rpts] }};
+    })
+  };
+}
 
-    const players = [];
-    snap.forEach(d => players.push({ id: d.id, ...d.data() }));
+function liveLeaderboard(){
+  const q = query(collection(db,"players"), orderBy("points","desc"), limit(7));
 
-    const START_INDEX = 0;
-    const startCoords = allBricks[START_INDEX].geometry.coordinates;
+  onSnapshot(q,snap=>{
+    const list=document.getElementById("leaderboard-list");
+    list.innerHTML="";
+    playerPositions=[];
 
-    // Always render exactly 7 slots
-    for (let i = 0; i < 7; i++) {
-      const p = players[i];
+    const players=[];
+    snap.forEach(d=>players.push({id:d.id,...d.data()}));
 
-      if (p) {
-        // REAL PLAYER
-        list.innerHTML += `
-          <div class="leader-item">
-            <span>${i + 1}. ${p.id}</span>
-            <span>${p.points || 0}</span>
-          </div>
-        `;
+    const startCoords = allBricks[0].geometry.coordinates;
 
-        const idx = p.brickIndex || 0;
+    for(let i=0;i<7;i++){
+      const p=players[i];
+      if(p){
+        list.innerHTML+=`<div class="leader-item"><span>${i+1}. ${p.id}</span><span>${p.points}</span></div>`;
+        const idx = Number.isInteger(p.brickIndex)?p.brickIndex:0;
         const coords = allBricks[idx].geometry.coordinates;
-
-        newPositions.push(
-          mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude)
-        );
-
-        labelFeatures.push({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: coords },
-          properties: { name: p.id }
-        });
-
-      } else {
-        // PLACEHOLDER SLOT
-        list.innerHTML += `
-          <div class="leader-item" style="opacity:0.35">
-            <span>${i + 1}. —</span>
-            <span>0</span>
-          </div>
-        `;
-
-        newPositions.push(
-          mapboxgl.MercatorCoordinate.fromLngLat(startCoords, modelAltitude)
-        );
+        playerPositions.push(mapboxgl.MercatorCoordinate.fromLngLat(coords,modelAltitude));
+      }else{
+        list.innerHTML+=`<div class="leader-item" style="opacity:.3"><span>${i+1}. —</span><span>0</span></div>`;
+        playerPositions.push(mapboxgl.MercatorCoordinate.fromLngLat(startCoords,modelAltitude));
       }
     }
-
-    playerPositions = newPositions;
-
-    if (map.getSource("player-labels")) {
-      map.getSource("player-labels").setData({
-        type: "FeatureCollection",
-        features: labelFeatures
-      });
-    }
-
-    map.triggerRepaint();
   });
 }
- 
 
-    map.on('load', async () => {
-      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
-      const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+/* ---------- THREE.JS CUSTOM LAYER ---------- */
+const customLayer = {
+  id:'penguins',
+  type:'custom',
+  renderingMode:'3d',
 
-      map.addSource('housing-overlay', { type: 'image', url: 'housing-overlay.png', coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]] });
-      map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
+  onAdd(map,gl){
+    this.camera=new THREE.Camera();
+    this.scene=new THREE.Scene();
+    this.map=map;
 
-      if(brickData) {
-        map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
-        map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
-        liveLeaderboard();
+    this.scene.add(new THREE.AmbientLight(0xffffff,1.2));
+    const d=new THREE.DirectionalLight(0xffffff,1);
+    d.position.set(0,-70,100).normalize();
+    this.scene.add(d);
 
-        const startPoint = brickData.features[0].geometry.coordinates;
-        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
-        const turnPoint = brickData.features[41].geometry.coordinates;
-        map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } }, { type: 'Feature', geometry: { type: 'Point', coordinates: turnPoint }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }] } });
-        map.addLayer({ id: 'marker-labels', type: 'symbol', source: 'markers', layout: { 'text-field': ['get', 'label'], 'text-size': 14, 'text-offset': [0, -0.5], 'text-anchor': 'bottom', 'text-allow-overlap': true }, paint: { 'text-color': '#ffffff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 } });
-        
-        map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, -1.8], 'text-anchor': 'bottom' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 } });
+    this.renderer=new THREE.WebGLRenderer({
+      canvas:map.getCanvas(), context:gl, antialias:true
+    });
+    this.renderer.autoClear=false;
+
+    this.penguins=[];
+    const loader=new THREE.GLTFLoader();
+    loader.load('penguinpete.glb',g=>{
+      for(let i=0;i<7;i++){
+        const p=g.scene.clone(true);
+        this.scene.add(p);
+        this.penguins.push(p);
       }
+    });
+  },
 
-      if(race) {
-        map.addSource('race', { type:'geojson', data: race });
-        map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
-      }
-      if(courtyards) {
-        map.addSource('courtyards', { type: 'geojson', data: courtyards });
-        map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
-      }
-      
-      map.addLayer(customLayer);
+  render(gl,matrix){
+    if(!this.penguins.length) return;
+    this.camera.projectionMatrix.fromArray(matrix);
+
+    playerPositions.forEach((pos,i)=>{
+      const p=this.penguins[i];
+      if(!p) return;
+      const s=pos.meterInMercatorCoordinateUnits()*10;
+      p.position.set(pos.x,pos.y,pos.z);
+      p.rotation.set(...modelRotate);
+      p.scale.set(s,s,s);
     });
 
-    window.validateCode = async () => {
-      const username = document.getElementById('username').value.trim();
-      const code = document.getElementById('redeemCode').value.trim();
-      if (!username || !code) return alert("Enter Info");
-      try {
-        const pRef = window.doc(window.db, "players", username);
-        const cRef = window.doc(window.db, "codes", code);
-        const clRef = window.doc(window.db, "globalClaims", code);
-        await window.runTransaction(window.db, async (tx) => {
-          const cS = await tx.get(cRef); if(!cS.exists()) throw "Invalid";
-          const clS = await tx.get(clRef); if(clS.exists()) throw "Claimed";
-          const pS = await tx.get(pRef); if(!pS.exists()) throw "No User";
-          const earned = cS.data().points || 0;
-          const newPoints = (pS.data().points || 0) + earned;
-          const newIndex = Math.min(allBricks.length-1, Math.floor(newPoints / (totalPoints/allBricks.length)));
-          tx.update(pRef, { points: newPoints, brickIndex: newIndex, lastUpdated: window.serverTimestamp() });
-          tx.set(clRef, { codeId: code, claimedBy: username, claimedAt: window.serverTimestamp() });
-          document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
-          map.flyTo({ center: allBricks[newIndex].geometry.coordinates, duration: 1000 });
-        });
-        document.getElementById('redeemCode').value = "";
-      } catch (e) { alert(e); }
-    };
-  </script>
+    this.renderer.resetState();
+    this.renderer.render(this.scene,this.camera);
+  }
+};
+
+map.on('load', async()=>{
+  const race = await loadJSON(GEOJSON_URL).catch(()=>null);
+  const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
+  const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+
+  map.addSource('housing-overlay',{
+    type:'image',
+    url:'housing-overlay.png',
+    coordinates:[
+      [-80.64760006745172,41.10229501193964],
+      [-80.65320155001069,41.10444521963691],
+      [-80.65140971026295,41.10911312176939],
+      [-80.64580822770398,41.10696291407212]
+    ]
+  });
+  map.addLayer({ id:'housing-overlay-layer', type:'raster', source:'housing-overlay' });
+
+  if(brickData){
+    map.addSource('dots',{ type:'geojson', data:processBricks(brickData) });
+    map.addLayer({ id:'dots-layer', type:'fill', source:'dots',
+      paint:{ 'fill-color':['get','color'] } });
+
+    liveLeaderboard();
+  }
+
+  if(race){
+    map.addSource('race',{ type:'geojson', data:race });
+    map.addLayer({
+      id:'race-buildings', type:'fill-extrusion', source:'race',
+      paint:{
+        'fill-extrusion-color':['match',['get','name'],
+          'Lyden House','#FF69B4','Cafaro House','#0072CE',
+          'Wick House (Art)','#FFFF00','Weller House','#582C83',
+          'Christman Dining','#FFDF00','Kilcawley House','#E4002B',
+          '#d6001c'],
+        'fill-extrusion-height':22,
+        'fill-extrusion-opacity':0.96
+      }
+    });
+  }
+
+  if(courtyards){
+    map.addSource('courtyards',{ type:'geojson', data:courtyards });
+    map.addLayer({
+      id:'courtyards-fill3d', type:'fill-extrusion', source:'courtyards',
+      paint:{ 'fill-extrusion-color':'#78BE20','fill-extrusion-height':22,'fill-extrusion-opacity':0.96 }
+    });
+  }
+
+  map.addLayer(customLayer);
+});
+
+/* ---------- FIREBASE REDEEM ---------- */
+window.validateCode = async ()=>{
+  const u=username.value.trim();
+  const c=redeemCode.value.trim();
+  if(!u||!c) return;
+
+  const pRef=doc(db,"players",u);
+  const cRef=doc(db,"codes",c);
+  const clRef=doc(db,"globalClaims",c);
+
+  await runTransaction(db,async tx=>{
+    const cs=await tx.get(cRef);
+    if(!cs.exists()) throw "Invalid";
+    if((await tx.get(clRef)).exists()) throw "Claimed";
+
+    const ps=await tx.get(pRef);
+    const earned=cs.data().points||0;
+    const newPts=(ps.data().points||0)+earned;
+    const idx=Math.min(allBricks.length-1,Math.floor(newPts/(totalPoints/allBricks.length)));
+
+    tx.update(pRef,{points:newPts,brickIndex:idx,lastUpdated:serverTimestamp()});
+    tx.set(clRef,{codeId:c,claimedBy:u,claimedAt:serverTimestamp()});
+  });
+};
+</script>
 </body>
 </html>
