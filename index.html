@@ -161,46 +161,52 @@ function liveLeaderboard() {
   });
 }
 
-    const customLayer = {
-      id: '3d-model', type: 'custom', renderingMode: '3d',
-      onAdd: function (map, gl) {
-        this.camera = new THREE.Camera();
-        this.scene = new THREE.Scene();
-        this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-        const loader = new THREE.GLTFLoader();
-        loader.load('penguinpete.glb', (gltf) => {
-          this.model = gltf.scene;
-          this.model.scale.set(12, 12, 12);
-        });
-        this.map = map;
-        this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
-        this.renderer.autoClear = false;
-      },
-      render: function (gl, matrix) {
-        if (!this.model) return;
-        const m = new THREE.Matrix4().fromArray(matrix);
-        const rotationX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
-        const rotationY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
-        const rotationZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
+  const customLayer = {
+  id: '3d-model', type: 'custom', renderingMode: '3d',
+  onAdd: function (map, gl) {
+    this.camera = new THREE.Camera();
+    this.scene = new THREE.Scene();
+    this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+    const loader = new THREE.GLTFLoader();
+    loader.load('penguinpete.glb', (gltf) => {
+      this.model = gltf.scene;
+      this.model.scale.set(12, 12, 12);
+    });
+    this.map = map;
+    this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
+    this.renderer.autoClear = false;
+  },
+  render: function (gl, matrix) {
+    if (!this.model) return;
+    const m = new THREE.Matrix4().fromArray(matrix);
 
-        playerPositions.forEach(player => {
-          const pos = player.coord;
-          const l = new THREE.Matrix4()
-            .makeTranslation(pos.x, pos.y, pos.z)
-            .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
-            .multiply(rotationX).multiply(rotationY).multiply(rotationZ);
+    playerPositions.forEach(player => {
+      const pos = player.coord;
+      
+      // 1. Translation (Where they stand)
+      const translate = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z);
+      
+      // 2. Scale
+      const s = pos.meterInMercatorCoordinateUnits();
+      const scale = new THREE.Matrix4().makeScale(s, -s, s);
+      
+      // 3. Dynamic Rotation (Face the direction they are moving)
+      // We subtract the pathAngle from our base rotation to align them correctly
+      const rotationZ = new THREE.Matrix4().makeRotationZ(-player.angle + Math.PI);
+      const rotationX = new THREE.Matrix4().makeRotationX(Math.PI / 2);
 
-          this.camera.projectionMatrix.copy(m).multiply(l);
-          this.scene.clear();
-          this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-          this.scene.add(this.model);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        });
-        this.map.triggerRepaint();
-      }
-    };
+      const l = translate.multiply(scale).multiply(rotationZ).multiply(rotationX);
 
+      this.camera.projectionMatrix.copy(m).multiply(l);
+      this.scene.clear();
+      this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+      this.scene.add(this.model);
+      this.renderer.resetState();
+      this.renderer.render(this.scene, this.camera);
+    });
+    this.map.triggerRepaint();
+  }
+};
     map.on('load', async () => {
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
       if(brickData) {
