@@ -186,6 +186,23 @@
     };
 
     map.on('load', async () => {
+      // --- 1. Housing Logo Overlay (Logo on Ground) ---
+map.addSource('housing-overlay', { 
+  type: 'image', 
+  url: 'housing-overlay.png', 
+  coordinates: [
+    [-80.6476, 41.1022], // Top Left
+    [-80.6532, 41.1044], // Top Right
+    [-80.6514, 41.1091], // Bottom Right
+    [-80.6458, 41.1069]  // Bottom Left
+  ] 
+});
+
+map.addLayer({ 
+  id: 'housing-overlay-layer', 
+  type: 'raster', 
+  source: 'housing-overlay' 
+});
       map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       const [brickData, race, courtyards] = await Promise.all([
         loadJSON(BRICKS_FILE_URL), 
