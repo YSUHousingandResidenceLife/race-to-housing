@@ -132,11 +132,6 @@
     }
 
     function liveLeaderboard() {
-      if (!window.db || !window.query) { 
-        setTimeout(liveLeaderboard, 500); 
-        return; 
-      }
-      
       const q = window.query(
         window.collection(window.db, "players"), 
         window.where("points", ">", 0), 
@@ -147,203 +142,112 @@
       window.onSnapshot(q, (snap) => {
         const list = document.getElementById("leaderboard-list");
         list.innerHTML = "";
-        const topPlayersFeatures = [];
-        let currentRank = 1;
+        const playerFeatures = [];
+        let rank = 1;
         
         snap.forEach(d => {
           const p = d.data();
+          list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${Math.floor(p.points || 0)}</span></div>`;
           
-          // 1. Add to HTML UI
-          list.innerHTML += `
-            <div class="leader-item">
-              <span>${currentRank}. ${d.id}</span>
-              <span>${Math.floor(p.points || 0)}</span>
-            </div>`;
-          
-          // 2. Add to Map Layer Data
-          const brickIdx = p.brickIndex || 0;
-          if (allBricks[brickIdx]) {
-            topPlayersFeatures.push({
+          const bIdx = p.brickIndex || 0;
+          if (allBricks[bIdx]) {
+            playerFeatures.push({
               type: 'Feature',
-              geometry: { type: 'Point', coordinates: allBricks[brickIdx].geometry.coordinates },
-              properties: { 
-                username: d.id, 
-                rank: currentRank // EXPLICIT RANK 1-7
-              }
+              geometry: { type: 'Point', coordinates: allBricks[bIdx].geometry.coordinates },
+              properties: { rank: rank } // Assigns rank 1, 2, 3...
             });
           }
-          currentRank++; // INCREMENT FOR NEXT PLAYER
+          rank++;
         });
 
-        // 3. Force Update Map
         const src = map.getSource('players');
-        if (src) {
-          src.setData({ type: 'FeatureCollection', features: topPlayersFeatures });
-        }
+        if (src) src.setData({ type: 'FeatureCollection', features: playerFeatures });
       });
     }
 
     map.on('load', async () => {
-      // Step 1: Pre-load all 7 images before doing anything else
-      const imagePromises = [];
-      for (let i = 1; i <= 7; i++) {
-        imagePromises.push(new Promise((resolve) => {
-          map.loadImage(`topplayer${i}.png`, (error, image) => {
-            if (!error) map.addImage(`status-rank-${i}`, image);
-            resolve();
+      // 1. Force load all 7 images as Promises to guarantee they exist
+      const imageLoaders = [1,2,3,4,5,6,7].map(i => {
+        return new Promise((res) => {
+          map.loadImage(`topplayer${i}.png`, (err, img) => {
+            if (!err) map.addImage(`rank-${i}`, img);
+            res();
           });
-        }));
-      }
+        });
+      });
 
+      // 2. Load Geometry
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // Housing Overlay
+      // 3. Setup Layers
       map.addSource('housing-overlay', {
         type: 'image',
         url: 'housing-overlay.png',
-        coordinates: [
-          [-80.64760006745172, 41.10229501193964],
-          [-80.65320155001069, 41.10444521963691],
-          [-80.65140971026295, 41.10911312176939],
-          [-80.64580822770398, 41.10696291407212]
-        ]
+        coordinates: [[-80.6476, 41.1022], [-80.6532, 41.1044], [-80.6514, 41.1091], [-80.6458, 41.1069]]
       });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
-      // Race Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
-        map.addLayer({
-          id:'race-buildings', type:'fill-extrusion', source:'race',
-          paint:{
-            'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'],
-            'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96
-          }
-        });
+        map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
       }
 
-      // University Courtyards
       if(courtyards) {
         map.addSource('courtyards', { type: 'geojson', data: courtyards });
-        map.addLayer({
-          id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards',
-          paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 }
-        });
+        map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
       }
 
-      // Bricks and Endpoints
-      if(brickData && brickData.features.length > 0) {
+      if(brickData) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
-
-        const startPoint = brickData.features[0].geometry.coordinates;
-        const endPoint = brickData.features[brickData.features.length - 1].geometry.coordinates;
-        const turnPoint = brickData.features[41].geometry.coordinates;
-
-        map.addSource('markers', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: [
-              { type: 'Feature', geometry: { type: 'Point', coordinates: startPoint }, properties: { label: 'START', color: '#E4002B' } },
-              { type: 'Feature', geometry: { type: 'Point', coordinates: endPoint }, properties: { label: 'FINISH', color: '#111111' } },
-              { type: 'Feature', geometry: { type: 'Point', coordinates: turnPoint }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }
-            ]
-          }
-        });
-
-        map.addLayer({
-          id: 'marker-labels',
-          type: 'symbol',
-          source: 'markers',
-          layout: {
-            'text-field': ['get', 'label'],
-            'text-size': ['match', ['get', 'id'], 'turn-arrow', 15, 14],
-            'text-offset': [0, -0.5],
-            'text-anchor': 'bottom',
-            'visibility': 'visible',
-            'text-allow-overlap': true
-          },
-          paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': ['coalesce', ['get', 'color'], '#E4002B'],
-            'text-halo-width': 2
-          }
-        });
-
-        // PLAYER SOURCE
-        map.addSource('players', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] }
-        });
-
-        // PLAYER SYMBOL LAYER (Uses Rank to pull image)
-        map.addLayer({
-          id: 'players-layer',
-          type: 'symbol',
-          source: 'players',
-          layout: {
-            'icon-image': ['concat', 'status-rank-', ['get', 'rank']],
-            'icon-size': 0.35,
-            'icon-anchor': 'bottom',
-            'icon-allow-overlap': true,
-            'icon-ignore-placement': true
-          },
-          paint: {
-            'icon-opacity': 1
-          }
-        });
       }
 
-      // Start Firebase sync after images and map are ready
-      Promise.all(imagePromises).then(() => {
+      // 4. PLAYER LAYER - Crucial part for Rank images
+      map.addSource('players', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'players-layer',
+        type: 'symbol',
+        source: 'players',
+        layout: {
+          'icon-image': ['concat', 'rank-', ['get', 'rank']], // pulls rank-1, rank-2, etc.
+          'icon-size': 0.35,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true
+        }
+      });
+
+      // 5. Start Leaderboard ONLY after all 7 images are finished loading
+      Promise.all(imageLoaders).then(() => {
         liveLeaderboard();
       });
     });
 
-    // REDEMPTION LOGIC
     window.validateCode = async () => {
       const username = document.getElementById('username').value.trim();
       const code = document.getElementById('redeemCode').value.trim();
-      if (!username || !code) return alert("Enter username and code!");
-
+      if (!username || !code) return alert("Enter info");
       try {
         const playerRef = window.doc(window.db, "players", username);
         const codeRef = window.doc(window.db, "codes", code);
         const claimRef = window.doc(window.db, "globalClaims", code);
-
         await window.runTransaction(window.db, async (tx) => {
           const codeSnap = await tx.get(codeRef);
           if (!codeSnap.exists()) throw "Invalid code";
-          
           const claimSnap = await tx.get(claimRef);
-          if (claimSnap.exists()) throw "Code already claimed!";
-
+          if (claimSnap.exists()) throw "Claimed!";
           const playerSnap = await tx.get(playerRef);
           if (!playerSnap.exists()) throw "User not found!";
-
           const earned = codeSnap.data().points || 0;
           const player = playerSnap.data();
           const newPoints = (player.points || 0) + earned;
-          const pointsPerBrick = totalPoints / allBricks.length;
-          const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
-          
-          tx.update(playerRef, {
-            points: newPoints,
-            brickIndex: newIndex,
-            lastUpdated: window.serverTimestamp()
-          });
-
-          tx.set(claimRef, {
-            codeId: code,
-            claimedBy: username,
-            claimedAt: window.serverTimestamp()
-          });
-
+          const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / (totalPoints / allBricks.length)));
+          tx.update(playerRef, { points: newPoints, brickIndex: newIndex, lastUpdated: window.serverTimestamp() });
+          tx.set(claimRef, { codeId: code, claimedBy: username, claimedAt: window.serverTimestamp() });
           const nextCoords = allBricks[newIndex].geometry.coordinates;
-          document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
+          document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000`;
           map.flyTo({ center: nextCoords, duration: 1000 });
         });
         document.getElementById('redeemCode').value = "";
