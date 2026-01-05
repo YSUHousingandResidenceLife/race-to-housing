@@ -308,21 +308,42 @@ map.on('load', async ()=>{
     window.where('points','>',0)
   );
 
-  window.onSnapshot(q,snap=>{
-    const feats=[];
-    snap.forEach(d=>{
-      const p=d.data();
-      const idx=Math.min(allBricks.length-1,p.brickIndex||0);
-      feats.push({
-        type:'Feature',
-        geometry:{type:'Point',coordinates:allBricks[idx].geometry.coordinates},
-        properties:{username:d.id}
-      });
+window.onSnapshot(q, snap => {
+
+  // 🛑 Guard: bricks must exist
+  if (!allBricks || allBricks.length === 0) return;
+
+  const feats = [];
+
+  snap.forEach(d => {
+    const p = d.data();
+
+    // ✅ Fallback: derive position from points if brickIndex missing
+    const pts = p.points || 0;
+    const pointsPerBrick = totalPoints / allBricks.length;
+    const derivedIndex = Math.floor(pts / pointsPerBrick);
+
+    const idx = Math.min(
+      allBricks.length - 1,
+      Number.isInteger(p.brickIndex) ? p.brickIndex : derivedIndex
+    );
+
+    feats.push({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: allBricks[idx].geometry.coordinates
+      },
+      properties: { username: d.id }
     });
-    map.getSource('players').setData({type:'FeatureCollection',features:feats});
   });
 
+  map.getSource('players').setData({
+    type: 'FeatureCollection',
+    features: feats
+  });
 });
+
 
 /* Redeem */
 window.validateCode = async ()=>{
