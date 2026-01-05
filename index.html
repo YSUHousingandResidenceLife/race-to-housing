@@ -67,35 +67,9 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
+    const COURTYARDS_URL = 'university_courtyards.geojson';
     const BRICKS_FILE_URL = 'race_bricks.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
-
-    // REAL COORDINATES FOR UNIVERSITY COURTYARD BUILDINGS 100 & 200
-    const COURTYARDS_DATA = {
-      "type": "FeatureCollection",
-      "features": [
-        {
-          "type": "Feature",
-          "properties": { "name": "University Courtyard 100" },
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [[
-              [-80.64386, 41.10706], [-80.64303, 41.10706], [-80.64303, 41.10605], [-80.64386, 41.10605], [-80.64386, 41.10706]
-            ]]
-          }
-        },
-        {
-          "type": "Feature",
-          "properties": { "name": "University Courtyard 200" },
-          "geometry": {
-            "type": "Polygon",
-            "coordinates": [[
-              [-80.64300, 41.10706], [-80.64215, 41.10706], [-80.64215, 41.10605], [-80.64300, 41.10605], [-80.64300, 41.10706]
-            ]]
-          }
-        }
-      ]
-    };
 
     let allBricks = [];
     const totalPoints = 1000;
@@ -213,7 +187,11 @@
 
     map.on('load', async () => {
       map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      const [brickData, race] = await Promise.all([loadJSON(BRICKS_FILE_URL), loadJSON(GEOJSON_URL)]).catch(()=>[]);
+      const [brickData, race, courtyards] = await Promise.all([
+        loadJSON(BRICKS_FILE_URL), 
+        loadJSON(GEOJSON_URL),
+        loadJSON(COURTYARDS_URL)
+      ]).catch(()=>[]);
 
       if(brickData) {
         allBricks = brickData.features;
@@ -240,13 +218,13 @@
         map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.8 } });
       }
 
-      // ADD COURTYARDS
-      map.addSource('courtyards', { type: 'geojson', data: COURTYARDS_DATA });
-      map.addLayer({ id: 'courtyards-layer', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.9 } });
+      if(courtyards) {
+        map.addSource('courtyards', { type: 'geojson', data: courtyards });
+        map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.9 } });
+      }
 
       map.addLayer(customLayer);
 
-      // --- LAYER: Fixed Track Labels (Start/Finish) ---
       map.addLayer({
         id: 'marker-labels', type: 'symbol', source: 'markers',
         layout: { 
@@ -265,7 +243,6 @@
         paint: { 'text-color': '#fff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 }
       });
 
-      // --- LAYER: Player Name Tags ---
       map.addLayer({ 
         id: 'player-name-tags', type: 'symbol', source: 'player-labels', 
         layout: { 
