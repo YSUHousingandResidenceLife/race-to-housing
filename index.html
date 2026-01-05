@@ -8,8 +8,6 @@
   <style>
     html, body { height:100%; margin:0; overflow: hidden; }
     #map { position:absolute; inset:0; }
-
-    /* Left Console: Leaderboard */
     .console-left {
       position: absolute; bottom: 20px; left: 20px;
       width: 220px; background: rgba(17, 17, 17, 0.9);
@@ -19,8 +17,6 @@
     }
     .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
     .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; }
-
-    /* Right Console: Redeem */
     .console-right {
       position: absolute; bottom: 20px; right: 20px;
       width: 260px; background: rgba(255, 255, 255, 0.95);
@@ -40,7 +36,6 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import { getFirestore, doc, collection, query, where, orderBy, limit, runTransaction, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
   const firebaseConfig = {
     apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
     authDomain: "race-to-housing.firebaseapp.com",
@@ -50,30 +45,17 @@
     appId: "1:569695954799:web:93f20901d27bebaeadaa9a",
     measurementId: "G-VQKHZ1ZTWE"
   };
-
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-
-  window.db = db;
-  window.doc = doc;
-  window.collection = collection;
-  window.query = query;
-  window.where = where;
-  window.orderBy = orderBy;
-  window.limit = limit;
-  window.runTransaction = runTransaction;
-  window.serverTimestamp = serverTimestamp;
-  window.onSnapshot = onSnapshot;
+  window.db = db; window.doc = doc; window.collection = collection; window.query = query; window.where = where; window.orderBy = orderBy; window.limit = limit; window.runTransaction = runTransaction; window.serverTimestamp = serverTimestamp; window.onSnapshot = onSnapshot;
 </script>
 
 <body>
   <div id="map"></div>
-
   <div class="console-left">
     <h2>Top 7 Players</h2>
     <div id="leaderboard-list"></div>
   </div>
-
   <div class="console-right">
     <span id="score-display">Progress: 0 / 1000 Points</span>
     <input type="text" id="username" placeholder="Username" />
@@ -94,8 +76,8 @@
     const modelAltitude = 0.5; 
     const modelRotate = [Math.PI / 2, Math.PI, 0];
     
-    // Independent Placeholders for all 7 Player Coordinates
-    let p1_pos=null, p2_pos=null, p3_pos=null, p4_pos=null, p5_pos=null, p6_pos=null, p7_pos=null;
+    // SEVEN ENTIRELY INDEPENDENT POSITION VARIABLES
+    let p1_pos=null; let p2_pos=null; let p3_pos=null; let p4_pos=null; let p5_pos=null; let p6_pos=null; let p7_pos=null;
 
     const map = new mapboxgl.Map({
       container: 'map',
@@ -130,27 +112,29 @@
       window.onSnapshot(q, (snap) => {
         const list = document.getElementById("leaderboard-list");
         list.innerHTML = "";
-        let rank = 1; 
+        let count = 0; 
         const labelFeatures = [];
         
+        // FULL CLEAR OF INDEPENDENT SLOTS
         p1_pos=null; p2_pos=null; p3_pos=null; p4_pos=null; p5_pos=null; p6_pos=null; p7_pos=null;
 
         snap.forEach(d => {
+          count++;
           const p = d.data();
-          list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
+          list.innerHTML += `<div class="leader-item"><span>${count}. ${d.id}</span><span>${p.points || 0}</span></div>`;
           const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
           const merc = mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude);
           
-          if(rank===1) p1_pos = merc;
-          else if(rank===2) p2_pos = merc;
-          else if(rank===3) p3_pos = merc;
-          else if(rank===4) p4_pos = merc;
-          else if(rank===5) p5_pos = merc;
-          else if(rank===6) p6_pos = merc;
-          else if(rank===7) p7_pos = merc;
+          // INDEPENDENT DATA DROP
+          if(count === 1) p1_pos = merc;
+          if(count === 2) p2_pos = merc;
+          if(count === 3) p3_pos = merc;
+          if(count === 4) p4_pos = merc;
+          if(count === 5) p5_pos = merc;
+          if(count === 6) p6_pos = merc;
+          if(count === 7) p7_pos = merc;
 
           labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords }, properties: { name: d.id } });
-          rank++; 
         });
         if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
         map.triggerRepaint();
@@ -168,108 +152,104 @@
         
         const loader = new THREE.GLTFLoader();
         loader.load('penguinpete.glb', (gltf) => { 
-          // Independent Model Instances
-          this.p1 = gltf.scene.clone(); 
-          this.p2 = gltf.scene.clone(); 
-          this.p3 = gltf.scene.clone();
-          this.p4 = gltf.scene.clone(); 
-          this.p5 = gltf.scene.clone(); 
-          this.p6 = gltf.scene.clone();
-          this.p7 = gltf.scene.clone();
+          // SEVEN ENTIRELY SEPARATE MEMORY OBJECTS
+          this.p1_model = gltf.scene.clone();
+          this.p2_model = gltf.scene.clone();
+          this.p3_model = gltf.scene.clone();
+          this.p4_model = gltf.scene.clone();
+          this.p5_model = gltf.scene.clone();
+          this.p6_model = gltf.scene.clone();
+          this.p7_model = gltf.scene.clone();
           
-          const models = [this.p1, this.p2, this.p3, this.p4, this.p5, this.p6, this.p7];
-          models.forEach(m => {
-            m.scale.set(10, 10, 10); 
-            m.visible = false; 
-            this.scene.add(m);
-          });
+          const group = [this.p1_model, this.p2_model, this.p3_model, this.p4_model, this.p5_model, this.p6_model, this.p7_model];
+          group.forEach(m => { m.scale.set(10, 10, 10); m.visible = false; this.scene.add(m); });
         });
         this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
         this.renderer.autoClear = false;
       },
       render: function (gl, matrix) {
-        if (!this.p1) return;
+        if (!this.p1_model) return;
         const m = new THREE.Matrix4().fromArray(matrix);
         const rX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
         const rY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
 
-        // Independent Logic Block for Rank 1
+        // INDEPENDENT RENDER BLOCK 1
         if(p1_pos) {
-            this.p1.visible = true;
-            const l1 = new THREE.Matrix4().makeTranslation(p1_pos.x, p1_pos.y, p1_pos.z)
-              .scale(new THREE.Vector3(p1_pos.meterInMercatorCoordinateUnits(), -p1_pos.meterInMercatorCoordinateUnits(), p1_pos.meterInMercatorCoordinateUnits()))
-              .multiply(rX).multiply(rY).multiply(rZ);
-            this.camera.projectionMatrix.copy(m).multiply(l1);
-            this.renderer.resetState();
-            this.renderer.render(this.scene, this.camera);
-        } else { this.p1.visible = false; }
+          this.p1_model.visible = true;
+          const l1 = new THREE.Matrix4().makeTranslation(p1_pos.x, p1_pos.y, p1_pos.z)
+            .scale(new THREE.Vector3(p1_pos.meterInMercatorCoordinateUnits(), -p1_pos.meterInMercatorCoordinateUnits(), p1_pos.meterInMercatorCoordinateUnits()))
+            .multiply(rX).multiply(rY).multiply(rZ);
+          this.camera.projectionMatrix.copy(m).multiply(l1);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        } else { this.p1_model.visible = false; }
 
-        // Independent Logic Block for Rank 2
+        // INDEPENDENT RENDER BLOCK 2
         if(p2_pos) {
-            this.p2.visible = true;
-            const l2 = new THREE.Matrix4().makeTranslation(p2_pos.x, p2_pos.y, p2_pos.z)
-              .scale(new THREE.Vector3(p2_pos.meterInMercatorCoordinateUnits(), -p2_pos.meterInMercatorCoordinateUnits(), p2_pos.meterInMercatorCoordinateUnits()))
-              .multiply(rX).multiply(rY).multiply(rZ);
-            this.camera.projectionMatrix.copy(m).multiply(l2);
-            this.renderer.resetState();
-            this.renderer.render(this.scene, this.camera);
-        } else { this.p2.visible = false; }
+          this.p2_model.visible = true;
+          const l2 = new THREE.Matrix4().makeTranslation(p2_pos.x, p2_pos.y, p2_pos.z)
+            .scale(new THREE.Vector3(p2_pos.meterInMercatorCoordinateUnits(), -p2_pos.meterInMercatorCoordinateUnits(), p2_pos.meterInMercatorCoordinateUnits()))
+            .multiply(rX).multiply(rY).multiply(rZ);
+          this.camera.projectionMatrix.copy(m).multiply(l2);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        } else { this.p2_model.visible = false; }
 
-        // Independent Logic Block for Rank 3
+        // INDEPENDENT RENDER BLOCK 3
         if(p3_pos) {
-            this.p3.visible = true;
-            const l3 = new THREE.Matrix4().makeTranslation(p3_pos.x, p3_pos.y, p3_pos.z)
-              .scale(new THREE.Vector3(p3_pos.meterInMercatorCoordinateUnits(), -p3_pos.meterInMercatorCoordinateUnits(), p3_pos.meterInMercatorCoordinateUnits()))
-              .multiply(rX).multiply(rY).multiply(rZ);
-            this.camera.projectionMatrix.copy(m).multiply(l3);
-            this.renderer.resetState();
-            this.renderer.render(this.scene, this.camera);
-        } else { this.p3.visible = false; }
+          this.p3_model.visible = true;
+          const l3 = new THREE.Matrix4().makeTranslation(p3_pos.x, p3_pos.y, p3_pos.z)
+            .scale(new THREE.Vector3(p3_pos.meterInMercatorCoordinateUnits(), -p3_pos.meterInMercatorCoordinateUnits(), p3_pos.meterInMercatorCoordinateUnits()))
+            .multiply(rX).multiply(rY).multiply(rZ);
+          this.camera.projectionMatrix.copy(m).multiply(l3);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        } else { this.p3_model.visible = false; }
 
-        // Independent Logic Block for Rank 4
+        // INDEPENDENT RENDER BLOCK 4
         if(p4_pos) {
-            this.p4.visible = true;
-            const l4 = new THREE.Matrix4().makeTranslation(p4_pos.x, p4_pos.y, p4_pos.z)
-              .scale(new THREE.Vector3(p4_pos.meterInMercatorCoordinateUnits(), -p4_pos.meterInMercatorCoordinateUnits(), p4_pos.meterInMercatorCoordinateUnits()))
-              .multiply(rX).multiply(rY).multiply(rZ);
-            this.camera.projectionMatrix.copy(m).multiply(l4);
-            this.renderer.resetState();
-            this.renderer.render(this.scene, this.camera);
-        } else { this.p4.visible = false; }
+          this.p4_model.visible = true;
+          const l4 = new THREE.Matrix4().makeTranslation(p4_pos.x, p4_pos.y, p4_pos.z)
+            .scale(new THREE.Vector3(p4_pos.meterInMercatorCoordinateUnits(), -p4_pos.meterInMercatorCoordinateUnits(), p4_pos.meterInMercatorCoordinateUnits()))
+            .multiply(rX).multiply(rY).multiply(rZ);
+          this.camera.projectionMatrix.copy(m).multiply(l4);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        } else { this.p4_model.visible = false; }
 
-        // Independent Logic Block for Rank 5
+        // INDEPENDENT RENDER BLOCK 5
         if(p5_pos) {
-            this.p5.visible = true;
-            const l5 = new THREE.Matrix4().makeTranslation(p5_pos.x, p5_pos.y, p5_pos.z)
-              .scale(new THREE.Vector3(p5_pos.meterInMercatorCoordinateUnits(), -p5_pos.meterInMercatorCoordinateUnits(), p5_pos.meterInMercatorCoordinateUnits()))
-              .multiply(rX).multiply(rY).multiply(rZ);
-            this.camera.projectionMatrix.copy(m).multiply(l5);
-            this.renderer.resetState();
-            this.renderer.render(this.scene, this.camera);
-        } else { this.p5.visible = false; }
+          this.p5_model.visible = true;
+          const l5 = new THREE.Matrix4().makeTranslation(p5_pos.x, p5_pos.y, p5_pos.z)
+            .scale(new THREE.Vector3(p5_pos.meterInMercatorCoordinateUnits(), -p5_pos.meterInMercatorCoordinateUnits(), p5_pos.meterInMercatorCoordinateUnits()))
+            .multiply(rX).multiply(rY).multiply(rZ);
+          this.camera.projectionMatrix.copy(m).multiply(l5);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        } else { this.p5_model.visible = false; }
 
-        // Independent Logic Block for Rank 6
+        // INDEPENDENT RENDER BLOCK 6
         if(p6_pos) {
-            this.p6.visible = true;
-            const l6 = new THREE.Matrix4().makeTranslation(p6_pos.x, p6_pos.y, p6_pos.z)
-              .scale(new THREE.Vector3(p6_pos.meterInMercatorCoordinateUnits(), -p6_pos.meterInMercatorCoordinateUnits(), p6_pos.meterInMercatorCoordinateUnits()))
-              .multiply(rX).multiply(rY).multiply(rZ);
-            this.camera.projectionMatrix.copy(m).multiply(l6);
-            this.renderer.resetState();
-            this.renderer.render(this.scene, this.camera);
-        } else { this.p6.visible = false; }
+          this.p6_model.visible = true;
+          const l6 = new THREE.Matrix4().makeTranslation(p6_pos.x, p6_pos.y, p6_pos.z)
+            .scale(new THREE.Vector3(p6_pos.meterInMercatorCoordinateUnits(), -p6_pos.meterInMercatorCoordinateUnits(), p6_pos.meterInMercatorCoordinateUnits()))
+            .multiply(rX).multiply(rY).multiply(rZ);
+          this.camera.projectionMatrix.copy(m).multiply(l6);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        } else { this.p6_model.visible = false; }
 
-        // Independent Logic Block for Rank 7
+        // INDEPENDENT RENDER BLOCK 7
         if(p7_pos) {
-            this.p7.visible = true;
-            const l7 = new THREE.Matrix4().makeTranslation(p7_pos.x, p7_pos.y, p7_pos.z)
-              .scale(new THREE.Vector3(p7_pos.meterInMercatorCoordinateUnits(), -p7_pos.meterInMercatorCoordinateUnits(), p7_pos.meterInMercatorCoordinateUnits()))
-              .multiply(rX).multiply(rY).multiply(rZ);
-            this.camera.projectionMatrix.copy(m).multiply(l7);
-            this.renderer.resetState();
-            this.renderer.render(this.scene, this.camera);
-        } else { this.p7.visible = false; }
+          this.p7_model.visible = true;
+          const l7 = new THREE.Matrix4().makeTranslation(p7_pos.x, p7_pos.y, p7_pos.z)
+            .scale(new THREE.Vector3(p7_pos.meterInMercatorCoordinateUnits(), -p7_pos.meterInMercatorCoordinateUnits(), p7_pos.meterInMercatorCoordinateUnits()))
+            .multiply(rX).multiply(rY).multiply(rZ);
+          this.camera.projectionMatrix.copy(m).multiply(l7);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        } else { this.p7_model.visible = false; }
 
         this.map.triggerRepaint();
       }
@@ -313,15 +293,15 @@
     window.validateCode = async () => {
       const username = document.getElementById('username').value.trim();
       const code = document.getElementById('redeemCode').value.trim();
-      if (!username || !code) return alert("Enter Username and Code");
+      if (!username || !code) return alert("Enter Info");
       try {
         const pRef = window.doc(window.db, "players", username);
         const cRef = window.doc(window.db, "codes", code);
         const clRef = window.doc(window.db, "globalClaims", code);
         await window.runTransaction(window.db, async (tx) => {
-          const cS = await tx.get(cRef); if(!cS.exists()) throw "Invalid Code";
-          const clS = await tx.get(clRef); if(clS.exists()) throw "Already Claimed";
-          const pS = await tx.get(pRef); if(!pS.exists()) throw "User not found";
+          const cS = await tx.get(cRef); if(!cS.exists()) throw "Invalid";
+          const clS = await tx.get(clRef); if(clS.exists()) throw "Claimed";
+          const pS = await tx.get(pRef); if(!pS.exists()) throw "No User";
           const earned = cS.data().points || 0;
           const newPoints = (pS.data().points || 0) + earned;
           const newIndex = Math.min(allBricks.length-1, Math.floor(newPoints / (totalPoints/allBricks.length)));
