@@ -87,127 +87,134 @@
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
-function liveLeaderboard() {
-  if (!window.db || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
-  const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
-  
-  window.onSnapshot(q, (snap) => {
-    const list = document.getElementById("leaderboard-list");
-    list.innerHTML = "";
-    const playersAtPoints = {};
-    const activePlayers = [];
-
-    // First pass: Group players by their exact progress
-    snap.forEach(d => {
-      const p = d.data();
-      const pts = p.points || 0;
-      const spotKey = Math.floor(pts);
-      if (!playersAtPoints[spotKey]) playersAtPoints[spotKey] = [];
+    function liveLeaderboard() {
+      if (!window.db || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
+      const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
       
-      const playerData = { id: d.id, points: pts };
-      playersAtPoints[spotKey].push(playerData);
-      activePlayers.push(playerData);
-    });
+      window.onSnapshot(q, (snap) => {
+        const list = document.getElementById("leaderboard-list");
+        list.innerHTML = "";
+        const playersAtPoints = {};
+        const activePlayers = [];
 
-    let rank = 1;
-    const newPositions = [];
-    const labelFeatures = [];
-    const pointsToBrickRatio = totalPoints / (allBricks.length - 1);
+        snap.forEach(d => {
+          const p = d.data();
+          const pts = p.points || 0;
+          const spotKey = Math.floor(pts);
+          if (!playersAtPoints[spotKey]) playersAtPoints[spotKey] = [];
+          
+          const playerData = { id: d.id, points: pts };
+          playersAtPoints[spotKey].push(playerData);
+          activePlayers.push(playerData);
+        });
 
-    // Second pass: Calculate positions with centering and spacing
-    activePlayers.forEach(p => {
-      list.innerHTML += `<div class="leader-item"><span>${rank}. ${p.id}</span><span>${Math.floor(p.points)}</span></div>`;
+        let rank = 1;
+        const newPositions = [];
+        const labelFeatures = [];
+        const pointsToBrickRatio = totalPoints / (allBricks.length - 1);
 
-      let brickIndex = Math.floor(p.points / pointsToBrickRatio);
-      let remainder = (p.points % pointsToBrickRatio) / pointsToBrickRatio;
-      brickIndex = Math.min(brickIndex, allBricks.length - 1);
-      let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
+        activePlayers.forEach(p => {
+          list.innerHTML += `<div class="leader-item"><span>${rank}. ${p.id}</span><span>${Math.floor(p.points)}</span></div>`;
 
-      const start = allBricks[brickIndex].geometry.coordinates;
-      const end = allBricks[nextIndex].geometry.coordinates;
+          let brickIndex = Math.floor(p.points / pointsToBrickRatio);
+          let remainder = (p.points % pointsToBrickRatio) / pointsToBrickRatio;
+          brickIndex = Math.min(brickIndex, allBricks.length - 1);
+          let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
 
-      const dx = end[0] - start[0];
-      const dy = end[1] - start[1];
-      const pathAngle = Math.atan2(dy, dx); 
+          const start = allBricks[brickIndex].geometry.coordinates;
+          const end = allBricks[nextIndex].geometry.coordinates;
 
-      let lng = start[0] + dx * remainder;
-      let lat = start[1] + dy * remainder;
+          const dx = end[0] - start[0];
+          const dy = end[1] - start[1];
+          const pathAngle = Math.atan2(dy, dx); 
 
-      // CENTERED SIDE-BY-SIDE SPACING
-      const spotKey = Math.floor(p.points);
-      const peers = playersAtPoints[spotKey];
-      const count = peers.length;
+          let lng = start[0] + dx * remainder;
+          let lat = start[1] + dy * remainder;
 
-      if (count > 1) {
-        const laneWidth = 0.00012; // INCREASED: Adjust this for more/less gap
-        const playerIndex = peers.findIndex(peer => peer.id === p.id);
-        
-        // This math centers the group (e.g., if 2 players, they are -0.5 and +0.5 lanes from center)
-        const offsetMultiplier = playerIndex - (count - 1) / 2;
-        const sideShift = offsetMultiplier * laneWidth;
-        
-        lng += Math.cos(pathAngle + Math.PI / 2) * sideShift;
-        lat += Math.sin(pathAngle + Math.PI / 2) * sideShift;
-      }
+          const spotKey = Math.floor(p.points);
+          const peers = playersAtPoints[spotKey];
+          const count = peers.length;
 
-      newPositions.push({
-        coord: mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], 0),
-        angle: pathAngle,
-        rank: rank
+          if (count > 1) {
+            const laneWidth = 0.00012; 
+            const playerIndex = peers.findIndex(peer => peer.id === p.id);
+            const offsetMultiplier = playerIndex - (count - 1) / 2;
+            const sideShift = offsetMultiplier * laneWidth;
+            
+            lng += Math.cos(pathAngle + Math.PI / 2) * sideShift;
+            lat += Math.sin(pathAngle + Math.PI / 2) * sideShift;
+          }
+
+          newPositions.push({
+            coord: mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], 0),
+            angle: pathAngle,
+            rank: rank
+          });
+
+          labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name: p.id } });
+          rank++;
+        });
+
+        playerPositions = newPositions;
+        if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
+        map.triggerRepaint();
       });
+    }
 
-      labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name: p.id } });
-      rank++;
-    });
+    const customLayer = {
+      id: '3d-model', type: 'custom', renderingMode: '3d',
+      onAdd: function (map, gl) {
+        this.camera = new THREE.Camera();
+        this.scene = new THREE.Scene();
+        this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        const loader = new THREE.GLTFLoader();
+        loader.load('penguinpete.glb', (gltf) => {
+          this.model = gltf.scene;
+          this.model.scale.set(10, 10, 10); 
+        });
+        this.map = map;
+        this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
+        this.renderer.autoClear = false;
+      },
+      render: function (gl, matrix) {
+        if (!this.model) return;
+        const m = new THREE.Matrix4().fromArray(matrix);
 
-    playerPositions = newPositions;
-    if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
-    map.triggerRepaint();
-  });
-}
+        playerPositions.forEach(player => {
+          const pos = player.coord;
+          const translate = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z);
+          const s = pos.meterInMercatorCoordinateUnits();
+          const scale = new THREE.Matrix4().makeScale(s, -s, s);
+          const rotationZ = new THREE.Matrix4().makeRotationZ(-player.angle + Math.PI);
+          const rotationX = new THREE.Matrix4().makeRotationX(Math.PI / 2);
 
- const customLayer = {
-  id: '3d-model', type: 'custom', renderingMode: '3d',
-  onAdd: function (map, gl) {
-    this.camera = new THREE.Camera();
-    this.scene = new THREE.Scene();
-    this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-    const loader = new THREE.GLTFLoader();
-    loader.load('penguinpete.glb', (gltf) => {
-      this.model = gltf.scene;
-      // Set a consistent scale
-      this.model.scale.set(10, 10, 10); 
-    });
-    this.map = map;
-    this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
-    this.renderer.autoClear = false;
-  },
-  render: function (gl, matrix) {
-    if (!this.model) return;
-    const m = new THREE.Matrix4().fromArray(matrix);
+          const l = translate.multiply(scale).multiply(rotationZ).multiply(rotationX);
 
-    playerPositions.forEach(player => {
-      const pos = player.coord;
-      const translate = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z);
-      const s = pos.meterInMercatorCoordinateUnits();
-      const scale = new THREE.Matrix4().makeScale(s, -s, s);
-      const rotationZ = new THREE.Matrix4().makeRotationZ(-player.angle + Math.PI);
-      const rotationX = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+          this.camera.projectionMatrix.copy(m).multiply(l);
+          this.scene.clear();
+          this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+          this.scene.add(this.model);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
+        });
+        this.map.triggerRepaint();
+      }
+    };
 
-      const l = translate.multiply(scale).multiply(rotationZ).multiply(rotationX);
-
-      this.camera.projectionMatrix.copy(m).multiply(l);
-      this.scene.clear();
-      this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-      this.scene.add(this.model);
-      this.renderer.resetState();
-      this.renderer.render(this.scene, this.camera);
-    });
-    this.map.triggerRepaint();
-  }
-};
     map.on('load', async () => {
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
+      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
+
+      // --- 1. Housing Overlay (Logo) ---
+      map.addSource('housing-overlay', { 
+        type: 'image', 
+        url: 'housing-overlay.png', 
+        coordinates: [[-80.6476, 41.1022], [-80.6532, 41.1044], [-80.6514, 41.1091], [-80.6458, 41.1069]] 
+      });
+      map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
+
+      // --- 2. Bricks and Standard Markers ---
       if(brickData) {
         allBricks = brickData.features;
         map.addSource('dots', { type: 'geojson', data: { type: 'FeatureCollection', features: brickData.features.map(f => {
@@ -222,31 +229,74 @@ function liveLeaderboard() {
           return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [points] }, properties: f.properties };
         })}});
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
+
+        const startCoords = brickData.features[0].geometry.coordinates;
+        const endCoords = brickData.features[brickData.features.length - 1].geometry.coordinates;
+        const turnCoords = brickData.features[41].geometry.coordinates;
+
+        map.addSource('markers', { 
+          type: 'geojson', 
+          data: { 
+            type: 'FeatureCollection', 
+            features: [
+              { type: 'Feature', geometry: { type: 'Point', coordinates: startCoords }, properties: { label: 'START', color: '#E4002B' } }, 
+              { type: 'Feature', geometry: { type: 'Point', coordinates: endCoords }, properties: { label: 'FINISH', color: '#111111' } }, 
+              { type: 'Feature', geometry: { type: 'Point', coordinates: turnCoords }, properties: { label: 'Turn Left', id: 'turn-arrow', color: '#00c853' } }
+            ] 
+          } 
+        });
+
+        map.addLayer({ 
+          id: 'marker-labels', 
+          type: 'symbol', 
+          source: 'markers', 
+          layout: { 
+            'text-field': ['get', 'label'], 
+            'text-size': 14, 
+            'text-offset': [0, -0.5], 
+            'text-anchor': 'bottom', 
+            'text-allow-overlap': true 
+          }, 
+          paint: { 
+            'text-color': '#ffffff', 
+            'text-halo-color': ['get', 'color'], 
+            'text-halo-width': 2 
+          } 
+        });
       }
 
+      // --- 3. Player Labels (Jumble Fix) ---
       map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-map.addLayer({ 
-  id: 'player-name-tags', 
-  type: 'symbol', 
-  source: 'player-labels', 
-  layout: { 
-    'text-field': ['get', 'name'], 
-    'text-size': 14, 
-    'text-offset': [0, -3.5], // Moves label UP (negative Y is up in Mapbox)
-    'text-anchor': 'bottom',   // Anchors the bottom of the text to the offset point
-    'text-allow-overlap': true,
-    'text-ignore-placement': true
-  }, 
-  paint: { 
-    'text-color': '#ffffff', 
-    'text-halo-color': '#000000', 
-    'text-halo-width': 2 
-  } 
-});
-      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
+      map.addLayer({ 
+        id: 'player-name-tags', 
+        type: 'symbol', 
+        source: 'player-labels', 
+        layout: { 
+          'text-field': ['get', 'name'], 
+          'text-size': 14, 
+          'text-offset': [0, -4.0], // Increased offset to clear penguin head
+          'text-variable-anchor': ['bottom', 'top', 'left', 'right'], // Prevents clumping by allowing names to shift
+          'text-radial-offset': 0.5,
+          'text-justify': 'auto',
+          'text-allow-overlap': false, // Changed to false so they spread out rather than stack
+          'text-ignore-placement': false
+        }, 
+        paint: { 
+          'text-color': '#ffffff', 
+          'text-halo-color': '#000000', 
+          'text-halo-width': 2 
+        } 
+      });
+
+      // --- 4. Buildings & Courtyards ---
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.9 } });
+      }
+
+      if(courtyards) {
+        map.addSource('courtyards', { type: 'geojson', data: courtyards });
+        map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
       }
 
       map.addLayer(customLayer);
