@@ -147,7 +147,7 @@
       window.onSnapshot(q, (snap) => {
         const list = document.getElementById("leaderboard-list");
         list.innerHTML = "";
-        const topPlayersData = [];
+        const topPlayersFeatures = [];
         let rank = 1;
         
         snap.forEach(d => {
@@ -155,56 +155,55 @@
           list.innerHTML += `
             <div class="leader-item">
               <span>${rank}. ${d.id}</span>
-              <span>${p.points || 0}</span>
+              <span>${Math.floor(p.points || 0)}</span>
             </div>`;
           
-          const coords = (allBricks && allBricks[p.brickIndex]) 
-            ? allBricks[p.brickIndex].geometry.coordinates 
+          const brickIdx = p.brickIndex || 0;
+          const coords = (allBricks && allBricks[brickIdx]) 
+            ? allBricks[brickIdx].geometry.coordinates 
             : [-80.64848, 41.10985];
 
-          topPlayersData.push({
+          topPlayersFeatures.push({
             type: 'Feature',
             geometry: { type: 'Point', coordinates: coords },
-            properties: { username: d.id, rank: rank }
+            properties: { 
+              username: d.id, 
+              rank: rank // This identifies which topplayerX image to use
+            }
           });
           rank++;
         });
 
         const src = map.getSource('players');
         if (src) {
-          src.setData({ type: 'FeatureCollection', features: topPlayersData });
+          src.setData({ type: 'FeatureCollection', features: topPlayersFeatures });
         }
       });
     }
 
     function updatePlayerOnMap(username, coords) {
-      const src = map.getSource('players');
-      if (!src) return;
-      const data = src._data || { type: 'FeatureCollection', features: [] };
-      const i = data.features.findIndex(f => f.properties?.username === username);
-      const feature = {
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: coords },
-        properties: { username }
-      };
-      if (i >= 0) data.features[i] = feature;
-      else data.features.push(feature);
-      src.setData(data);
+        // This is handled by the live snapshot, but kept for logic consistency
+        return; 
     }
 
     map.on('load', async () => {
-      // Load 7 status images and start leaderboard logic
+      // 1. Load all 7 images as a batch
+      const imagePromises = [];
       for (let i = 1; i <= 7; i++) {
-        map.loadImage(`topplayer${i}.png`, (error, image) => {
-          if (!error) map.addImage(`status-rank-${i}`, image);
-          if (i === 1) liveLeaderboard();
-        });
+        imagePromises.push(new Promise((resolve) => {
+          map.loadImage(`topplayer${i}.png`, (error, image) => {
+            if (!error) map.addImage(`status-rank-${i}`, image);
+            resolve();
+          });
+        }));
       }
 
+      // 2. Load Data Files
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
+      // 3. Housing Overlay
       map.addSource('housing-overlay', {
         type: 'image',
         url: 'housing-overlay.png',
@@ -217,6 +216,7 @@
       });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
+      // 4. Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
@@ -236,6 +236,7 @@
         });
       }
 
+      // 5. Path Bricks
       if(brickData && brickData.features.length > 0) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
@@ -275,29 +276,35 @@
           }
         });
 
+        // 6. Players Source & Layer
         map.addSource('players', {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] }
         });
 
-        // The logic for displaying images based on rank
         map.addLayer({
           id: 'players-layer',
           type: 'symbol',
           source: 'players',
           layout: {
+            // Concatenates rank to the image name: status-rank-1, status-rank-2, etc.
             'icon-image': ['concat', 'status-rank-', ['get', 'rank']],
-            'icon-size': 0.3,
+            'icon-size': 0.35,
             'icon-anchor': 'bottom',
             'icon-allow-overlap': true,
             'icon-ignore-placement': true
           },
           paint: {
             'icon-halo-color': '#ffffff',
-            'icon-halo-width': 3
+            'icon-halo-width': 2
           }
         });
       }
+
+      // Wait for all rank images to be ready before starting Firestore sync
+      Promise.all(imagePromises).then(() => {
+        liveLeaderboard();
+      });
     });
 
     window.validateCode = async () => {
@@ -339,7 +346,6 @@
           });
 
           const nextCoords = allBricks[newIndex].geometry.coordinates;
-          updatePlayerOnMap(username, nextCoords);
           document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
           map.flyTo({ center: nextCoords, duration: 1000 });
         });
