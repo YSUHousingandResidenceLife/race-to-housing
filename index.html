@@ -67,9 +67,29 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
   <script>
     const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
-    const COURTYARDS_URL = 'university_courtyards.geojson';
     const BRICKS_FILE_URL = 'race_bricks.geojson';
     mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+
+    // DROP-IN COURTYARDS DATA
+    const COURTYARDS_DATA = {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "properties": { "name": "University Courtyards" },
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[
+              [-80.64571, 41.10756],
+              [-80.64326, 41.10756],
+              [-80.64326, 41.10444],
+              [-80.64571, 41.10444],
+              [-80.64571, 41.10756]
+            ]]
+          }
+        }
+      ]
+    };
 
     let allBricks = [];
     const totalPoints = 1000;
@@ -187,10 +207,8 @@
 
     map.on('load', async () => {
       map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
-      const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
-      
+      const [brickData, race] = await Promise.all([loadJSON(BRICKS_FILE_URL), loadJSON(GEOJSON_URL)]).catch(()=>[]);
+
       if(brickData) {
         allBricks = brickData.features;
         map.addSource('dots', { type: 'geojson', data: { type: 'FeatureCollection', features: brickData.features.map(f => {
@@ -215,13 +233,10 @@ const race = await loadJSON(GEOJSON_URL).catch(()=>null);
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.8 } });
       }
-       // University Courtyards
-      if(courtyards) {
-        map.addSource('courtyards', { type: 'geojson', data: courtyards });
-        map.addLayer({
-          id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards',
-          paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 }
-        });
+
+      // ADD COURTYARDS FROM DROP-IN DATA
+      map.addSource('courtyards', { type: 'geojson', data: COURTYARDS_DATA });
+      map.addLayer({ id: 'courtyards-layer', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.9 } });
 
       map.addLayer(customLayer);
 
@@ -229,8 +244,17 @@ const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       map.addLayer({
         id: 'marker-labels', type: 'symbol', source: 'markers',
         layout: { 
-          'text-field': ['get', 'label'], 'text-size': 14, 'text-anchor': 'bottom', 
-          'text-offset': [0, -3], 'text-allow-overlap': true, 'text-ignore-placement': true 
+          'text-field': ['get', 'label'], 
+          'text-size': 14, 
+          'text-anchor': 'bottom', 
+          'text-offset': [
+            'match',
+            ['get', 'label'],
+            'START', ['literal', [0, -3]], // Only START is higher
+            ['literal', [0, -1.5]]            // Others stay standard
+          ], 
+          'text-allow-overlap': true, 
+          'text-ignore-placement': true 
         },
         paint: { 'text-color': '#fff', 'text-halo-color': ['get', 'color'], 'text-halo-width': 2 }
       });
@@ -240,13 +264,11 @@ const race = await loadJSON(GEOJSON_URL).catch(()=>null);
         id: 'player-name-tags', type: 'symbol', source: 'player-labels', 
         layout: { 
           'text-field': ['get', 'name'],
-          // Scale size and height together
           'text-size': ['interpolate', ['linear'], ['zoom'], 15, 10, 20, 18],
-          // At zoom 15 (far out), offset is small (-1.5). At zoom 20 (close), offset is high (-4.5)
           'text-offset': ['interpolate', ['linear'], ['zoom'], 15, [0, -1.5], 20, [0, -4.5]],
           'text-anchor': 'bottom',
           'text-padding': 10,
-          'text-allow-overlap': false, // Prevents the jumble when zoomed out
+          'text-allow-overlap': false,
           'text-ignore-placement': false,
           'text-pitch-alignment': 'viewport'
         }, 
