@@ -8,50 +8,49 @@
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
 
 <style>
-html, body { height:100%; margin:0; overflow:hidden; }
-#map { position:absolute; inset:0; }
+html,body{height:100%;margin:0;overflow:hidden}
+#map{position:absolute;inset:0}
 
 /* Leaderboard */
 .console-left{
-  position:absolute; bottom:20px; left:20px;
-  width:220px; padding:14px;
+  position:absolute;bottom:20px;left:20px;
+  width:220px;padding:14px;
   background:rgba(17,17,17,.9);
-  color:#fff; border-radius:12px;
+  color:#fff;border-radius:12px;
   border:2px solid #E4002B;
-  z-index:10;
-  font-family:system-ui,sans-serif;
+  z-index:10;font-family:system-ui,sans-serif
 }
 .console-left h2{
-  font-size:13px; margin:0 0 8px;
-  color:#E4002B; text-transform:uppercase;
+  font-size:13px;margin:0 0 8px;
+  color:#E4002B;text-transform:uppercase
 }
 .leader-item{
-  display:flex; justify-content:space-between;
-  font-size:13px; margin:5px 0;
+  display:flex;justify-content:space-between;
+  font-size:13px;margin:5px 0
 }
 
 /* Redeem */
 .console-right{
-  position:absolute; bottom:20px; right:20px;
-  width:260px; padding:14px;
+  position:absolute;bottom:20px;right:20px;
+  width:260px;padding:14px;
   background:rgba(255,255,255,.95);
-  border-radius:12px; z-index:10;
-  font-family:system-ui,sans-serif;
+  border-radius:12px;z-index:10;
+  font-family:system-ui,sans-serif
 }
 .console-right input{
-  width:100%; padding:8px; margin-bottom:6px;
+  width:100%;padding:8px;margin-bottom:6px
 }
 .btn{
-  width:100%; padding:10px;
-  border:none; border-radius:6px;
-  font-weight:600;
+  width:100%;padding:10px;
+  border:none;border-radius:6px;
+  font-weight:600
 }
-.btn-red{ background:#E4002B; color:#fff; }
-.btn-gray{ background:#eee; margin-top:6px; }
+.btn-red{background:#E4002B;color:#fff}
+.btn-gray{background:#eee;margin-top:6px}
 #score-display{
-  display:block; text-align:center;
-  font-weight:700; color:#E4002B;
-  margin-bottom:6px;
+  display:block;text-align:center;
+  font-weight:700;color:#E4002B;
+  margin-bottom:6px
 }
 </style>
 </head>
@@ -75,12 +74,10 @@ const app = initializeApp({
 });
 
 const db = getFirestore(app);
-
-// expose to window
 Object.assign(window,{
-  db, doc, collection, query,
-  where, orderBy, limit,
-  runTransaction, serverTimestamp, onSnapshot
+  db,doc,collection,query,where,
+  orderBy,limit,runTransaction,
+  serverTimestamp,onSnapshot
 });
 </script>
 
@@ -117,12 +114,47 @@ const map = new mapboxgl.Map({
   container:'map',
   style:'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
   center:[-80.64848,41.10985],
-  zoom:16.7, pitch:60, bearing:-172
+  zoom:16.7,pitch:60,bearing:-172
 });
 
 async function loadJSON(url){
   const r = await fetch(url);
   return r.json();
+}
+
+/* Brick → rotated rectangle */
+function processBricks(data){
+  const sizeLng = 0.00005;
+  const sizeLat = 0.00009;
+  allBricks = data.features;
+
+  return {
+    type:'FeatureCollection',
+    features:data.features.map(f=>{
+      const [lng,lat] = f.geometry.coordinates;
+      const angle = ((f.properties.rotation||0)*-1)*Math.PI/180;
+
+      const base = [
+        [-sizeLng,-sizeLat],
+        [ sizeLng,-sizeLat],
+        [ sizeLng, sizeLat],
+        [-sizeLng, sizeLat]
+      ];
+
+      const poly = base.map(([dx,dy])=>[
+        lng + (dx*Math.cos(angle)-dy*Math.sin(angle)),
+        lat + (dx*Math.sin(angle)+dy*Math.cos(angle))
+      ]);
+
+      poly.push(poly[0]);
+
+      return {
+        type:'Feature',
+        properties:f.properties,
+        geometry:{type:'Polygon',coordinates:[poly]}
+      };
+    })
+  };
 }
 
 function liveLeaderboard(){
@@ -148,18 +180,13 @@ function liveLeaderboard(){
   });
 }
 
-function updatePlayerOnMap(username, coords){
+function updatePlayerOnMap(username,coords){
   const src = map.getSource('players');
   if(!src) return;
   const data = src._data || {type:'FeatureCollection',features:[]};
   const i = data.features.findIndex(f=>f.properties.username===username);
-  const f = {
-    type:'Feature',
-    geometry:{type:'Point',coordinates:coords},
-    properties:{username}
-  };
-  if(i>=0) data.features[i]=f;
-  else data.features.push(f);
+  const f = {type:'Feature',geometry:{type:'Point',coordinates:coords},properties:{username}};
+  if(i>=0) data.features[i]=f; else data.features.push(f);
   src.setData(data);
 }
 
@@ -169,8 +196,8 @@ map.on('load', async ()=>{
 
   const race = await loadJSON(GEOJSON_URL);
   const courtyards = await loadJSON(COURTYARDS_URL);
-  const bricks = await loadJSON(BRICKS_URL);
-  allBricks = bricks.features;
+  const bricksRaw = await loadJSON(BRICKS_URL);
+  const bricks = processBricks(bricksRaw);
 
   /* Housing overlay */
   map.addSource('housing-overlay',{
@@ -218,44 +245,50 @@ map.on('load', async ()=>{
     }
   });
 
-  /* Bricks */
+  /* Brick route */
   map.addSource('bricks',{type:'geojson',data:bricks});
   map.addLayer({
     id:'bricks-layer',
-    type:'circle',
+    type:'fill',
     source:'bricks',
-    paint:{'circle-radius':3,'circle-color':'#ffffff'}
+    paint:{'fill-color':['get','color'],'fill-opacity':1}
   });
 
-  /* Markers */
+  /* START / FINISH / TURN */
+  const startPoint = allBricks[0].geometry.coordinates;
+  const endPoint   = allBricks[allBricks.length-1].geometry.coordinates;
+  const turnPoint  = allBricks[41].geometry.coordinates;
+
   map.addSource('markers',{
     type:'geojson',
     data:{
       type:'FeatureCollection',
       features:[
-        {type:'Feature',geometry:{type:'Point',coordinates:allBricks[0].geometry.coordinates},properties:{label:'START'}},
-        {type:'Feature',geometry:{type:'Point',coordinates:allBricks.at(-1).geometry.coordinates},properties:{label:'FINISH'}}
+        {type:'Feature',geometry:{type:'Point',coordinates:startPoint},properties:{label:'START',color:'#E4002B'}},
+        {type:'Feature',geometry:{type:'Point',coordinates:endPoint},properties:{label:'FINISH',color:'#111'}},
+        {type:'Feature',geometry:{type:'Point',coordinates:turnPoint},properties:{label:'Turn Left',color:'#00c853'}}
       ]
     }
   });
+
   map.addLayer({
     id:'marker-labels',
     type:'symbol',
     source:'markers',
     layout:{
       'text-field':['get','label'],
-      'text-size':14,
+      'text-size':15,
       'text-offset':[0,-0.6],
       'text-allow-overlap':true
     },
     paint:{
       'text-color':'#fff',
-      'text-halo-color':'#E4002B',
+      'text-halo-color':['get','color'],
       'text-halo-width':2
     }
   });
 
-  /* Players */
+  /* Players (penguins) */
   map.addSource('players',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({
     id:'players-layer',
@@ -269,33 +302,54 @@ map.on('load', async ()=>{
     }
   });
 
+  /* Spawn penguins for active players */
+  const q = window.query(
+    window.collection(window.db,'players'),
+    window.where('points','>',0)
+  );
+
+  window.onSnapshot(q,snap=>{
+    const feats=[];
+    snap.forEach(d=>{
+      const p=d.data();
+      const idx=Math.min(allBricks.length-1,p.brickIndex||0);
+      feats.push({
+        type:'Feature',
+        geometry:{type:'Point',coordinates:allBricks[idx].geometry.coordinates},
+        properties:{username:d.id}
+      });
+    });
+    map.getSource('players').setData({type:'FeatureCollection',features:feats});
+  });
+
 });
 
+/* Redeem */
 window.validateCode = async ()=>{
-  const username = document.getElementById('username').value.trim();
-  const code = document.getElementById('redeemCode').value.trim();
+  const username=document.getElementById('username').value.trim();
+  const code=document.getElementById('redeemCode').value.trim();
   if(!username||!code) return alert('Enter username and code');
 
-  const playerRef = window.doc(window.db,'players',username);
-  const codeRef = window.doc(window.db,'codes',code);
-  const claimRef = window.doc(window.db,'globalClaims',code);
+  const playerRef=window.doc(window.db,'players',username);
+  const codeRef=window.doc(window.db,'codes',code);
+  const claimRef=window.doc(window.db,'globalClaims',code);
 
-  await window.runTransaction(window.db, async tx=>{
-    const c = await tx.get(codeRef);
+  await window.runTransaction(window.db,async tx=>{
+    const c=await tx.get(codeRef);
     if(!c.exists()) throw 'Invalid code';
     if((await tx.get(claimRef)).exists()) throw 'Already claimed';
 
-    const p = await tx.get(playerRef);
+    const p=await tx.get(playerRef);
     if(!p.exists()) throw 'User not found';
 
-    const pts = (p.data().points||0)+c.data().points;
-    const idx = Math.min(allBricks.length-1,Math.floor(pts/(totalPoints/allBricks.length)));
+    const pts=(p.data().points||0)+c.data().points;
+    const idx=Math.min(allBricks.length-1,Math.floor(pts/(totalPoints/allBricks.length)));
 
     tx.update(playerRef,{points:pts,brickIndex:idx,lastUpdated:window.serverTimestamp()});
     tx.set(claimRef,{claimedBy:username,claimedAt:window.serverTimestamp()});
 
-    updatePlayerOnMap(username, allBricks[idx].geometry.coordinates);
-    document.getElementById('score-display').innerText = `Progress: ${pts} / 1000`;
+    document.getElementById('score-display').innerText=`Progress: ${pts} / 1000`;
+    map.flyTo({center:allBricks[idx].geometry.coordinates,duration:800});
   });
 };
 </script>
