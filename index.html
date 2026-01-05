@@ -266,30 +266,27 @@
       }
 
       // --- 3. Player Labels (Jumble Fix) ---
-map.addLayer({ 
-  id: 'player-name-tags', 
-  type: 'symbol', 
-  source: 'player-labels', 
-  layout: { 
-    'text-field': ['get', 'name'], 
-    // This scales the text as you zoom: 12px at zoom 15, up to 20px at zoom 22
-    'text-size': ['interpolate', ['linear'], ['zoom'], 15, 12, 22, 20], 
-    'text-offset': [0, -4.0], 
-    'text-variable-anchor': ['bottom', 'top', 'left', 'right'],
-    'text-radial-offset': 0.5,
-    'text-justify': 'auto',
-    // These two lines prevent the text from disappearing when you get close
-    'text-allow-overlap': true, 
-    'text-ignore-placement': true,
-    'text-pitch-alignment': 'viewport', // Keeps text facing you like a billboard
-    'text-rotation-alignment': 'viewport'
-  }, 
-  paint: { 
-    'text-color': '#ffffff', 
-    'text-halo-color': '#000000', 
-    'text-halo-width': 2 
-  } 
-});
+      map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({ 
+        id: 'player-name-tags', 
+        type: 'symbol', 
+        source: 'player-labels', 
+        layout: { 
+          'text-field': ['get', 'name'], 
+          'text-size': 14, 
+          'text-offset': [0, -4.0], // Increased offset to clear penguin head
+          'text-variable-anchor': ['bottom', 'top', 'left', 'right'], // Prevents clumping by allowing names to shift
+          'text-radial-offset': 0.5,
+          'text-justify': 'auto',
+          'text-allow-overlap': false, // Changed to false so they spread out rather than stack
+          'text-ignore-placement': false
+        }, 
+        paint: { 
+          'text-color': '#ffffff', 
+          'text-halo-color': '#000000', 
+          'text-halo-width': 2 
+        } 
+      });
 
       // --- 4. Buildings & Courtyards ---
       if(race) {
