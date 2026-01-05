@@ -63,7 +63,6 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // Global Scope Exports for the standard script below
   window.db = db;
   window.doc = doc;
   window.collection = collection;
@@ -81,8 +80,7 @@
 
   <div class="console-left">
     <h2>Top 7 Players</h2>
-    <div id="leaderboard-list">
-      </div>
+    <div id="leaderboard-list"></div>
   </div>
 
   <div class="console-right">
@@ -133,37 +131,51 @@
       };
     }
 
-function liveLeaderboard() {
-  if (!window.db || !window.query) { 
-    setTimeout(liveLeaderboard, 500); 
-    return; 
-  }
-  
-// Use window. to access Firebase functions from the module script
-  const q = window.query(
-    window.collection(window.db, "players"), 
-    window.where("points", ">", 0), // Only show active players with more than 0 points
-    window.orderBy("points", "desc"),
-    window.limit(7)
-  );
+    function liveLeaderboard() {
+      if (!window.db || !window.query) { 
+        setTimeout(liveLeaderboard, 500); 
+        return; 
+      }
+      
+      const q = window.query(
+        window.collection(window.db, "players"), 
+        window.where("points", ">", 0), 
+        window.orderBy("points", "desc"),
+        window.limit(7)
+      );
 
-  window.onSnapshot(q, (snap) => {
-    const list = document.getElementById("leaderboard-list");
-    list.innerHTML = "";
-    let rank = 1;
-    
-    snap.forEach(d => {
-      const p = d.data();
-      // d.id is the username (the Document ID from your screenshot)
-      list.innerHTML += `
-        <div class="leader-item">
-          <span>${rank}. ${d.id}</span>
-          <span>${p.points || 0}</span>
-        </div>`;
-      rank++;
-    });
-  });
-}
+      window.onSnapshot(q, (snap) => {
+        const list = document.getElementById("leaderboard-list");
+        list.innerHTML = "";
+        const topPlayersData = [];
+        let rank = 1;
+        
+        snap.forEach(d => {
+          const p = d.data();
+          list.innerHTML += `
+            <div class="leader-item">
+              <span>${rank}. ${d.id}</span>
+              <span>${p.points || 0}</span>
+            </div>`;
+          
+          const coords = (allBricks && allBricks[p.brickIndex]) 
+            ? allBricks[p.brickIndex].geometry.coordinates 
+            : [-80.64848, 41.10985];
+
+          topPlayersData.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: coords },
+            properties: { username: d.id, rank: rank }
+          });
+          rank++;
+        });
+
+        const src = map.getSource('players');
+        if (src) {
+          src.setData({ type: 'FeatureCollection', features: topPlayersData });
+        }
+      });
+    }
 
     function updatePlayerOnMap(username, coords) {
       const src = map.getSource('players');
@@ -181,16 +193,18 @@ function liveLeaderboard() {
     }
 
     map.on('load', async () => {
-      map.loadImage('https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Emperor_Penguin_Manchot_empereur.png/100px-Emperor_Penguin_Manchot_empereur.png', (error, image) => {
-          if (!error) map.addImage('penguin', image);
-          liveLeaderboard();
-      });
+      // Load 7 status images and start leaderboard logic
+      for (let i = 1; i <= 7; i++) {
+        map.loadImage(`topplayer${i}.png`, (error, image) => {
+          if (!error) map.addImage(`status-rank-${i}`, image);
+          if (i === 1) liveLeaderboard();
+        });
+      }
 
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // Housing Overlay
       map.addSource('housing-overlay', {
         type: 'image',
         url: 'housing-overlay.png',
@@ -203,7 +217,6 @@ function liveLeaderboard() {
       });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
-      // Race Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
@@ -215,7 +228,6 @@ function liveLeaderboard() {
         });
       }
 
-      // University Courtyards
       if(courtyards) {
         map.addSource('courtyards', { type: 'geojson', data: courtyards });
         map.addLayer({
@@ -224,7 +236,6 @@ function liveLeaderboard() {
         });
       }
 
-      // Bricks and Endpoints
       if(brickData && brickData.features.length > 0) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
@@ -264,73 +275,77 @@ function liveLeaderboard() {
           }
         });
 
-        // Player Symbol Layer
         map.addSource('players', {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] }
         });
 
+        // The logic for displaying images based on rank
         map.addLayer({
           id: 'players-layer',
           type: 'symbol',
           source: 'players',
           layout: {
-            'icon-image': 'penguin',
-            'icon-size': 0.2,
+            'icon-image': ['concat', 'status-rank-', ['get', 'rank']],
+            'icon-size': 0.3,
             'icon-anchor': 'bottom',
-            'icon-allow-overlap': true
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true
+          },
+          paint: {
+            'icon-halo-color': '#ffffff',
+            'icon-halo-width': 3
           }
         });
       }
     });
 
-    // Redemption Logic with Security Rules Compliance
-window.validateCode = async () => {
-  const username = document.getElementById('username').value.trim();
-  const code = document.getElementById('redeemCode').value.trim();
-  if (!username || !code) return alert("Enter username and code!");
+    window.validateCode = async () => {
+      const username = document.getElementById('username').value.trim();
+      const code = document.getElementById('redeemCode').value.trim();
+      if (!username || !code) return alert("Enter username and code!");
 
-  try {
-    // Changing "penguins" back to "players" to match your screenshot
-    const playerRef = window.doc(window.db, "players", username);
-    const codeRef = window.doc(window.db, "codes", code);
-    const claimRef = window.doc(window.db, "globalClaims", code);
+      try {
+        const playerRef = window.doc(window.db, "players", username);
+        const codeRef = window.doc(window.db, "codes", code);
+        const claimRef = window.doc(window.db, "globalClaims", code);
 
-    await window.runTransaction(window.db, async (tx) => {
-      const codeSnap = await tx.get(codeRef);
-      if (!codeSnap.exists()) throw "Invalid code";
-      
-      const claimSnap = await tx.get(claimRef);
-      if (claimSnap.exists()) throw "Code already claimed!";
+        await window.runTransaction(window.db, async (tx) => {
+          const codeSnap = await tx.get(codeRef);
+          if (!codeSnap.exists()) throw "Invalid code";
+          
+          const claimSnap = await tx.get(claimRef);
+          if (claimSnap.exists()) throw "Code already claimed!";
 
-      const playerSnap = await tx.get(playerRef);
-      if (!playerSnap.exists()) throw "User not found! (Check if username matches Firebase ID)";
+          const playerSnap = await tx.get(playerRef);
+          if (!playerSnap.exists()) throw "User not found!";
 
-      const earned = codeSnap.data().points || 0;
-      const player = playerSnap.data();
-      const newPoints = (player.points || 0) + earned;
-      const pointsPerBrick = totalPoints / allBricks.length;
-const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
-      tx.update(playerRef, {
-        points: newPoints,
-        brickIndex: newIndex,
-        lastUpdated: window.serverTimestamp()
-      });
+          const earned = codeSnap.data().points || 0;
+          const player = playerSnap.data();
+          const newPoints = (player.points || 0) + earned;
+          const pointsPerBrick = totalPoints / allBricks.length;
+          const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
+          
+          tx.update(playerRef, {
+            points: newPoints,
+            brickIndex: newIndex,
+            lastUpdated: window.serverTimestamp()
+          });
 
-      tx.set(claimRef, {
-        codeId: code,
-        claimedBy: username,
-        claimedAt: window.serverTimestamp()
-      });
+          tx.set(claimRef, {
+            codeId: code,
+            claimedBy: username,
+            claimedAt: window.serverTimestamp()
+          });
 
-      const nextCoords = allBricks[newIndex].geometry.coordinates;
-      updatePlayerOnMap(username, nextCoords);
-document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
-      map.flyTo({ center: nextCoords, duration: 1000 });
-    });
-    document.getElementById('redeemCode').value = "";
-  } catch (err) { alert(err); }
-};
+          const nextCoords = allBricks[newIndex].geometry.coordinates;
+          updatePlayerOnMap(username, nextCoords);
+          document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
+          map.flyTo({ center: nextCoords, duration: 1000 });
+        });
+        document.getElementById('redeemCode').value = "";
+      } catch (err) { alert(err); }
+    };
   </script>
 </body>
 </html>
