@@ -73,7 +73,6 @@
 
     let allBricks = [];
     const totalPoints = 1000;
-    const modelAltitude = 0; 
     const modelRotate = [Math.PI / 2, Math.PI, 0];
     let playerPositions = [];
     
@@ -88,142 +87,135 @@
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
-    function processBricks(data) {
-      allBricks = data.features;
-      const sizeLng = 0.00005, sizeLat = 0.00009;
-      return {
-        type: 'FeatureCollection',
-        features: data.features.map(f => {
-          const [lng, lat] = f.geometry.coordinates;
-          const angle = ((f.properties.rotation || 123) * -1) * (Math.PI / 180);
-          const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]];
-          const rotated = points.map(([dx, dy]) => [lng + (dx * Math.cos(angle) - dy * Math.sin(angle)), lat + (dx * Math.sin(angle) + dy * Math.cos(angle))]);
-          rotated.push(rotated[0]);
-          return { type: 'Feature', properties: f.properties, geometry: { type: 'Polygon', coordinates: [rotated] } };
-        })
-      };
-    }
-
     function liveLeaderboard() {
-      if (!window.db || !window.query || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
+      if (!window.db || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
       const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
+      
       window.onSnapshot(q, (snap) => {
         const list = document.getElementById("leaderboard-list");
         list.innerHTML = "";
-        let rank = 1; 
+        let rank = 1;
         const newPositions = [];
         const labelFeatures = [];
+        const pointsToBrickRatio = totalPoints / (allBricks.length - 1);
+
+        // Track how many players land on the exact same point/segment
+        const pointTracker = {};
+
         snap.forEach(d => {
           const p = d.data();
-          list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${p.points || 0}</span></div>`;
-          const bIndex = p.brickIndex || 0;
-          if (allBricks[bIndex]) {
-            const coords = allBricks[bIndex].geometry.coordinates;
-            // Store coordinates and the rank for the custom layer
-            newPositions.push({
-              coord: mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude),
-              rank: rank
-            });
-            labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords }, properties: { name: d.id } });
+          const pts = p.points || 0;
+          list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${Math.floor(pts)}</span></div>`;
+
+          // CALCULATION LOGIC:
+          // Find the current brick and the next brick for interpolation
+          let brickIndex = Math.floor(pts / pointsToBrickRatio);
+          let remainder = (pts % pointsToBrickRatio) / pointsToBrickRatio;
+          
+          brickIndex = Math.min(brickIndex, allBricks.length - 1);
+          let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
+
+          const start = allBricks[brickIndex].geometry.coordinates;
+          const end = allBricks[nextIndex].geometry.coordinates;
+
+          // Interpolate Lng/Lat between current and next brick
+          let lng = start[0] + (end[0] - start[0]) * remainder;
+          let lat = start[1] + (end[1] - start[1]) * remainder;
+
+          // SIDE-BY-SIDE LOGIC:
+          // Use a key based on rounded coordinates to detect stacking
+          const key = `${lng.toFixed(6)}-${lat.toFixed(6)}`;
+          pointTracker[key] = (pointTracker[key] || 0) + 1;
+          
+          // Offset players horizontally if they are stacked
+          if (pointTracker[key] > 1) {
+             const offsetVal = (pointTracker[key] - 1) * 0.00002;
+             lng += offsetVal; 
+             lat += offsetVal;
           }
-          rank++; 
+
+          newPositions.push({
+            coord: mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], 0),
+            rank: rank
+          });
+
+          labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: { name: d.id } });
+          rank++;
         });
+
         playerPositions = newPositions;
         if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
         map.triggerRepaint();
       });
     }
 
-  const customLayer = {
+    const customLayer = {
       id: '3d-model', type: 'custom', renderingMode: '3d',
       onAdd: function (map, gl) {
         this.camera = new THREE.Camera();
         this.scene = new THREE.Scene();
-        this.scene.add(new THREE.AmbientLight(0xffffff, 1.2)); 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        directionalLight.position.set(0, -70, 100).normalize();
-        this.scene.add(directionalLight);
-        
-        this.penguins = []; // Array to hold our 7 clones
+        this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
         const loader = new THREE.GLTFLoader();
         loader.load('penguinpete.glb', (gltf) => {
-          for (let i = 0; i < 7; i++) {
-            const clone = gltf.scene.clone(); // Create a unique copy
-            clone.scale.set(10, 10, 10);
-            clone.visible = false; // Hide until a player is active
-            this.scene.add(clone);
-            this.penguins.push(clone);
-          }
+          this.model = gltf.scene;
+          this.model.scale.set(12, 12, 12);
         });
-
         this.map = map;
         this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
         this.renderer.autoClear = false;
       },
       render: function (gl, matrix) {
-        if (this.penguins.length === 0) return;
-
+        if (!this.model) return;
         const m = new THREE.Matrix4().fromArray(matrix);
         const rotationX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
         const rotationY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rotationZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
 
-        // Reset all penguins to invisible first
-        this.penguins.forEach(p => p.visible = false);
+        playerPositions.forEach(player => {
+          const pos = player.coord;
+          const l = new THREE.Matrix4()
+            .makeTranslation(pos.x, pos.y, pos.z)
+            .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
+            .multiply(rotationX).multiply(rotationY).multiply(rotationZ);
 
-        // Position each active player
-        playerPositions.forEach((player, index) => {
-          if (index < this.penguins.length) {
-            const penguin = this.penguins[index];
-            const pos = player.coord;
-            
-            // Create the individual transform for this penguin
-            const l = new THREE.Matrix4()
-              .makeTranslation(pos.x, pos.y, pos.z)
-              .scale(new THREE.Vector3(pos.meterInMercatorCoordinateUnits(), -pos.meterInMercatorCoordinateUnits(), pos.meterInMercatorCoordinateUnits()))
-              .multiply(rotationX)
-              .multiply(rotationY)
-              .multiply(rotationZ);
-
-            penguin.visible = true;
-            
-            // Render this specific penguin
-            this.camera.projectionMatrix.copy(m).multiply(l);
-            this.renderer.resetState();
-            this.renderer.render(this.scene, this.camera);
-          }
+          this.camera.projectionMatrix.copy(m).multiply(l);
+          this.scene.clear();
+          this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+          this.scene.add(this.model);
+          this.renderer.resetState();
+          this.renderer.render(this.scene, this.camera);
         });
         this.map.triggerRepaint();
       }
     };
-    
 
     map.on('load', async () => {
-      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
-
-      map.addSource('housing-overlay', { type: 'image', url: 'housing-overlay.png', coordinates: [[-80.64760006745172, 41.10229501193964], [-80.65320155001069, 41.10444521963691], [-80.65140971026295, 41.10911312176939], [-80.64580822770398, 41.10696291407212]] });
-      map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
-
       if(brickData) {
-        map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
+        allBricks = brickData.features;
+        map.addSource('dots', { type: 'geojson', data: { type: 'FeatureCollection', features: brickData.features.map(f => {
+          const [lng, lat] = f.geometry.coordinates;
+          const sizeLng = 0.00005, sizeLat = 0.00009;
+          const angle = ((f.properties.rotation || 123) * -1) * (Math.PI / 180);
+          const points = [[-sizeLng, -sizeLat], [sizeLng, -sizeLat], [sizeLng, sizeLat], [-sizeLng, sizeLat]].map(([dx, dy]) => [
+            lng + (dx * Math.cos(angle) - dy * Math.sin(angle)),
+            lat + (dx * Math.sin(angle) + dy * Math.cos(angle))
+          ]);
+          points.push(points[0]);
+          return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [points] }, properties: f.properties };
+        })}});
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
-        
-        map.addSource('markers', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }); // Placeholder
-        map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, -2.5], 'text-anchor': 'bottom' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1 } });
       }
 
+      map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({ id: 'player-name-tags', type: 'symbol', source: 'player-labels', layout: { 'text-field': ['get', 'name'], 'text-size': 12, 'text-offset': [0, -3], 'text-anchor': 'bottom' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 } });
+
+      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
-        map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
+        map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.9 } });
       }
-      if(courtyards) {
-        map.addSource('courtyards', { type: 'geojson', data: courtyards });
-        map.addLayer({ id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards', paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 } });
-      }
-      
+
       map.addLayer(customLayer);
       liveLeaderboard();
     });
@@ -231,7 +223,7 @@
     window.validateCode = async () => {
       const username = document.getElementById('username').value.trim();
       const code = document.getElementById('redeemCode').value.trim();
-      if (!username || !code) return alert("Enter username and code!");
+      if (!username || !code) return alert("Enter credentials!");
       try {
         const playerRef = window.doc(window.db, "players", username);
         const codeRef = window.doc(window.db, "codes", code);
@@ -244,14 +236,10 @@
           const playerSnap = await tx.get(playerRef);
           if (!playerSnap.exists()) throw "User not found!";
           const earned = codeSnap.data().points || 0;
-          const player = playerSnap.data();
-          const newPoints = (player.points || 0) + earned;
-          const pointsPerBrick = totalPoints / allBricks.length;
-          const newIndex = Math.min(allBricks.length - 1, Math.floor(newPoints / pointsPerBrick));
-          tx.update(playerRef, { points: newPoints, brickIndex: newIndex, lastUpdated: window.serverTimestamp() });
+          const newPoints = (playerSnap.data().points || 0) + earned;
+          tx.update(playerRef, { points: newPoints, lastUpdated: window.serverTimestamp() });
           tx.set(claimRef, { codeId: code, claimedBy: username, claimedAt: window.serverTimestamp() });
           document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPoints)} / 1000 Points`;
-          map.flyTo({ center: allBricks[newIndex].geometry.coordinates, duration: 1000 });
         });
         document.getElementById('redeemCode').value = "";
       } catch (err) { alert(err); }
