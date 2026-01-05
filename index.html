@@ -107,7 +107,8 @@
       center: [-80.64848, 41.10985],
       zoom: 16.72,
       pitch: 60.0,
-      bearing: -172.0
+      bearing: -172.0,
+      antialias: true
     });
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
@@ -143,48 +144,60 @@
         const list = document.getElementById("leaderboard-list");
         list.innerHTML = "";
         const playerFeatures = [];
-        let rank = 1;
+        let rankCounter = 1;
         
         snap.forEach(d => {
           const p = d.data();
-          list.innerHTML += `<div class="leader-item"><span>${rank}. ${d.id}</span><span>${Math.floor(p.points || 0)}</span></div>`;
+          list.innerHTML += `<div class="leader-item"><span>${rankCounter}. ${d.id}</span><span>${Math.floor(p.points || 0)}</span></div>`;
           
           const bIdx = p.brickIndex || 0;
           if (allBricks[bIdx]) {
             playerFeatures.push({
               type: 'Feature',
               geometry: { type: 'Point', coordinates: allBricks[bIdx].geometry.coordinates },
-              properties: { rank: rank } // Assigns rank 1, 2, 3...
+              properties: { 
+                rank: rankCounter,
+                username: d.id 
+              }
             });
           }
-          rank++;
+          rankCounter++;
         });
 
         const src = map.getSource('players');
-        if (src) src.setData({ type: 'FeatureCollection', features: playerFeatures });
+        if (src) {
+            src.setData({ type: 'FeatureCollection', features: playerFeatures });
+        }
       });
     }
 
     map.on('load', async () => {
-      // 1. Force load all 7 images as Promises to guarantee they exist
-      const imageLoaders = [1,2,3,4,5,6,7].map(i => {
-        return new Promise((res) => {
-          map.loadImage(`topplayer${i}.png`, (err, img) => {
-            if (!err) map.addImage(`rank-${i}`, img);
-            res();
+      // 1. GUARANTEED IMAGE LOADING
+      const loadImg = (id, url) => {
+        return new Promise((resolve) => {
+          map.loadImage(url, (error, image) => {
+            if (!error) map.addImage(id, image);
+            resolve();
           });
         });
-      });
+      };
 
-      // 2. Load Geometry
-      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
-      const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+      // Create a list of promises for all 7 images
+      const promises = [];
+      for (let i = 1; i <= 7; i++) {
+        promises.push(loadImg(`rank-${i}`, `topplayer${i}.png`));
+      }
 
-      // 3. Setup Layers
+      // 2. LOAD DATA
+      const [race, courtyards, brickData] = await Promise.all([
+        loadJSON(GEOJSON_URL).catch(()=>null),
+        loadJSON(COURTYARDS_URL).catch(()=>null),
+        loadJSON(BRICKS_FILE_URL).catch(()=>null)
+      ]);
+
+      // 3. MAP LAYERS (Overlay, Buildings, Bricks)
       map.addSource('housing-overlay', {
-        type: 'image',
-        url: 'housing-overlay.png',
+        type: 'image', url: 'housing-overlay.png',
         coordinates: [[-80.6476, 41.1022], [-80.6532, 41.1044], [-80.6514, 41.1091], [-80.6458, 41.1069]]
       });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
@@ -204,23 +217,29 @@
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
       }
 
-      // 4. PLAYER LAYER - Crucial part for Rank images
-      map.addSource('players', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      // 4. PLAYER SOURCE & LAYER
+      map.addSource('players', { 
+        type: 'geojson', 
+        data: { type: 'FeatureCollection', features: [] } 
+      });
+
       map.addLayer({
         id: 'players-layer',
         type: 'symbol',
         source: 'players',
         layout: {
-          'icon-image': ['concat', 'rank-', ['get', 'rank']], // pulls rank-1, rank-2, etc.
-          'icon-size': 0.35,
+          // This line dynamically looks for rank-1, rank-2, etc.
+          'icon-image': ['concat', 'rank-', ['to-string', ['get', 'rank']]],
+          'icon-size': 0.4,
           'icon-anchor': 'bottom',
           'icon-allow-overlap': true,
           'icon-ignore-placement': true
         }
       });
 
-      // 5. Start Leaderboard ONLY after all 7 images are finished loading
-      Promise.all(imageLoaders).then(() => {
+      // 5. THE FINAL LOCK
+      // This ensures nothing starts until ALL images are loaded
+      Promise.all(promises).then(() => {
         liveLeaderboard();
       });
     });
@@ -228,7 +247,7 @@
     window.validateCode = async () => {
       const username = document.getElementById('username').value.trim();
       const code = document.getElementById('redeemCode').value.trim();
-      if (!username || !code) return alert("Enter info");
+      if (!username || !code) return alert("Missing Info");
       try {
         const playerRef = window.doc(window.db, "players", username);
         const codeRef = window.doc(window.db, "codes", code);
@@ -239,7 +258,7 @@
           const claimSnap = await tx.get(claimRef);
           if (claimSnap.exists()) throw "Claimed!";
           const playerSnap = await tx.get(playerRef);
-          if (!playerSnap.exists()) throw "User not found!";
+          if (!playerSnap.exists()) throw "User Not Found";
           const earned = codeSnap.data().points || 0;
           const player = playerSnap.data();
           const newPoints = (player.points || 0) + earned;
