@@ -187,8 +187,10 @@
 
     map.on('load', async () => {
       map.addSource('player-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      const [brickData, race, courtyards] = await Promise.all([loadJSON(BRICKS_FILE_URL), loadJSON(GEOJSON_URL), loadJSON(COURTYARDS_URL)]).catch(()=>[]);
-
+const race = await loadJSON(GEOJSON_URL).catch(()=>null);
+      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
+      const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+      
       if(brickData) {
         allBricks = brickData.features;
         map.addSource('dots', { type: 'geojson', data: { type: 'FeatureCollection', features: brickData.features.map(f => {
@@ -213,6 +215,13 @@
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({ id:'race-buildings', type:'fill-extrusion', source:'race', paint:{ 'fill-extrusion-color': ['match', ['get','name'], 'Lyden House', '#FF69B4', 'Cafaro House', '#0072CE', 'Wick House (Art)', '#FFFF00', 'Weller House', '#582C83', 'Christman Dining', '#FFDF00', 'Kilcawley House', '#E4002B', '#d6001c'], 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.8 } });
       }
+       // University Courtyards
+      if(courtyards) {
+        map.addSource('courtyards', { type: 'geojson', data: courtyards });
+        map.addLayer({
+          id: 'courtyards-fill3d', type: 'fill-extrusion', source: 'courtyards',
+          paint: { 'fill-extrusion-color': '#78BE20', 'fill-extrusion-height': 22, 'fill-extrusion-opacity': 0.96 }
+        });
 
       map.addLayer(customLayer);
 
