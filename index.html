@@ -76,7 +76,7 @@
     const modelAltitude = 0.5; 
     const modelRotate = [Math.PI / 2, Math.PI, 0];
     
-    // SEVEN ENTIRELY INDEPENDENT POSITION VARIABLES
+    // 7 FULLY INDEPENDENT GLOBAL COORDINATES
     let p1_pos=null; let p2_pos=null; let p3_pos=null; let p4_pos=null; let p5_pos=null; let p6_pos=null; let p7_pos=null;
 
     const map = new mapboxgl.Map({
@@ -112,20 +112,17 @@
       window.onSnapshot(q, (snap) => {
         const list = document.getElementById("leaderboard-list");
         list.innerHTML = "";
-        let count = 0; 
+        let count = 1; 
         const labelFeatures = [];
         
-        // FULL CLEAR OF INDEPENDENT SLOTS
         p1_pos=null; p2_pos=null; p3_pos=null; p4_pos=null; p5_pos=null; p6_pos=null; p7_pos=null;
 
         snap.forEach(d => {
-          count++;
           const p = d.data();
           list.innerHTML += `<div class="leader-item"><span>${count}. ${d.id}</span><span>${p.points || 0}</span></div>`;
           const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
           const merc = mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude);
           
-          // INDEPENDENT DATA DROP
           if(count === 1) p1_pos = merc;
           if(count === 2) p2_pos = merc;
           if(count === 3) p3_pos = merc;
@@ -135,6 +132,7 @@
           if(count === 7) p7_pos = merc;
 
           labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords }, properties: { name: d.id } });
+          count++; 
         });
         if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
         map.triggerRepaint();
@@ -152,104 +150,109 @@
         
         const loader = new THREE.GLTFLoader();
         loader.load('penguinpete.glb', (gltf) => { 
-          // SEVEN ENTIRELY SEPARATE MEMORY OBJECTS
-          this.p1_model = gltf.scene.clone();
-          this.p2_model = gltf.scene.clone();
-          this.p3_model = gltf.scene.clone();
-          this.p4_model = gltf.scene.clone();
-          this.p5_model = gltf.scene.clone();
-          this.p6_model = gltf.scene.clone();
-          this.p7_model = gltf.scene.clone();
+          // 7 COMPLETELY INDEPENDENT MODEL CLONES
+          this.u1 = gltf.scene.clone(); 
+          this.u2 = gltf.scene.clone(); 
+          this.u3 = gltf.scene.clone();
+          this.u4 = gltf.scene.clone(); 
+          this.u5 = gltf.scene.clone(); 
+          this.u6 = gltf.scene.clone();
+          this.u7 = gltf.scene.clone();
           
-          const group = [this.p1_model, this.p2_model, this.p3_model, this.p4_model, this.p5_model, this.p6_model, this.p7_model];
-          group.forEach(m => { m.scale.set(10, 10, 10); m.visible = false; this.scene.add(m); });
+          this.u1.scale.set(10, 10, 10); this.u1.visible = false; this.scene.add(this.u1);
+          this.u2.scale.set(10, 10, 10); this.u2.visible = false; this.scene.add(this.u2);
+          this.u3.scale.set(10, 10, 10); this.u3.visible = false; this.scene.add(this.u3);
+          this.u4.scale.set(10, 10, 10); this.u4.visible = false; this.scene.add(this.u4);
+          this.u5.scale.set(10, 10, 10); this.u5.visible = false; this.scene.add(this.u5);
+          this.u6.scale.set(10, 10, 10); this.u6.visible = false; this.scene.add(this.u6);
+          this.u7.scale.set(10, 10, 10); this.u7.visible = false; this.scene.add(this.u7);
         });
         this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
         this.renderer.autoClear = false;
       },
       render: function (gl, matrix) {
-        if (!this.p1_model) return;
+        if (!this.u1) return;
         const m = new THREE.Matrix4().fromArray(matrix);
         const rX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
         const rY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
         const rZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
 
-        // INDEPENDENT RENDER BLOCK 1
+        // INDEPENDENT BLOCK 1
         if(p1_pos) {
-          this.p1_model.visible = true;
+          this.u1.visible = true;
           const l1 = new THREE.Matrix4().makeTranslation(p1_pos.x, p1_pos.y, p1_pos.z)
             .scale(new THREE.Vector3(p1_pos.meterInMercatorCoordinateUnits(), -p1_pos.meterInMercatorCoordinateUnits(), p1_pos.meterInMercatorCoordinateUnits()))
             .multiply(rX).multiply(rY).multiply(rZ);
           this.camera.projectionMatrix.copy(m).multiply(l1);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
-        } else { this.p1_model.visible = false; }
+        } else { this.u1.visible = false; }
 
-        // INDEPENDENT RENDER BLOCK 2
+        // INDEPENDENT BLOCK 2
         if(p2_pos) {
-          this.p2_model.visible = true;
+          this.u2.visible = true;
           const l2 = new THREE.Matrix4().makeTranslation(p2_pos.x, p2_pos.y, p2_pos.z)
             .scale(new THREE.Vector3(p2_pos.meterInMercatorCoordinateUnits(), -p2_pos.meterInMercatorCoordinateUnits(), p2_pos.meterInMercatorCoordinateUnits()))
             .multiply(rX).multiply(rY).multiply(rZ);
           this.camera.projectionMatrix.copy(m).multiply(l2);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
-        } else { this.p2_model.visible = false; }
+        } else { this.u2.visible = false; }
 
-        // INDEPENDENT RENDER BLOCK 3
+        // INDEPENDENT BLOCK 3
         if(p3_pos) {
-          this.p3_model.visible = true;
+          this.u3.visible = true;
           const l3 = new THREE.Matrix4().makeTranslation(p3_pos.x, p3_pos.y, p3_pos.z)
             .scale(new THREE.Vector3(p3_pos.meterInMercatorCoordinateUnits(), -p3_pos.meterInMercatorCoordinateUnits(), p3_pos.meterInMercatorCoordinateUnits()))
             .multiply(rX).multiply(rY).multiply(rZ);
           this.camera.projectionMatrix.copy(m).multiply(l3);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
-        } else { this.p3_model.visible = false; }
+        } else { this.u3.visible = false; }
 
-        // INDEPENDENT RENDER BLOCK 4
+        // INDEPENDENT BLOCK 4
         if(p4_pos) {
-          this.p4_model.visible = true;
+          this.u4.visible = true;
           const l4 = new THREE.Matrix4().makeTranslation(p4_pos.x, p4_pos.y, p4_pos.z)
             .scale(new THREE.Vector3(p4_pos.meterInMercatorCoordinateUnits(), -p4_pos.meterInMercatorCoordinateUnits(), p4_pos.meterInMercatorCoordinateUnits()))
             .multiply(rX).multiply(rY).multiply(rZ);
           this.camera.projectionMatrix.copy(m).multiply(l4);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
-        } else { this.p4_model.visible = false; }
+        } else { this.u4.visible = false; }
 
-        // INDEPENDENT RENDER BLOCK 5
+        // INDEPENDENT BLOCK 5
         if(p5_pos) {
-          this.p5_model.visible = true;
+          this.u5.visible = true;
           const l5 = new THREE.Matrix4().makeTranslation(p5_pos.x, p5_pos.y, p5_pos.z)
             .scale(new THREE.Vector3(p5_pos.meterInMercatorCoordinateUnits(), -p5_pos.meterInMercatorCoordinateUnits(), p5_pos.meterInMercatorCoordinateUnits()))
             .multiply(rX).multiply(rY).multiply(rZ);
           this.camera.projectionMatrix.copy(m).multiply(l5);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
-        } else { this.p5_model.visible = false; }
+        } else { this.u5.visible = false; }
 
-        // INDEPENDENT RENDER BLOCK 6
+        // INDEPENDENT BLOCK 6
         if(p6_pos) {
-          this.p6_model.visible = true;
+          this.u6.visible = true;
           const l6 = new THREE.Matrix4().makeTranslation(p6_pos.x, p6_pos.y, p6_pos.z)
             .scale(new THREE.Vector3(p6_pos.meterInMercatorCoordinateUnits(), -p6_pos.meterInMercatorCoordinateUnits(), p6_pos.meterInMercatorCoordinateUnits()))
             .multiply(rX).multiply(rY).multiply(rZ);
           this.camera.projectionMatrix.copy(m).multiply(l6);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
-        } else { this.p6_model.visible = false; }
+        } else { this.u6.visible = false; }
 
-        // INDEPENDENT RENDER BLOCK 7
+        // INDEPENDENT BLOCK 7
         if(p7_pos) {
-          this.p7_model.visible = true;
+          this.u7.visible = true;
           const l7 = new THREE.Matrix4().makeTranslation(p7_pos.x, p7_pos.y, p7_pos.z)
             .scale(new THREE.Vector3(p7_pos.meterInMercatorCoordinateUnits(), -p7_pos.meterInMercatorCoordinateUnits(), p7_pos.meterInMercatorCoordinateUnits()))
             .multiply(rX).multiply(rY).multiply(rZ);
           this.camera.projectionMatrix.copy(m).multiply(l7);
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
-        } else { this.p7_model.visible = false; }
+        } else { this.u7.visible = false; }
 
         this.map.triggerRepaint();
       }
