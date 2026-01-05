@@ -182,15 +182,19 @@ function liveLeaderboard() {
 
 map.on('load', async () => {
 
-  // Start leaderboard listener (was previously inside loadImage)
+  // start leaderboard listener
   liveLeaderboard();
 
+  const race = await loadJSON(GEOJSON_URL).catch(() => null);
+  const courtyards = await loadJSON(COURTYARDS_URL).catch(() => null);
+  const brickData = await loadJSON(BRICKS_FILE_URL).catch(() => null);
+
+  // everything else that already existed stays here
+  // addSource(...)
+  // addLayer(...)
 });
 
 
-      const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-      const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
-      const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
       // Housing Overlay
       map.addSource('housing-overlay', {
