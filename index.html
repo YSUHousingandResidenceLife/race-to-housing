@@ -106,157 +106,86 @@
       };
     }
 
-    function liveLeaderboard() {
-      if (!window.db || !window.query || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
-      const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
-      window.onSnapshot(q, (snap) => {
-        const list = document.getElementById("leaderboard-list");
-        list.innerHTML = "";
-        let count = 1; 
-        const labelFeatures = [];
-        
-        p1_pos=null; p2_pos=null; p3_pos=null; p4_pos=null; p5_pos=null; p6_pos=null; p7_pos=null;
+   function liveLeaderboard() {
+  if (!window.db || !window.query || allBricks.length === 0) {
+    setTimeout(liveLeaderboard, 500);
+    return;
+  }
 
-        snap.forEach(d => {
-          const p = d.data();
-          list.innerHTML += `<div class="leader-item"><span>${count}. ${d.id}</span><span>${p.points || 0}</span></div>`;
-          const coords = allBricks[p.brickIndex || 0].geometry.coordinates;
-          const merc = mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude);
-          
-          if(count === 1) p1_pos = merc;
-          if(count === 2) p2_pos = merc;
-          if(count === 3) p3_pos = merc;
-          if(count === 4) p4_pos = merc;
-          if(count === 5) p5_pos = merc;
-          if(count === 6) p6_pos = merc;
-          if(count === 7) p7_pos = merc;
+  const q = window.query(
+    window.collection(window.db, "players"),
+    window.where("points", ">", 0),
+    window.orderBy("points", "desc"),
+    window.limit(7)
+  );
 
-          labelFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: coords }, properties: { name: d.id } });
-          count++; 
+  window.onSnapshot(q, (snap) => {
+    const list = document.getElementById("leaderboard-list");
+    list.innerHTML = "";
+
+    const newPositions = [];
+    const labelFeatures = [];
+
+    const players = [];
+    snap.forEach(d => players.push({ id: d.id, ...d.data() }));
+
+    const START_INDEX = 0;
+    const startCoords = allBricks[START_INDEX].geometry.coordinates;
+
+    // Always render exactly 7 slots
+    for (let i = 0; i < 7; i++) {
+      const p = players[i];
+
+      if (p) {
+        // REAL PLAYER
+        list.innerHTML += `
+          <div class="leader-item">
+            <span>${i + 1}. ${p.id}</span>
+            <span>${p.points || 0}</span>
+          </div>
+        `;
+
+        const idx = p.brickIndex || 0;
+        const coords = allBricks[idx].geometry.coordinates;
+
+        newPositions.push(
+          mapboxgl.MercatorCoordinate.fromLngLat(coords, modelAltitude)
+        );
+
+        labelFeatures.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: coords },
+          properties: { name: p.id }
         });
-        if(map.getSource('player-labels')) map.getSource('player-labels').setData({ type: 'FeatureCollection', features: labelFeatures });
-        map.triggerRepaint();
+
+      } else {
+        // PLACEHOLDER SLOT
+        list.innerHTML += `
+          <div class="leader-item" style="opacity:0.35">
+            <span>${i + 1}. —</span>
+            <span>0</span>
+          </div>
+        `;
+
+        newPositions.push(
+          mapboxgl.MercatorCoordinate.fromLngLat(startCoords, modelAltitude)
+        );
+      }
+    }
+
+    playerPositions = newPositions;
+
+    if (map.getSource("player-labels")) {
+      map.getSource("player-labels").setData({
+        type: "FeatureCollection",
+        features: labelFeatures
       });
     }
 
-    const customLayer = {
-      id: '3d-model', type: 'custom', renderingMode: '3d',
-      onAdd: function (map, gl) {
-        this.camera = new THREE.Camera();
-        this.scene = new THREE.Scene();
-        this.scene.add(new THREE.AmbientLight(0xffffff, 1.2)); 
-        const dl = new THREE.DirectionalLight(0xffffff, 1.0); dl.position.set(0, -70, 100).normalize();
-        this.scene.add(dl);
-        
-        const loader = new THREE.GLTFLoader();
-        loader.load('penguinpete.glb', (gltf) => { 
-          // 7 COMPLETELY INDEPENDENT MODEL CLONES
-          this.u1 = gltf.scene.clone(); 
-          this.u2 = gltf.scene.clone(); 
-          this.u3 = gltf.scene.clone();
-          this.u4 = gltf.scene.clone(); 
-          this.u5 = gltf.scene.clone(); 
-          this.u6 = gltf.scene.clone();
-          this.u7 = gltf.scene.clone();
-          
-          this.u1.scale.set(10, 10, 10); this.u1.visible = false; this.scene.add(this.u1);
-          this.u2.scale.set(10, 10, 10); this.u2.visible = false; this.scene.add(this.u2);
-          this.u3.scale.set(10, 10, 10); this.u3.visible = false; this.scene.add(this.u3);
-          this.u4.scale.set(10, 10, 10); this.u4.visible = false; this.scene.add(this.u4);
-          this.u5.scale.set(10, 10, 10); this.u5.visible = false; this.scene.add(this.u5);
-          this.u6.scale.set(10, 10, 10); this.u6.visible = false; this.scene.add(this.u6);
-          this.u7.scale.set(10, 10, 10); this.u7.visible = false; this.scene.add(this.u7);
-        });
-        this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
-        this.renderer.autoClear = false;
-      },
-      render: function (gl, matrix) {
-        if (!this.u1) return;
-        const m = new THREE.Matrix4().fromArray(matrix);
-        const rX = new THREE.Matrix4().makeRotationX(modelRotate[0]);
-        const rY = new THREE.Matrix4().makeRotationY(modelRotate[1]);
-        const rZ = new THREE.Matrix4().makeRotationZ(modelRotate[2]);
-
-        // INDEPENDENT BLOCK 1
-        if(p1_pos) {
-          this.u1.visible = true;
-          const l1 = new THREE.Matrix4().makeTranslation(p1_pos.x, p1_pos.y, p1_pos.z)
-            .scale(new THREE.Vector3(p1_pos.meterInMercatorCoordinateUnits(), -p1_pos.meterInMercatorCoordinateUnits(), p1_pos.meterInMercatorCoordinateUnits()))
-            .multiply(rX).multiply(rY).multiply(rZ);
-          this.camera.projectionMatrix.copy(m).multiply(l1);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        } else { this.u1.visible = false; }
-
-        // INDEPENDENT BLOCK 2
-        if(p2_pos) {
-          this.u2.visible = true;
-          const l2 = new THREE.Matrix4().makeTranslation(p2_pos.x, p2_pos.y, p2_pos.z)
-            .scale(new THREE.Vector3(p2_pos.meterInMercatorCoordinateUnits(), -p2_pos.meterInMercatorCoordinateUnits(), p2_pos.meterInMercatorCoordinateUnits()))
-            .multiply(rX).multiply(rY).multiply(rZ);
-          this.camera.projectionMatrix.copy(m).multiply(l2);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        } else { this.u2.visible = false; }
-
-        // INDEPENDENT BLOCK 3
-        if(p3_pos) {
-          this.u3.visible = true;
-          const l3 = new THREE.Matrix4().makeTranslation(p3_pos.x, p3_pos.y, p3_pos.z)
-            .scale(new THREE.Vector3(p3_pos.meterInMercatorCoordinateUnits(), -p3_pos.meterInMercatorCoordinateUnits(), p3_pos.meterInMercatorCoordinateUnits()))
-            .multiply(rX).multiply(rY).multiply(rZ);
-          this.camera.projectionMatrix.copy(m).multiply(l3);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        } else { this.u3.visible = false; }
-
-        // INDEPENDENT BLOCK 4
-        if(p4_pos) {
-          this.u4.visible = true;
-          const l4 = new THREE.Matrix4().makeTranslation(p4_pos.x, p4_pos.y, p4_pos.z)
-            .scale(new THREE.Vector3(p4_pos.meterInMercatorCoordinateUnits(), -p4_pos.meterInMercatorCoordinateUnits(), p4_pos.meterInMercatorCoordinateUnits()))
-            .multiply(rX).multiply(rY).multiply(rZ);
-          this.camera.projectionMatrix.copy(m).multiply(l4);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        } else { this.u4.visible = false; }
-
-        // INDEPENDENT BLOCK 5
-        if(p5_pos) {
-          this.u5.visible = true;
-          const l5 = new THREE.Matrix4().makeTranslation(p5_pos.x, p5_pos.y, p5_pos.z)
-            .scale(new THREE.Vector3(p5_pos.meterInMercatorCoordinateUnits(), -p5_pos.meterInMercatorCoordinateUnits(), p5_pos.meterInMercatorCoordinateUnits()))
-            .multiply(rX).multiply(rY).multiply(rZ);
-          this.camera.projectionMatrix.copy(m).multiply(l5);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        } else { this.u5.visible = false; }
-
-        // INDEPENDENT BLOCK 6
-        if(p6_pos) {
-          this.u6.visible = true;
-          const l6 = new THREE.Matrix4().makeTranslation(p6_pos.x, p6_pos.y, p6_pos.z)
-            .scale(new THREE.Vector3(p6_pos.meterInMercatorCoordinateUnits(), -p6_pos.meterInMercatorCoordinateUnits(), p6_pos.meterInMercatorCoordinateUnits()))
-            .multiply(rX).multiply(rY).multiply(rZ);
-          this.camera.projectionMatrix.copy(m).multiply(l6);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        } else { this.u6.visible = false; }
-
-        // INDEPENDENT BLOCK 7
-        if(p7_pos) {
-          this.u7.visible = true;
-          const l7 = new THREE.Matrix4().makeTranslation(p7_pos.x, p7_pos.y, p7_pos.z)
-            .scale(new THREE.Vector3(p7_pos.meterInMercatorCoordinateUnits(), -p7_pos.meterInMercatorCoordinateUnits(), p7_pos.meterInMercatorCoordinateUnits()))
-            .multiply(rX).multiply(rY).multiply(rZ);
-          this.camera.projectionMatrix.copy(m).multiply(l7);
-          this.renderer.resetState();
-          this.renderer.render(this.scene, this.camera);
-        } else { this.u7.visible = false; }
-
-        this.map.triggerRepaint();
-      }
-    };   
+    map.triggerRepaint();
+  });
+}
+ 
 
     map.on('load', async () => {
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
