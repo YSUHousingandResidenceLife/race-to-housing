@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Race to Housing — Path Viewer</title>
 
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
@@ -11,82 +11,77 @@
 html, body { height:100%; margin:0; overflow:hidden; }
 #map { position:absolute; inset:0; }
 
-/* Left Console */
+/* Leaderboard */
 .console-left{
   position:absolute; bottom:20px; left:20px;
-  width:220px; padding:15px;
+  width:220px; padding:14px;
   background:rgba(17,17,17,.9);
   color:#fff; border-radius:12px;
   border:2px solid #E4002B;
   z-index:10;
+  font-family:system-ui,sans-serif;
 }
 .console-left h2{
-  font-size:14px; margin:0 0 10px;
+  font-size:13px; margin:0 0 8px;
   color:#E4002B; text-transform:uppercase;
 }
 .leader-item{
   display:flex; justify-content:space-between;
-  font-size:13px; margin:6px 0;
+  font-size:13px; margin:5px 0;
 }
 
-/* Right Console */
+/* Redeem */
 .console-right{
   position:absolute; bottom:20px; right:20px;
-  width:260px; padding:15px;
+  width:260px; padding:14px;
   background:rgba(255,255,255,.95);
   border-radius:12px; z-index:10;
+  font-family:system-ui,sans-serif;
 }
 .console-right input{
-  width:100%; padding:8px; margin-bottom:8px;
+  width:100%; padding:8px; margin-bottom:6px;
 }
-.btn-redeem{
+.btn{
   width:100%; padding:10px;
-  background:#E4002B; color:#fff;
   border:none; border-radius:6px;
+  font-weight:600;
 }
-.btn-help{
-  width:100%; padding:8px;
-  margin-top:6px;
-}
+.btn-red{ background:#E4002B; color:#fff; }
+.btn-gray{ background:#eee; margin-top:6px; }
 #score-display{
   display:block; text-align:center;
-  font-weight:bold; color:#E4002B;
-  margin-bottom:8px;
+  font-weight:700; color:#E4002B;
+  margin-bottom:6px;
 }
 </style>
 </head>
 
-<!-- Firebase (module) -->
+<!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
-  getFirestore, doc, collection, query, where,
-  orderBy, limit, runTransaction,
-  serverTimestamp, onSnapshot
+  getFirestore, doc, collection, query,
+  where, orderBy, limit,
+  runTransaction, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const firebaseConfig = {
+const app = initializeApp({
   apiKey: "AIzaSyB6Yg6UMpfIjlKAqyV50egsXnlnWY1RyBM",
   authDomain: "race-to-housing.firebaseapp.com",
   projectId: "race-to-housing",
   storageBucket: "race-to-housing.firebasestorage.app",
   messagingSenderId: "569695954799",
   appId: "1:569695954799:web:93f20901d27bebaeadaa9a"
-};
+});
 
-const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-window.db = db;
-window.doc = doc;
-window.collection = collection;
-window.query = query;
-window.where = where;
-window.orderBy = orderBy;
-window.limit = limit;
-window.runTransaction = runTransaction;
-window.serverTimestamp = serverTimestamp;
-window.onSnapshot = onSnapshot;
+// expose to window
+Object.assign(window,{
+  db, doc, collection, query,
+  where, orderBy, limit,
+  runTransaction, serverTimestamp, onSnapshot
+});
 </script>
 
 <body>
@@ -101,21 +96,22 @@ window.onSnapshot = onSnapshot;
   <span id="score-display">Progress: 0 / 1000</span>
   <input id="username" placeholder="Username" />
   <input id="redeemCode" placeholder="Redemption Code" />
-  <button class="btn-redeem" onclick="validateCode()">Redeem Code</button>
-  <button class="btn-help" onclick="location.href='instructions.html'">Instructions</button>
+  <button class="btn btn-red" onclick="validateCode()">Redeem Code</button>
+  <button class="btn btn-gray" onclick="location.href='instructions.html'">Instructions</button>
 </div>
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
 
 <script>
-mapboxgl.accessToken = 'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
+mapboxgl.accessToken =
+'pk.eyJ1IjoieXN1LWhybCIsImEiOiJjbWZtcjVkNXUwNTJkMmxvaDZpaTF6b2x2In0.8-4W7BoAy5GmwM2_-L_Jzw';
 
 const GEOJSON_URL = 'ysu_race_buildings_exact_final.geojson';
 const COURTYARDS_URL = 'university_courtyards.geojson';
-const BRICKS_FILE_URL = 'race_bricks.geojson';
+const BRICKS_URL = 'race_bricks.geojson';
+const totalPoints = 1000;
 
 let allBricks = [];
-const totalPoints = 1000;
 
 const map = new mapboxgl.Map({
   container:'map',
@@ -131,14 +127,15 @@ async function loadJSON(url){
 
 function liveLeaderboard(){
   const q = window.query(
-    window.collection(window.db,"players"),
-    window.where("points",">",0),
-    window.orderBy("points","desc"),
+    window.collection(window.db,'players'),
+    window.where('points','>',0),
+    window.orderBy('points','desc'),
     window.limit(7)
   );
+
   window.onSnapshot(q,snap=>{
-    const list=document.getElementById("leaderboard-list");
-    list.innerHTML="";
+    const list=document.getElementById('leaderboard-list');
+    list.innerHTML='';
     let i=1;
     snap.forEach(d=>{
       list.innerHTML+=`
@@ -156,8 +153,13 @@ function updatePlayerOnMap(username, coords){
   if(!src) return;
   const data = src._data || {type:'FeatureCollection',features:[]};
   const i = data.features.findIndex(f=>f.properties.username===username);
-  const f = {type:'Feature',geometry:{type:'Point',coordinates:coords},properties:{username}};
-  if(i>=0) data.features[i]=f; else data.features.push(f);
+  const f = {
+    type:'Feature',
+    geometry:{type:'Point',coordinates:coords},
+    properties:{username}
+  };
+  if(i>=0) data.features[i]=f;
+  else data.features.push(f);
   src.setData(data);
 }
 
@@ -165,52 +167,135 @@ map.on('load', async ()=>{
 
   liveLeaderboard();
 
-  const race = await loadJSON(GEOJSON_URL).catch(()=>null);
-  const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
-  const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
+  const race = await loadJSON(GEOJSON_URL);
+  const courtyards = await loadJSON(COURTYARDS_URL);
+  const bricks = await loadJSON(BRICKS_URL);
+  allBricks = bricks.features;
 
-  if(brickData){
-    allBricks = brickData.features;
-    map.addSource('players',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-    map.addLayer({
-      id:'players-layer',
-      type:'symbol',
-      source:'players',
-      layout:{
-        'text-field':'🐧',
-        'text-size':['interpolate',['linear'],['zoom'],14,18,16,26,18,34],
-        'text-offset':[0,-0.4],
-        'text-allow-overlap':true
-      }
-    });
-  }
+  /* Housing overlay */
+  map.addSource('housing-overlay',{
+    type:'image',
+    url:'housing-overlay.png',
+    coordinates:[
+      [-80.64760006745172,41.10229501193964],
+      [-80.65320155001069,41.10444521963691],
+      [-80.65140971026295,41.10911312176939],
+      [-80.64580822770398,41.10696291407212]
+    ]
+  });
+  map.addLayer({id:'housing-overlay-layer',type:'raster',source:'housing-overlay'});
+
+  /* Race buildings */
+  map.addSource('race',{type:'geojson',data:race});
+  map.addLayer({
+    id:'race-buildings',
+    type:'fill-extrusion',
+    source:'race',
+    paint:{
+      'fill-extrusion-color':['match',['get','name'],
+        'Lyden House','#FF69B4',
+        'Cafaro House','#0072CE',
+        'Wick House (Art)','#FFFF00',
+        'Weller House','#582C83',
+        'Christman Dining','#FFDF00',
+        'Kilcawley House','#E4002B',
+        '#d6001c'],
+      'fill-extrusion-height':22,
+      'fill-extrusion-opacity':0.96
+    }
+  });
+
+  /* Courtyards */
+  map.addSource('courtyards',{type:'geojson',data:courtyards});
+  map.addLayer({
+    id:'courtyards-3d',
+    type:'fill-extrusion',
+    source:'courtyards',
+    paint:{
+      'fill-extrusion-color':'#78BE20',
+      'fill-extrusion-height':22,
+      'fill-extrusion-opacity':0.96
+    }
+  });
+
+  /* Bricks */
+  map.addSource('bricks',{type:'geojson',data:bricks});
+  map.addLayer({
+    id:'bricks-layer',
+    type:'circle',
+    source:'bricks',
+    paint:{'circle-radius':3,'circle-color':'#ffffff'}
+  });
+
+  /* Markers */
+  map.addSource('markers',{
+    type:'geojson',
+    data:{
+      type:'FeatureCollection',
+      features:[
+        {type:'Feature',geometry:{type:'Point',coordinates:allBricks[0].geometry.coordinates},properties:{label:'START'}},
+        {type:'Feature',geometry:{type:'Point',coordinates:allBricks.at(-1).geometry.coordinates},properties:{label:'FINISH'}}
+      ]
+    }
+  });
+  map.addLayer({
+    id:'marker-labels',
+    type:'symbol',
+    source:'markers',
+    layout:{
+      'text-field':['get','label'],
+      'text-size':14,
+      'text-offset':[0,-0.6],
+      'text-allow-overlap':true
+    },
+    paint:{
+      'text-color':'#fff',
+      'text-halo-color':'#E4002B',
+      'text-halo-width':2
+    }
+  });
+
+  /* Players */
+  map.addSource('players',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({
+    id:'players-layer',
+    type:'symbol',
+    source:'players',
+    layout:{
+      'text-field':'🐧',
+      'text-size':['interpolate',['linear'],['zoom'],14,18,16,26,18,34],
+      'text-offset':[0,-0.4],
+      'text-allow-overlap':true
+    }
+  });
+
 });
 
 window.validateCode = async ()=>{
-  const username = usernameInput.value.trim();
-  const code = redeemCode.value.trim();
-  if(!username||!code) return alert("Enter username & code");
+  const username = document.getElementById('username').value.trim();
+  const code = document.getElementById('redeemCode').value.trim();
+  if(!username||!code) return alert('Enter username and code');
 
-  const playerRef = window.doc(window.db,"players",username);
-  const codeRef = window.doc(window.db,"codes",code);
-  const claimRef = window.doc(window.db,"globalClaims",code);
+  const playerRef = window.doc(window.db,'players',username);
+  const codeRef = window.doc(window.db,'codes',code);
+  const claimRef = window.doc(window.db,'globalClaims',code);
 
   await window.runTransaction(window.db, async tx=>{
     const c = await tx.get(codeRef);
-    if(!c.exists()) throw "Invalid code";
-    if((await tx.get(claimRef)).exists()) throw "Already claimed";
+    if(!c.exists()) throw 'Invalid code';
+    if((await tx.get(claimRef)).exists()) throw 'Already claimed';
 
     const p = await tx.get(playerRef);
-    if(!p.exists()) throw "User not found";
+    if(!p.exists()) throw 'User not found';
 
     const pts = (p.data().points||0)+c.data().points;
-    const idx = Math.min(allBricks.length-1, Math.floor(pts/(totalPoints/allBricks.length)));
+    const idx = Math.min(allBricks.length-1,Math.floor(pts/(totalPoints/allBricks.length)));
 
     tx.update(playerRef,{points:pts,brickIndex:idx,lastUpdated:window.serverTimestamp()});
     tx.set(claimRef,{claimedBy:username,claimedAt:window.serverTimestamp()});
 
     updatePlayerOnMap(username, allBricks[idx].geometry.coordinates);
-    score-display.innerText = `Progress: ${pts} / 1000`;
+    document.getElementById('score-display').innerText = `Progress: ${pts} / 1000`;
   });
 };
 </script>
