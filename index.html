@@ -148,32 +148,34 @@
         const list = document.getElementById("leaderboard-list");
         list.innerHTML = "";
         const topPlayersFeatures = [];
-        let rank = 1;
+        let currentRank = 1;
         
         snap.forEach(d => {
           const p = d.data();
+          
+          // 1. Add to HTML UI
           list.innerHTML += `
             <div class="leader-item">
-              <span>${rank}. ${d.id}</span>
+              <span>${currentRank}. ${d.id}</span>
               <span>${Math.floor(p.points || 0)}</span>
             </div>`;
           
+          // 2. Add to Map Layer Data
           const brickIdx = p.brickIndex || 0;
-          const coords = (allBricks && allBricks[brickIdx]) 
-            ? allBricks[brickIdx].geometry.coordinates 
-            : [-80.64848, 41.10985];
-
-          topPlayersFeatures.push({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: coords },
-            properties: { 
-              username: d.id, 
-              rank: rank // This identifies which topplayerX image to use
-            }
-          });
-          rank++;
+          if (allBricks[brickIdx]) {
+            topPlayersFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: allBricks[brickIdx].geometry.coordinates },
+              properties: { 
+                username: d.id, 
+                rank: currentRank // EXPLICIT RANK 1-7
+              }
+            });
+          }
+          currentRank++; // INCREMENT FOR NEXT PLAYER
         });
 
+        // 3. Force Update Map
         const src = map.getSource('players');
         if (src) {
           src.setData({ type: 'FeatureCollection', features: topPlayersFeatures });
@@ -181,13 +183,8 @@
       });
     }
 
-    function updatePlayerOnMap(username, coords) {
-        // This is handled by the live snapshot, but kept for logic consistency
-        return; 
-    }
-
     map.on('load', async () => {
-      // 1. Load all 7 images as a batch
+      // Step 1: Pre-load all 7 images before doing anything else
       const imagePromises = [];
       for (let i = 1; i <= 7; i++) {
         imagePromises.push(new Promise((resolve) => {
@@ -198,12 +195,11 @@
         }));
       }
 
-      // 2. Load Data Files
       const race = await loadJSON(GEOJSON_URL).catch(()=>null);
       const courtyards = await loadJSON(COURTYARDS_URL).catch(()=>null);
       const brickData = await loadJSON(BRICKS_FILE_URL).catch(()=>null);
 
-      // 3. Housing Overlay
+      // Housing Overlay
       map.addSource('housing-overlay', {
         type: 'image',
         url: 'housing-overlay.png',
@@ -216,7 +212,7 @@
       });
       map.addLayer({ id: 'housing-overlay-layer', type: 'raster', source: 'housing-overlay' });
 
-      // 4. Buildings
+      // Race Buildings
       if(race) {
         map.addSource('race', { type:'geojson', data: race });
         map.addLayer({
@@ -228,6 +224,7 @@
         });
       }
 
+      // University Courtyards
       if(courtyards) {
         map.addSource('courtyards', { type: 'geojson', data: courtyards });
         map.addLayer({
@@ -236,7 +233,7 @@
         });
       }
 
-      // 5. Path Bricks
+      // Bricks and Endpoints
       if(brickData && brickData.features.length > 0) {
         map.addSource('dots', { type: 'geojson', data: processBricks(brickData) });
         map.addLayer({ id: 'dots-layer', type: 'fill', source: 'dots', paint: { 'fill-color': ['get', 'color'] } });
@@ -276,18 +273,18 @@
           }
         });
 
-        // 6. Players Source & Layer
+        // PLAYER SOURCE
         map.addSource('players', {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] }
         });
 
+        // PLAYER SYMBOL LAYER (Uses Rank to pull image)
         map.addLayer({
           id: 'players-layer',
           type: 'symbol',
           source: 'players',
           layout: {
-            // Concatenates rank to the image name: status-rank-1, status-rank-2, etc.
             'icon-image': ['concat', 'status-rank-', ['get', 'rank']],
             'icon-size': 0.35,
             'icon-anchor': 'bottom',
@@ -295,18 +292,18 @@
             'icon-ignore-placement': true
           },
           paint: {
-            'icon-halo-color': '#ffffff',
-            'icon-halo-width': 2
+            'icon-opacity': 1
           }
         });
       }
 
-      // Wait for all rank images to be ready before starting Firestore sync
+      // Start Firebase sync after images and map are ready
       Promise.all(imagePromises).then(() => {
         liveLeaderboard();
       });
     });
 
+    // REDEMPTION LOGIC
     window.validateCode = async () => {
       const username = document.getElementById('username').value.trim();
       const code = document.getElementById('redeemCode').value.trim();
