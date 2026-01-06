@@ -5,135 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>YSU Code Retrieval</title>
   <style>
-    body { 
-      background: #111; 
-      color: white; 
-      font-family: system-ui, sans-serif; 
-      display: flex; 
-      justify-content: center; 
-      align-items: center; 
-      min-height: 100vh; 
-      margin: 0; 
-    }
-    .container { 
-      width: 95%; 
-      max-width: 450px; 
-      text-align: center; 
-      background: rgba(255, 255, 255, 0.05); 
-      padding: 30px; 
-      border-radius: 12px; 
-      border: 2px solid #E4002B; 
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    }
-    h1 { color: #E4002B; font-size: 20px; text-transform: uppercase; margin-bottom: 20px; letter-spacing: 1px; }
-    p { font-size: 14px; color: #bbb; margin-bottom: 25px; }
+    body { background: #111; color: white; font-family: system-ui, sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
+    .header { text-align: center; padding: 15px; background: #111; border-bottom: 2px solid #E4002B; }
+    h1 { color: #E4002B; font-size: 18px; text-transform: uppercase; margin: 0; }
     
-    input { 
-      width: 100%; 
-      padding: 14px; 
-      margin-bottom: 15px; 
-      border: 1px solid #444; 
-      border-radius: 8px; 
-      background: #222; 
-      color: white; 
-      box-sizing: border-box; 
-      font-size: 16px; 
+    /* Responsive Wrapper for Mobile */
+    .sheet-container {
+      width: 100%;
+      height: 80vh; /* Takes up 80% of the screen height */
+      background: #fff;
     }
-    input:focus { border-color: #E4002B; outline: none; background: #2a2a2a; }
-
-    .btn-find { 
-      width: 100%; 
-      padding: 14px; 
-      background: #E4002B; 
-      color: white; 
-      border: none; 
-      border-radius: 8px; 
-      font-weight: bold; 
-      cursor: pointer; 
-      font-size: 16px; 
-      transition: background 0.3s;
-    }
-    .btn-find:hover { background: #b30022; }
-
-    #result-box { 
-      margin-top: 25px; 
-      padding: 20px; 
-      border-radius: 8px; 
-      background: rgba(228, 0, 43, 0.15); 
-      display: none; 
-      border: 1px dashed #E4002B; 
-      animation: fadeIn 0.5s;
-    }
-    .code-label { font-size: 12px; color: #E4002B; text-transform: uppercase; font-weight: bold; }
-    .code-text { font-size: 28px; font-weight: bold; color: #fff; letter-spacing: 3px; margin-top: 5px; }
+    iframe { width: 100%; height: 100%; border: none; }
     
-    .loading { display: none; color: #E4002B; margin-top: 15px; font-weight: bold; }
-    .back-btn { margin-top: 25px; display: inline-block; color: #888; text-decoration: none; font-size: 14px; transition: color 0.3s; }
-    .back-btn:hover { color: #fff; }
-
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .footer { text-align: center; padding: 15px; }
+    .back-btn { color: #E4002B; text-decoration: none; font-weight: bold; font-size: 14px; }
   </style>
 </head>
 <body>
 
-  <div class="container">
+  <div class="header">
     <h1>Redemption Center</h1>
-    <p>Enter your details to retrieve your unique code.</p>
-    
-    <input type="email" id="searchEmail" placeholder="YSU Email" autocomplete="off" />
-    <input type="text" id="searchID" placeholder="Penguin Username / ID" autocomplete="off" />
-    
-    <button class="btn-find" onclick="fetchCode()">Find My Code</button>
-    
-    <div id="loading" class="loading">Searching Database...</div>
-    
-    <div id="result-box">
-      <div class="code-label">Your Redemption Code:</div>
-      <div id="displayCode" class="code-text"></div>
-    </div>
-
-    <a href="../index.html" class="back-btn">← Return to Path Viewer</a>
   </div>
 
-  <script>
-    async function fetchCode() {
-      const email = document.getElementById('searchEmail').value.trim();
-      const id = document.getElementById('searchID').value.trim();
-      const resBox = document.getElementById('result-box');
-      const load = document.getElementById('loading');
-      
-      if (!email || !id) {
-        alert("Please enter both your Email and Penguin ID.");
-        return;
-      }
+  <div class="sheet-container">
+    <iframe src="https://docs.google.com/spreadsheets/d/1G6y392EZYNQMs0R_gdpC5h96s5s4lHimRXQRF5K_6nA/preview"></iframe>
+  </div>
 
-      // UI Reset
-      resBox.style.display = 'none';
-      load.style.display = 'block';
-
-      // Your Personal Private Web App URL
-      const scriptURL = 'https://script.google.com/macros/s/AKfycbzyoNboyJBnRxVTk4-UNxXSXRa3A2sNJ18t_TFA3Y4fU2fa4x4YzDqoLz8rtcsViFWn2Q/exec';
-
-      try {
-        // Sends request to Apps Script (Private session)
-        const response = await fetch(`${scriptURL}?email=${encodeURIComponent(email)}&id=${encodeURIComponent(id)}`);
-        const data = await response.json();
-        
-        load.style.display = 'none';
-
-        if (data.code) {
-          document.getElementById('displayCode').innerText = data.code;
-          resBox.style.display = 'block';
-        } else {
-          alert("No match found. Please verify your Email and ID.");
-        }
-      } catch (e) {
-        load.style.display = 'none';
-        alert("Connection Error. Please ensure the Google Script is deployed correctly.");
-        console.error(e);
-      }
-    }
-  </script>
+  <div class="footer">
+    <a href="../index.html" class="back-btn">← Return to Game</a>
+  </div>
 
 </body>
 </html>
