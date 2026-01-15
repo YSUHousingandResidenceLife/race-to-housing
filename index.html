@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-<meta name="viewport" content="width=1400, initial-scale=0.6, maximum-scale=0.6, user-scalable=no" />
+<meta name="viewport" content="width=1400, initial-scale=0.5, maximum-scale=0.5, user-scalable=no" />
 
   
   <title>Race to Housing — Path Viewer</title>
@@ -32,48 +32,58 @@
     .btn-help { width: 100%; padding: 8px; background: #f2f2f2; color: #333; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
     #score-display { font-weight: bold; color: #E4002B; margin-bottom: 10px; text-align: center; display: block; font-size: 14px; }
 
-/* ---------- MOBILE FIX: prevent console overlap ---------- */
+/* ---------- MOBILE FIX: stable, visible consoles ---------- */
 @media (max-width: 768px) {
 
+  /* Leaderboard: small, top-right */
   .console-left {
-    top: 10px;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    left: auto;
     bottom: auto;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 20px);
-    max-width: 360px;
+
+    width: 180px;
+    padding: 10px;
+    font-size: 12px;
+
+    transform: none;
+    z-index: 20;
   }
 
+  .console-left h2 {
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .leader-item {
+    font-size: 11px;
+    margin: 4px 0;
+  }
+
+  /* Redeem console: bottom-centered */
   .console-right {
-    bottom: 10px;
-    top: auto;
+    position: absolute;
+    bottom: 12px;
     left: 50%;
     right: auto;
+    top: auto;
+
     transform: translateX(-50%);
-    width: calc(100% - 20px);
-    max-width: 360px;
+    width: calc(100% - 24px);
+    max-width: 320px;
+
+    z-index: 20;
   }
 
+  /* Prevent off-screen overflow */
+  .console-left,
+  .console-right {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
 }
 
-   /* ---------- DESKTOP ANCHOR FIX AFTER FORCED VIEWPORT ---------- */
-
-.console-left {
-  bottom: 40px;
-  left: 40px;
-}
-
-.console-right {
-  bottom: 40px;
-  right: 40px;
-}
-
-/* Ensure consoles never drift off-screen */
-.console-left,
-.console-right {
-  max-height: 70vh;
-  overflow: auto;
-}
 
   </style>
   <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
