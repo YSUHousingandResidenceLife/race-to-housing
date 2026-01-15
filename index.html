@@ -29,10 +29,10 @@
     .btn-help { width: 100%; padding: 8px; background: #f2f2f2; color: #333; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; }
     #score-display { font-weight: bold; color: #E4002B; margin-bottom: 10px; text-align: center; display: block; font-size: 14px; }
 
- /* ---------- MOBILE FIX: prevent console overlap ---------- */
+/* ---------- MOBILE FIX: prevent console overlap ---------- */
 @media (max-width: 768px) {
 
-  /* Top Players — shrink to ~50% size */
+  /* Top Players — 50% size */
   .console-left {
     top: 10px;
     bottom: auto;
@@ -44,14 +44,16 @@
     max-width: 360px;
   }
 
-  /* Redeem console — unchanged */
+  /* Redeem console — match Top Players size */
   .console-right {
     bottom: 10px;
     top: auto;
     left: 50%;
     right: auto;
-    transform: translateX(-50%);
-    width: calc(100% - 20px);
+    transform: translateX(-50%) scale(0.5);
+    transform-origin: bottom center;
+
+    width: 360px;
     max-width: 360px;
   }
 
