@@ -18,6 +18,25 @@
       border: 2px solid #E4002B; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
     .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
+    /* ---------- DESKTOP ANCHOR FIX AFTER FORCED VIEWPORT ---------- */
+
+.console-left {
+  bottom: 40px;
+  left: 40px;
+}
+
+.console-right {
+  bottom: 40px;
+  right: 40px;
+}
+
+/* Ensure consoles never drift off-screen */
+.console-left,
+.console-right {
+  max-height: 70vh;
+  overflow: auto;
+}
+
     .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; }
     .console-right {
       position: absolute; bottom: 20px; right: 20px;
