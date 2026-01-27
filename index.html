@@ -108,23 +108,6 @@
     const totalPoints = 1000;
     let playerPositions = [];
 
-
-// ===============================
-// MANUAL TURN SEGMENTS (RADIANS)
-// applies from start brick → end brick (inclusive)
-// ===============================
-
-    // MANUAL TURN OVERRIDES (degrees)
-const BRICK_TURN_OVERRIDES = {
-  30: -Math.PI / 2, // right 90
-  41:  Math.PI / 2, // left 90
-  54: -Math.PI / 2,
-  62: -Math.PI / 2,
-  67: -Math.PI / 2,
-  73:  Math.PI / 2,
-  82:  Math.PI / 2,
-  87:  Math.PI / 2
-};
   
     const map = new mapboxgl.Map({
       container: 'map',
@@ -169,10 +152,9 @@ const BRICK_TURN_OVERRIDES = {
           brickIndex = Math.min(brickIndex, allBricks.length - 1);
           let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
 
-
-   // 1. Get current and next coordinates
+// 1. Get current and next coordinates
 const start = allBricks[brickIndex].geometry.coordinates;
-const end = allBricks[nextIndex].geometry.coordinates;
+const end   = allBricks[nextIndex].geometry.coordinates;
 
 // 2. Calculate the direction (heading)
 const dx = end[0] - start[0];
@@ -180,15 +162,23 @@ const dy = end[1] - start[1];
 
 let pathAngle = Math.atan2(dy, dx);
 
-// manual hard turns by NEXT brick (corner entry)
-if (BRICK_TURN_OVERRIDES[nextIndex] !== undefined) {
-  pathAngle = BRICK_TURN_OVERRIDES[nextIndex];
-}
-
+// ===============================
+// MANUAL HARD TURN SEGMENTS
+// (angle persists until next turn)
+// ===============================
+if (brickIndex >= 30 && brickIndex < 41) pathAngle = -Math.PI / 2;
+if (brickIndex >= 41 && brickIndex < 54) pathAngle =  Math.PI / 2;
+if (brickIndex >= 54 && brickIndex < 62) pathAngle = -Math.PI / 2;
+if (brickIndex >= 62 && brickIndex < 67) pathAngle = -Math.PI / 2;
+if (brickIndex >= 67 && brickIndex < 73) pathAngle = -Math.PI / 2;
+if (brickIndex >= 73 && brickIndex < 82) pathAngle =  Math.PI / 2;
+if (brickIndex >= 82 && brickIndex < 87) pathAngle =  Math.PI / 2;
+if (brickIndex >= 87)                    pathAngle =  Math.PI / 2;
 
 // 4. Calculate position on path
-let lng = start[0] + dx * remainder;
-let lat = start[1] + dy * remainder;
+const lng = start[0] + dx * remainder;
+const lat = start[1] + dy * remainder;
+
 
 
 
