@@ -153,9 +153,16 @@
 
           const start = allBricks[brickIndex].geometry.coordinates;
           const end = allBricks[nextIndex].geometry.coordinates;
+          
           const dx = end[0] - start[0];
-          const dy = end[1] - start[1];
-          const pathAngle = Math.atan2(dy, dx);
+const dy = end[1] - start[1];
+
+// use authored brick rotation when available, else fallback
+const brick = allBricks[brickIndex];
+const pathAngle = (brick.properties && typeof brick.properties.rotation === "number")
+  ? (brick.properties.rotation * -1) * (Math.PI / 180)
+  : Math.atan2(dy, dx);
+
 
 
 
