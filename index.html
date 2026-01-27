@@ -107,6 +107,22 @@
     let allBricks = [];
     const totalPoints = 1000;
     let playerPositions = [];
+
+
+    // ===============================
+// MANUAL BRICK FACING (RADIANS)
+// ===============================
+const BRICK_FACING = {
+  30: -Math.PI / 2,  // right 90
+  41:  Math.PI / 2,  // left 90
+  54: -Math.PI / 2,
+  62: -Math.PI / 2,
+  67: -Math.PI / 2,
+  73:  Math.PI / 2,
+  82:  Math.PI / 2,
+  87:  Math.PI / 2
+};
+
     
     const map = new mapboxgl.Map({
       container: 'map',
@@ -151,23 +167,21 @@
           brickIndex = Math.min(brickIndex, allBricks.length - 1);
           let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
 
+          const start = allBricks[brickIndex].geometry.coordinates;
+          const end = allBricks[nextIndex].geometry.coordinates;
+          const dx = end[0] - start[0];
+          const dy = end[1] - start[1];
 
-// 1. Get current and next coordinates
-const start = allBricks[brickIndex].geometry.coordinates;
-const end = allBricks[nextIndex].geometry.coordinates;
+          let pathAngle = Math.atan2(dy, dx);
 
-// 2. Calculate the direction (heading)
-const dx = end[0] - start[0];
-const dy = end[1] - start[1];
+// MANUAL OVERRIDE BY BRICK INDEX
+if (BRICK_FACING[brickIndex] !== undefined) {
+  pathAngle = BRICK_FACING[brickIndex];
+}
 
-// 3. IMPORTANT: Use the actual movement angle
-// If dx and dy are 0 (at the very end), default to 0 to prevent NaN
-const pathAngle = (dx === 0 && dy === 0) ? 0 : Math.atan2(dy, dx);
 
-// 4. Calculate position on path
-let lng = start[0] + dx * remainder;
-let lat = start[1] + dy * remainder;
-          
+
+
           let lng = start[0] + dx * remainder, lat = start[1] + dy * remainder;
 
           const spotKey = Math.floor(p.points);
