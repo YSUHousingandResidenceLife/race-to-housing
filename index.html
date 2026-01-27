@@ -209,8 +209,9 @@
           const s = pos.meterInMercatorCoordinateUnits();
           
           const l = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z)
-  .multiply(new THREE.Matrix4().makeScale(s, -s, s))
+  .multiply(new THREE.Matrix4().makeScale(s, s, s))
   .multiply(new THREE.Matrix4().makeRotationZ(-player.angle));
+
 
           
           this.camera.projectionMatrix.copy(m).multiply(l);
