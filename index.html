@@ -154,14 +154,21 @@
           const start = allBricks[brickIndex].geometry.coordinates;
           const end = allBricks[nextIndex].geometry.coordinates;
           const dx = end[0] - start[0], dy = end[1] - start[1];
-          const pathAngle = Math.atan2(dy, dx); 
+          let pathAngle = Math.atan2(dy, dx);
+
+// angle continuity guard (prevents flip on turns)
+if (playerPositions.length && Math.abs(pathAngle - playerPositions[newPositions.length]?.angle) > Math.PI / 2) {
+  pathAngle = playerPositions[newPositions.length].angle;
+}
+
 
           let lng = start[0] + dx * remainder, lat = start[1] + dy * remainder;
 
           const spotKey = Math.floor(p.points);
           const peers = playersAtPoints[spotKey];
           if (peers.length > 1) {
-            const laneWidth = 0.00012; 
+            const laneWidth = 0.000045;
+ 
             const playerIndex = peers.findIndex(peer => peer.id === p.id);
             const sideShift = (playerIndex - (peers.length - 1) / 2) * laneWidth;
             lng += Math.cos(pathAngle + Math.PI / 2) * sideShift;
