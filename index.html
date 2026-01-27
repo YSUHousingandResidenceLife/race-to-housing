@@ -151,25 +151,25 @@
           brickIndex = Math.min(brickIndex, allBricks.length - 1);
           let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
 
-         
+
+
 const currentBrick = allBricks[brickIndex];
 const nextBrick = allBricks[nextIndex];
 
-// Only calculate if the next brick actually exists
-if (currentBrick && nextBrick && nextBrick.geometry) {
-    const start = currentBrick.geometry.coordinates;
-    const end = nextBrick.geometry.coordinates;
+if (currentBrick && nextBrick) {
+  const start = currentBrick.geometry.coordinates;
+  const end = nextBrick.geometry.coordinates;
 
-    const dx = end[0] - start[0];
-    const dy = end[1] - start[1];
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
 
-    // Use the movement vector to find the angle
-    const pathAngle = Math.atan2(dy, dx);
-    
-    // Ensure you are only setting rotation, not touching position
-    penguin.rotation = pathAngle; 
+  // Return this value so the main loop can use it
+  return Math.atan2(dy, dx);
 }
 
+// Fallback if bricks are missing
+return 0;
+          
           let lng = start[0] + dx * remainder, lat = start[1] + dy * remainder;
 
           const spotKey = Math.floor(p.points);
