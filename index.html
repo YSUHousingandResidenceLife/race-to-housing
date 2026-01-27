@@ -249,7 +249,7 @@ this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
 
           const penguin = this.model.clone(true);
 penguin.matrixAutoUpdate = false;
-penguin.matrix.copy(l);
+penguin.matrix.copy(l).scale(new THREE.Vector3(10, 10, 10));
 
 this.scene.add(penguin);
 
