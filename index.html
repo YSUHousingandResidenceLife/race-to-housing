@@ -231,7 +231,8 @@ const lat = start[1] + dy * remainder;
           const s = pos.meterInMercatorCoordinateUnits();
           const l = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z)
             .multiply(new THREE.Matrix4().makeScale(s, -s, s))
-            .multiply(new THREE.Matrix4().makeRotationZ(-player.angle + Math.PI))
+            .multiply(new THREE.Matrix4().makeRotationZ(-player.angle))
+
             .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
           this.camera.projectionMatrix.copy(m).multiply(l);
           this.scene.clear();
