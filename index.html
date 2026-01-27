@@ -157,9 +157,13 @@
           let pathAngle = Math.atan2(dy, dx);
 
 // angle continuity guard (prevents flip on turns)
-if (playerPositions.length && Math.abs(pathAngle - playerPositions[newPositions.length]?.angle) > Math.PI / 2) {
+if (
+  playerPositions.length &&
+  Math.abs(pathAngle - playerPositions[newPositions.length]?.angle) > Math.PI / 2
+) {
   pathAngle = playerPositions[newPositions.length].angle;
 }
+
 
 
           let lng = start[0] + dx * remainder, lat = start[1] + dy * remainder;
