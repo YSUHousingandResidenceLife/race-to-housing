@@ -311,35 +311,67 @@ map.addLayer({
       liveLeaderboard();
     });
 
-    window.validateCode = async () => {
-      const u = document.getElementById('username').value.trim(), c = document.getElementById('redeemCode').value.trim();
-      if (!u || !c) return alert("Enter credentials!");
-      try {
-        const playerRef = window.doc(window.db, "players", u), codeRef = window.doc(window.db, "codes", c), claimRef = window.doc(window.db, "globalClaims", c);
-        await window.runTransaction(window.db, async (tx) => {
-          const codeSnap = await tx.get(codeRef); if (!codeSnap.exists()) throw "Invalid code";
-          if ((await tx.get(claimRef)).exists()) throw "Code already claimed!";
-          const pSnap = await tx.get(playerRef); if (!pSnap.exists()) throw "User not found!";
-          const newPts = (pSnap.data().points || 0) + (codeSnap.data().points || 0);
-          tx.update(playerRef, { points: newPts, lastUpdated: window.serverTimestamp() });
-          tx.set(claimRef, { codeId: c, claimedBy: u, claimedAt: window.serverTimestamp() });
+window.validateCode = async () => {
+  const u = document.getElementById('username').value.trim();
+  const c = document.getElementById('redeemCode').value.trim();
+  if (!u || !c) return alert("Enter credentials!");
 
-          //  PREFIX LOCK (ONE CLAIM PER PREFIX)
-const prefix = c.split("-")[0];
-const prefixLockId = `${u}_${prefix}`;
-const prefixLockRef = window.doc(window.db, "userPrefixClaims", prefixLockId);
+  try {
+    const playerRef = window.doc(window.db, "players", u);
+    const codeRef   = window.doc(window.db, "codes", c);
+    const claimRef  = window.doc(window.db, "globalClaims", c);
 
-tx.set(prefixLockRef, {
-  userId: u,
-  prefix: prefix,
-  createdAt: window.serverTimestamp()
-});
+    //  PREFIX LOCK REFS (DEFINE ONCE)
+    const prefix = c.split("-")[0];
+    const prefixLockId  = `${u}_${prefix}`;
+    const prefixLockRef = window.doc(window.db, "userPrefixClaims", prefixLockId);
 
-          document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPts)} / 1000 Points`;
-        });
-        document.getElementById('redeemCode').value = "";
-      } catch (err) { alert(err); }
-    };
+    await window.runTransaction(window.db, async (tx) => {
+      const codeSnap = await tx.get(codeRef);
+      if (!codeSnap.exists()) throw "Invalid code";
+
+      if ((await tx.get(claimRef)).exists())
+        throw "Code already claimed!";
+
+      if ((await tx.get(prefixLockRef)).exists())
+        throw "You already claimed this event.";
+
+      const pSnap = await tx.get(playerRef);
+      if (!pSnap.exists()) throw "User not found!";
+
+      const newPts =
+        (pSnap.data().points || 0) + (codeSnap.data().points || 0);
+
+      tx.update(playerRef, {
+        points: newPts,
+        lastUpdated: window.serverTimestamp()
+      });
+
+      // global code lock
+      tx.set(claimRef, {
+        codeId: c,
+        claimedBy: u,
+        claimedAt: window.serverTimestamp()
+      });
+
+      // prefix lock (ONE TIME)
+      tx.set(prefixLockRef, {
+        userId: u,
+        prefix: prefix,
+        createdAt: window.serverTimestamp()
+      });
+
+      document.getElementById('score-display').innerText =
+        `Progress: ${Math.floor(newPts)} / 1000 Points`;
+    });
+
+    document.getElementById('redeemCode').value = "";
+
+  } catch (err) {
+    alert(err);
+  }
+};
+
   </script>
 </body>
 </html>
