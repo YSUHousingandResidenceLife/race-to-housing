@@ -323,6 +323,18 @@ map.addLayer({
           const newPts = (pSnap.data().points || 0) + (codeSnap.data().points || 0);
           tx.update(playerRef, { points: newPts, lastUpdated: window.serverTimestamp() });
           tx.set(claimRef, { codeId: c, claimedBy: u, claimedAt: window.serverTimestamp() });
+
+          //  PREFIX LOCK (ONE CLAIM PER PREFIX)
+const prefix = c.split("-")[0];
+const prefixLockId = `${u}_${prefix}`;
+const prefixLockRef = window.doc(window.db, "userPrefixClaims", prefixLockId);
+
+tx.set(prefixLockRef, {
+  userId: u,
+  prefix: prefix,
+  createdAt: window.serverTimestamp()
+});
+
           document.getElementById('score-display').innerText = `Progress: ${Math.floor(newPts)} / 1000 Points`;
         });
         document.getElementById('redeemCode').value = "";
