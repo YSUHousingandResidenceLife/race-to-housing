@@ -113,19 +113,19 @@
 // MANUAL TURN SEGMENTS (RADIANS)
 // applies from start brick → end brick (inclusive)
 // ===============================
-const TURN_SEGMENTS = [
-  { from: 30, to: 40, angle: -Math.PI / 2 }, // right
-  { from: 41, to: 53, angle:  Math.PI / 2 }, // left
-  { from: 54, to: 61, angle: -Math.PI / 2 },
-  { from: 62, to: 66, angle: -Math.PI / 2 },
-  { from: 67, to: 72, angle: -Math.PI / 2 },
-  { from: 73, to: 81, angle:  Math.PI / 2 },
-  { from: 82, to: 86, angle:  Math.PI / 2 },
-  { from: 87, to: 999, angle: Math.PI / 2 }
-];
 
-
-    
+    // MANUAL TURN OVERRIDES (degrees)
+const BRICK_TURN_OVERRIDES = {
+  30: -Math.PI / 2, // right 90
+  41:  Math.PI / 2, // left 90
+  54: -Math.PI / 2,
+  62: -Math.PI / 2,
+  67: -Math.PI / 2,
+  73:  Math.PI / 2,
+  82:  Math.PI / 2,
+  87:  Math.PI / 2
+};
+  
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/ysu-hrl/cmfpr50qm00a401ry0uzb5b1q',
