@@ -153,16 +153,9 @@
 
           const start = allBricks[brickIndex].geometry.coordinates;
           const end = allBricks[nextIndex].geometry.coordinates;
-          const dx = end[0] - start[0], dy = end[1] - start[1];
-          let pathAngle = Math.atan2(dy, dx);
-
-// angle continuity guard (prevents flip on turns)
-if (
-  playerPositions.length &&
-  Math.abs(pathAngle - playerPositions[newPositions.length]?.angle) > Math.PI / 2
-) {
-  pathAngle = playerPositions[newPositions.length].angle;
-}
+          const dx = end[0] - start[0];
+          const dy = end[1] - start[1];
+          const pathAngle = Math.atan2(dy, dx);
 
 
 
