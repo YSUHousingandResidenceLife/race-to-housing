@@ -195,9 +195,6 @@
         this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
         new THREE.GLTFLoader().load('penguinpete.glb', (gltf) => {
           this.model = gltf.scene;
-          
-this.model.rotation.set(0, 0, -Math.PI / 2);
-
           this.model.scale.set(10, 10, 10); 
         });
         this.map = map;
