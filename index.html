@@ -233,15 +233,22 @@ const lat = start[1] + dy * remainder;
         playerPositions.forEach(player => {
           const pos = player.coord;
           const s = pos.meterInMercatorCoordinateUnits();
-          const l = new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z)
-            .multiply(new THREE.Matrix4().makeScale(s, -s, s))
-            .multiply(new THREE.Matrix4().makeRotationZ(-player.angle))
+const l = new THREE.Matrix4()
+  .makeTranslation(pos.x, pos.y, pos.z)
+  .multiply(new THREE.Matrix4().makeScale(s, -s, s))
+  .multiply(new THREE.Matrix4().makeRotationZ(-player.angle))
+  .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
 
-            .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+
+        
           this.camera.projectionMatrix.copy(m).multiply(l);
           this.scene.clear();
-          this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-          this.scene.add(this.model);
+this.scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+
+// CLONE MODEL PER PLAYER (CRITICAL)
+const penguin = this.model.clone(true);
+this.scene.add(penguin);
+
           this.renderer.resetState();
           this.renderer.render(this.scene, this.camera);
         });
