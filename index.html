@@ -151,20 +151,19 @@
           brickIndex = Math.min(brickIndex, allBricks.length - 1);
           let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
 
+         
           const start = allBricks[brickIndex].geometry.coordinates;
-          const end = allBricks[nextIndex].geometry.coordinates;
-          
-          const dx = end[0] - start[0];
+const end = allBricks[nextIndex].geometry.coordinates;
+
+const dx = end[0] - start[0];
 const dy = end[1] - start[1];
 
-// use authored brick rotation when available, else fallback
-const brick = allBricks[brickIndex];
-const pathAngle = (brick.properties && typeof brick.properties.rotation === "number")
-  ? (brick.properties.rotation * -1) * (Math.PI / 180)
-  : Math.atan2(dy, dx);
+// This calculates the angle based on movement direction
+// Add (Math.PI / 2) if your penguin sprite is drawn facing UP
+const pathAngle = Math.atan2(dy, dx);
 
-
-
+// Apply this to your penguin sprite
+penguin.rotation = pathAngle;
 
           let lng = start[0] + dx * remainder, lat = start[1] + dy * remainder;
 
