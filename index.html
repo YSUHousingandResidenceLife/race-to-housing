@@ -120,6 +120,7 @@
 
     async function loadJSON(url){ const r = await fetch(url); return r.json(); }
 
+
     function liveLeaderboard() {
       if (!window.db || allBricks.length === 0) { setTimeout(liveLeaderboard, 500); return; }
       const q = window.query(window.collection(window.db, "players"), window.where("points", ">", 0), window.orderBy("points", "desc"), window.limit(7));
@@ -152,46 +153,17 @@
           brickIndex = Math.min(brickIndex, allBricks.length - 1);
           let nextIndex = Math.min(brickIndex + 1, allBricks.length - 1);
 
-// 1. Get current and next coordinates
-const start = allBricks[brickIndex].geometry.coordinates;
-const end   = allBricks[nextIndex].geometry.coordinates;
+          const start = allBricks[brickIndex].geometry.coordinates;
+          const end = allBricks[nextIndex].geometry.coordinates;
+          const dx = end[0] - start[0], dy = end[1] - start[1];
+          const pathAngle = Math.atan2(dy, dx); 
 
-// 2. Calculate the direction (heading)
-const dx = end[0] - start[0];
-const dy = end[1] - start[1];
-
-let pathAngle = Math.atan2(dy, dx);
-// BASE ORIENTATION FIX — before first turn
-if (brickIndex < 30) {
-  pathAngle += Math.PI;
-}
-
-// ===============================
-// MANUAL HARD TURN SEGMENTS
-// (angle persists until next turn)
-// ===============================
-if (brickIndex >= 30 && brickIndex < 41) pathAngle = -Math.PI / 2;
-if (brickIndex >= 41 && brickIndex < 54) pathAngle =  Math.PI / 2;
-if (brickIndex >= 54 && brickIndex < 62) pathAngle = -Math.PI / 2;
-if (brickIndex >= 62 && brickIndex < 67) pathAngle = -Math.PI / 2;
-if (brickIndex >= 67 && brickIndex < 73) pathAngle = -Math.PI / 2;
-if (brickIndex >= 73 && brickIndex < 82) pathAngle =  Math.PI / 2;
-if (brickIndex >= 82 && brickIndex < 87) pathAngle =  Math.PI / 2;
-if (brickIndex >= 87)                    pathAngle =  Math.PI / 2;
-
-// 4. Calculate position on path
-const lng = start[0] + dx * remainder;
-const lat = start[1] + dy * remainder;
-
-
-
-
+          let lng = start[0] + dx * remainder, lat = start[1] + dy * remainder;
 
           const spotKey = Math.floor(p.points);
           const peers = playersAtPoints[spotKey];
           if (peers.length > 1) {
-            const laneWidth = 0.000045;
- 
+            const laneWidth = 0.00012; 
             const playerIndex = peers.findIndex(peer => peer.id === p.id);
             const sideShift = (playerIndex - (peers.length - 1) / 2) * laneWidth;
             lng += Math.cos(pathAngle + Math.PI / 2) * sideShift;
@@ -212,6 +184,7 @@ const lat = start[1] + dy * remainder;
         map.triggerRepaint();
       });
     }
+
 
     const customLayer = {
       id: '3d-model', type: 'custom', renderingMode: '3d',
