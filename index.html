@@ -281,6 +281,7 @@ map.addLayer({
       map.addLayer({
         id: 'marker-labels', type: 'symbol', source: 'markers',
         layout: { 
+         'visibility': 'none',       /// REMOVES start finish  LABELS///
           'text-field': ['get', 'label'], 
           'text-size': 14, 
           'text-anchor': 'bottom', 
