@@ -16,7 +16,7 @@
       border: 2px solid #E4002B; box-shadow: 0 4px 15px rgba(0,0,0,0.5); display: none;
     }
     .console-left h2 { font-size: 14px; margin: 0 0 10px; color: #E4002B; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px; }
-    .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; display: none; }
+    .leader-item { display: flex; justify-content: space-between; font-size: 13px; margin: 6px 0; border-bottom: 1px solid #222; }
     .console-right {
       position: absolute; bottom: 20px; right: 20px;
       width: 260px; background: rgba(255, 255, 255, 0.95);
@@ -299,6 +299,7 @@ map.addLayer({
       map.addLayer({ 
         id: 'player-name-tags', type: 'symbol', source: 'player-labels', 
         layout: { 
+          'visibility': 'none',       /// REMOVES NAME LABELS///
           'text-field': ['get', 'name'],
           'text-size': ['interpolate', ['linear'], ['zoom'], 15, 10, 20, 18],
           'text-offset': ['interpolate', ['linear'], ['zoom'], 15, [0, -1.5], 20, [0, -4.5]],
